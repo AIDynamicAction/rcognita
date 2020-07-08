@@ -184,7 +184,7 @@ To check the model prediction quality, you can ucomment `DEBUG` lines in `actor`
 
 ## Features for future extension
 
-* **ctrlDyn**: this is a dynamical controller which can be considered as an extension of the system state vector. RL is usually understood as a static controller, i.e., a one which assigns actions directly to outputs. A dynamical controller does this indirectly, via an internal state as intermediate link. Dynamical controllers can overcome some limitations of static ontrollers, but it goes beyond this description
+* **ctrlDyn**: this is a dynamical controller which can be considered as an extension of the system state vector. RL is usually understood as a static controller, i.e., a one which assigns actions directly to outputs. A dynamical controller does this indirectly, via an internal state as intermediate link. Dynamical controllers can overcome some limitations of static controllers, but it goes beyond this description
 
 ## Closing remarks
 
