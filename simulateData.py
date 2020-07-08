@@ -36,6 +36,10 @@ isStaticVisualization = 0
 
 isPrintSimStep = 1
 
+# Save animation to an mp4-file. isAnimate must be 1. Due to limitations of matplotlib, it is not possible to simultaneously show and save animation.
+# Therefore, set to 0 to check and then run again with 1
+isSaveAnim = 1
+
 #%% Service
 
 def printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u):
@@ -187,9 +191,11 @@ elif isAnimate:
     # For animation, data samples are limited to 500 for speed
     # animInterval is the interval between animation frames and should be adjusted depending on gear for better view
     if np.size(ts) > 500:
+        Nframes = 500
         simStepSize = int(np.size(ts)/500)
         animInterval = 1e-4
     else:
+        Nframes = np.size(ts)
         simStepSize = 1
         animInterval = np.size(ts)/1e6
     
@@ -245,6 +251,11 @@ elif isAnimate:
                 datacursor(subitem)
         else:
             datacursor(item)
+            
+if isSaveAnim:
+    FFMpegWriter = animation.writers['ffmpeg']
+    metadata = dict(title='RL demo', artist='Matplotlib', comment='Robot parking example')
+    writer = FFMpegWriter(fps=30, metadata=metadata)
         
 #%% Visuals: init & animate
 
@@ -299,13 +310,13 @@ def animate(k):
 if isAnimate:
     cId = simFig.canvas.mpl_connect('key_press_event', onKeyPress)
        
-    anm = animation.FuncAnimation(simFig, animate, init_func=initAnim, blit=False, interval=animInterval, repeat=False)
+    anm = animation.FuncAnimation(simFig, animate, init_func=initAnim, blit=False, interval=animInterval, repeat=False, save_count=1e10)
     anm.running = True
     
     simFig.tight_layout()
     
     plt.show()
-    
+  
 elif isPrintSimStep:   
     while True:
         # Get data row
@@ -316,4 +327,7 @@ elif isPrintSimStep:
         simStep += 1
         
         if t >= t1:  
-            break
+            break  
+        
+if isSaveAnim:
+        anm.save(dataFile.split('.')[0].split('/')[-1]+'.mp4', writer=writer, dpi=200)         
