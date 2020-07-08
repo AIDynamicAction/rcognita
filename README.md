@@ -124,7 +124,7 @@ That is, the controller is to learn how to park the robot *in one try*, i.e., on
 Classical controllers are usually meant to function this way.
 They may require a rather elaborate design, but come with formal guarantees of proper functioning.
 In contrast, RL is a plug-and-play approach, that *per se* needs no insight into the system's nature and model.
-What is achieved in the experimental configurations is a suitable balance between the controller sampling (although it was set to plausible 10 ms) and prediction horizon so as to stabilize the system (in an approximate sense, frankly) and the same time to keep the prediction error reasonably small.
+What is achieved in the experimental configurations is a suitable balance between the controller sampling (although it was set to plausible 10 ms) and prediction horizon so as to stabilize the system (in an approximate sense, frankly) and at the same time to keep the prediction error reasonably small.
 The longer the prediction horizon, the more estimation error is accumulated which might lead to improper controller behavior.
 So far, the computation time is rather large in [RLframe-experimental.py](RLframe-experimental.py), [RLframe-experimental-MATLAB.py](RLframe-experimental-MATLAB.py) (although depending on your gear) and further tuning is required to reduce it.
 Therefore, [data-experimental.csv](data-experimental.csv) is provided for use with [simulateData.py](simulateData.py) to produce a quick playback of an experimental run.
