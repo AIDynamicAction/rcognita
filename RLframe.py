@@ -197,7 +197,7 @@ criticPeriod = 5*dt # [s]
 criticStruct = 3
 
 #------------------------------------main switches
-isLogData = 0
+isLogData = 1
 isVisualization = 1
 isPrintSimStep = 1
 
@@ -1018,7 +1018,7 @@ dataFolder = 'data'
 
 if isLogData:
     date = datetime.now().strftime("%Y-%m-%d")
-    time = datetime.now().strftime("%H.%M.%S")
+    time = datetime.now().strftime("%Hh%Mm%Ss")
     dataFiles = [None] * Nruns
     for k in range(0, Nruns):
         dataFiles[k] = dataFolder + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
