@@ -1,6 +1,14 @@
 # learnRL-py
 Learning reinforcement learning (in Python) 
 
+Stacked Q-learning, model is known, one single episode demo:
+
+<img src="https://github.com/OsinenkoP/learnRL-py/blob/master/data-standard.gif" width="500" />
+
+N-rollout Q-learning, model is learned on-the-fly in one single episode:
+
+<img src="https://github.com/OsinenkoP/learnRL-py/blob/master/data-experimental.gif" width="500" />
+
 ## Abstract
 
 This is a framework of **reinforcement learning** with a rich variety of settings, aimed specifically at studying and research.
