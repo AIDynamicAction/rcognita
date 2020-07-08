@@ -105,6 +105,30 @@ If you choose to log data by setting `isLogData` to `1`, data files for each epi
 To play back a data file, run `simulateData.py` whereby specify the file name in `dataFile` of section `Initialization`.
 You can choose to print each time step, visualize stactically or dynamically, as if the simulator were running.
 
+### Preconfigurations
+
+As mentioined above, the following configurations come with this software, namely:
+
+* [RLframe.py](RLframe.py) - configured for quick demonstration
+* [RLframe-experimental.py](RLframe-experimental.py) - the same, but configured for demonstration of control under estimated model
+* [RLframe-experimental-MATLAB.py](RLframe-experimental-MATLAB.py) - the same with model estimation and optimization called from MATLAB®
+
+In general , it is not well understood how good purely data-driven controllers can work.
+In contrast to a pure data-driven RL, classical controllers use at least some knowledge of the physical process model.
+The last two configurations above are achieved by experimentation with settings listed in [basic customization](#basic-customization).
+They do not use the true model and estimate one on-the-fly.
+All in all, it is an extremely challenging task to combine control with real-time model learning.
+The rationale behind the described customization is as follows: to park the robot, or as we formally call it to *stabilize*, the controller needs to look several steps ahead.
+We should notice here that we are talking about a rather brief preliminary learning phase before control, and not about a multi-trial RL where many episodes are to be accomplished before the controller learns proper behavior.
+That is, the controller is to learn how to park the robot *in one try*, i.e., one episode.
+Classical controllers are usually meant to function this way.
+They may require a rather elaborate design, but come with formal guarantees of proper functioning.
+In contrast, RL is a plug-and-play approach, that *per se* needs no insight into the system's nature and model.
+What is achieved in the experimental configurations is a suitable balance between the controller sampling (although it was set to plausible 10 ms) and prediction horizon so as to stabilize the system (in an approximate sense, frankly) and the same time to keep the prediction error reasonably small.
+The longer the prediction horizon, the more estimation error is accumulated which might lead to improper controller behavior.
+So far, the computation time is rather large in [RLframe-experimental.py](RLframe-experimental.py), [RLframe-experimental-MATLAB.py](RLframe-experimental-MATLAB.py) (although depending on your gear) and further tuning is required to reduce it.
+Therefore, [data-experimental.csv](data-experimental.csv) is provided for use with [simulateData.py](simulateData.py) to produce a quick playback of an experimental run.
+
 ### Basic customization
 
 All the customization settings are pretty much in section `Initialization` of [RLframe.py](RLframe.py).
