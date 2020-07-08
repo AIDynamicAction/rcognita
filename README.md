@@ -72,12 +72,12 @@ if you want to use it as an IPython notebook.
 Regarding `sippy`, follow the instructions from the respective repository.
 To get their `setup.py` working, you might need to do
 
-`pip install nbconvert
-pip install cmake
-pip install scikit-build
-sudo apt-get install gfortran`
+    pip install nbconvert
+    pip install cmake
+    pip install scikit-build
+    sudo apt-get install gfortran
 
-Scroll down to [here](#running)] for the standard scenario, without MATLAB.
+Scroll down to [here](#running) for the standard scenario, without MATLAB.
 
 ### Usage with MATLAB
 
