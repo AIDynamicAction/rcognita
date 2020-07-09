@@ -197,4 +197,4 @@ To check the model prediction quality, you can ucomment `DEBUG` lines in `actor`
 ## Closing remarks
 
 Please contact [me](mailto:p.osinenko@skoltech.ru) for any inquiries and don't forget to give me credit for usage of this code.
-If you are interested in stacked Q-learning, kindly read the [paper](https://www.sciencedirect.com/science/article/pii/S2405896317312570).
+If you are interested in stacked Q-learning, kindly read the [paper](https://arxiv.org/abs/2007.03999).
