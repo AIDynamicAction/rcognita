@@ -1013,15 +1013,24 @@ yCoord0 = x0[1]
 alpha0 = x0[2]
 alphaDeg0 = alpha0/2/np.pi
 
-# Data logging init
-dataFolder = 'data'
-
 if isLogData:
+    # Data logging init
+    
+    import os
+    import pathlib
+    
+    cwd = os.getcwd()
+    datafolder = '/data'
+    dataFolder_path = cwd + datafolder
+    
+    # create data dir
+    pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True) 
+
     date = datetime.now().strftime("%Y-%m-%d")
     time = datetime.now().strftime("%Hh%Mm%Ss")
     dataFiles = [None] * Nruns
     for k in range(0, Nruns):
-        dataFiles[k] = dataFolder + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+        dataFiles[k] = dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
         with open(dataFiles[k], 'w', newline='') as outfile:
             writer = csv.writer(outfile)
             writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
