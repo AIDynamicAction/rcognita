@@ -29,7 +29,6 @@ setuptools.setup(
         "svgpath2mpl",
         "nbconvert",
         "cmake",
-        "scikit-build",
-        "genericf2py"],
+        "scikit-build"],
     dependency_links=['https://github.com/CPCLAB-UNIPI/SIPPY/tarball/master#egg=SIPPY']
 )
