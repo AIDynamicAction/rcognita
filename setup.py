@@ -20,16 +20,16 @@ setuptools.setup(
     ],
     python_requires=">=3.6",
     setup_requires=['numpy', 'scipy'],
-	install_requires=[
-		"control",
-		"slycot",
-		"future",
-		"tabulate",
-		"mpldatacursor",
-		"svgpath2mpl",
-		"nbconvert",
-		"cmake",
-		"scikit-build",
-		"genericf2py"],
-	dependency_links=['https://github.com/CPCLAB-UNIPI/SIPPY/tarball/master#egg=SIPPY']
+    install_requires=[
+        "control",
+        "slycot",
+        "future",
+        "tabulate",
+        "mpldatacursor",
+        "svgpath2mpl",
+        "nbconvert",
+        "cmake",
+        "scikit-build",
+        "genericf2py"],
+    dependency_links=['https://github.com/CPCLAB-UNIPI/SIPPY/tarball/master#egg=SIPPY']
 )
