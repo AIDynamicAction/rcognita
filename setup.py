@@ -5,11 +5,11 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="LearnRLSK", # Replace with your own username
-    version="1.0",
+    version="1.0.2",
     author="Pavel Osinenko",
     author_email="p.osinenko@skoltech.ru",
     description="Learning Reinforcement Learning - Skoltech",
-    long_description=long_description,
+    long_description="See homepage",
     long_description_content_type="text/markdown",
     url="https://github.com/OsinenkoP/learnRL-py",
     packages=setuptools.find_packages(),
@@ -19,8 +19,9 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires=">=3.6",
-    setup_requires=['numpy', 'scipy'],
     install_requires=[
+        "numpy",
+        "scipy",
         "control",
         "slycot",
         "future",
