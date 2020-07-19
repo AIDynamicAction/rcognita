@@ -338,29 +338,29 @@ class LearnRLSK:
 
 
 
-        def create_datafile(self):
-            if isLogData:
-                # create data dir
-                pathlib.Path(self.dataFolder_path).mkdir(parents=True, exist_ok=True) 
+    def create_datafile(self):
+        if isLogData:
+            # create data dir
+            pathlib.Path(self.dataFolder_path).mkdir(parents=True, exist_ok=True) 
 
-                date = datetime.now().strftime("%Y-%m-%d")
-                time = datetime.now().strftime("%Hh%Mm%Ss")
-                dataFiles = [None] * self.Nruns
-                for k in range(0, self.Nruns):
-                    dataFiles[k] = self.dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
-                    with open(dataFiles[k], 'w', newline='') as outfile:
-                        writer = csv.writer(outfile)
-                        writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
-                dataFile = dataFiles[0]
+            date = datetime.now().strftime("%Y-%m-%d")
+            time = datetime.now().strftime("%Hh%Mm%Ss")
+            dataFiles = [None] * self.Nruns
+            for k in range(0, self.Nruns):
+                dataFiles[k] = self.dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+                with open(dataFiles[k], 'w', newline='') as outfile:
+                    writer = csv.writer(outfile)
+                    writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
+            dataFile = dataFiles[0]
 
-                return dataFile
+            return dataFile
 
 
-        def train_this(self):
-            dataFile = create_datafile()
-            
-            if isPrintSimStep:
-                warnings.filterwarnings('ignore')
+    def train_this(self):
+        dataFile = create_datafile()
+        
+        if isPrintSimStep:
+            warnings.filterwarnings('ignore')
 
             
 
@@ -474,24 +474,24 @@ class LearnRLSK:
         return thetaVal
 
 
-def Cart2NH(CartCoords): 
-    xNI = np.zeros(3)
-    eta = np.zeros(2)
-    
-    xc = CartCoords[0]
-    yc = CartCoords[1]
-    alpha = CartCoords[2]
-    v = CartCoords[3]
-    omega = CartCoords[4]
-    
-    xNI[0] = alpha
-    xNI[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
-    xNI[2] = - 2 * ( yc * np.cos(alpha) - xc * np.sin(alpha) ) - alpha * ( xc * np.cos(alpha) + yc * np.sin(alpha) )
-    
-    eta[0] = omega
-    eta[1] = ( yc * np.cos(alpha) - xc * np.sin(alpha) ) * omega + v   
-    
-    return [xNI, eta]
+    def Cart2NH(CartCoords): 
+        xNI = np.zeros(3)
+        eta = np.zeros(2)
+        
+        xc = CartCoords[0]
+        yc = CartCoords[1]
+        alpha = CartCoords[2]
+        v = CartCoords[3]
+        omega = CartCoords[4]
+        
+        xNI[0] = alpha
+        xNI[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
+        xNI[2] = - 2 * ( yc * np.cos(alpha) - xc * np.sin(alpha) ) - alpha * ( xc * np.cos(alpha) + yc * np.sin(alpha) )
+        
+        eta[0] = omega
+        eta[1] = ( yc * np.cos(alpha) - xc * np.sin(alpha) ) * omega + v   
+        
+        return [xNI, eta]
  
     def NH2CartCtrl(self, xNI, eta, uNI): 
         uCart = np.zeros(2)
@@ -520,150 +520,133 @@ def Cart2NH(CartCoords):
             return ySqn, xSqn
 
 
-        # Convert upper triangular square sub-matrix to column vector
-        def uptria2vec(self, mat):
-            n = mat.shape[0]
-            
-            vec = np.zeros(n*(n+1)/2, 1)
-            
-            k = 0
-            for i in range(n):
-                for j in range(n):
-                    vec[j] = mat[i, j]
-                    k += 1
+    # Feature vector of critic
+    def Phi(self, y, u):
+        chi = np.concatenate([y, u])
+        
+        if self.criticStruct == 3:
+            return chi * chi    
+        elif self.criticStruct == 4:
+            return np.concatenate([ y**2, np.kron(y, u), u**2 ])
 
 
-        # Feature vector of critic
-        def Phi(self, y, u):
-            chi = np.concatenate([y, u])
-            
-            if self.criticStruct == 1:
-                return np.concatenate([self.uptria2vec( np.kron(chi, chi) ), chi ])
-            elif self.criticStruct == 2:
-                return np.concatenate([self.uptria2vec( np.kron(chi, chi) ) ])   
-            elif self.criticStruct == 3:
-                return chi * chi    
-            elif self.criticStruct == 4:
-                return np.concatenate([ y**2, np.kron(y, u), u**2 ])
+    # Running cost
+    def rcost(self, y, u):
+        chi = np.concatenate([y, u])
+        
+        r = 0
+        
+        if self.rcostStruct == 1:
+            r = chi @ self.R1 @ chi
+        elif self.rcostStruct == 2:
+            r = chi**2 @ self.R2 @ chi**2 + chi @ self.R1 @ chi
+        
+        return r
+        
+    # Integrated cost
+    def icost(self, r, t):
+        icost_val += r*(t - self.icost_itime)
+        self.icost_itime = t
+        return icost_val   
 
+    def criticCost(self, W, U, Y, Wprev):
+        Jc = 0
+        
+        for k in range(self.dimCrit, 0, -1):
+            yPrev = Y[k-1, :]
+            yNext = Y[k, :]
+            uPrev = U[k-1, :]
+            uNext = U[k, :]
+            
+            # Temporal difference
+            e = W @ self.Phi( yPrev, uPrev ) - self.gamma * Wprev @ self.Phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
+            
+            Jc += 1/2 * e**2
+            
+        return Jc
 
-        # Running cost
-        def rcost(self, y, u):
-            chi = np.concatenate([y, u])
-            
-            r = 0
-            
-            if self.rcostStruct == 1:
-                r = chi @ self.R1 @ chi
-            elif self.rcostStruct == 2:
-                r = chi**2 @ self.R2 @ chi**2 + chi @ self.R1 @ chi
-            
-            return r
-            
-        # Integrated cost
-        def icost(self, r, t):
-            icost_val += r*(t - self.icost_itime)
-            self.icost_itime = t
-            return icost_val   
+        
+    def critic(self, Wprev, Winit, U, Y):              
+        bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
 
-        def criticCost(self, W, U, Y, Wprev):
-            Jc = 0
-            
-            for k in range(self.dimCrit, 0, -1):
-                yPrev = Y[k-1, :]
-                yNext = Y[k, :]
-                uPrev = U[k-1, :]
-                uNext = U[k, :]
-                
-                # Temporal difference
-                e = W @ self.Phi( yPrev, uPrev ) - self.gamma * Wprev @ self.Phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
-                
-                Jc += 1/2 * e**2
-                
-            return Jc
+        W = minimize(lambda W: criticCost(W, U, Y, Wprev), Winit, method=self.criticOptMethod, tol=1e-7, bounds=bnds, options=self.criticOptOptions).x
 
-            
-        def critic(self, Wprev, Winit, U, Y):              
-            bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
+        
+        return W
 
-            W = minimize(lambda W: criticCost(W, U, Y, Wprev), Winit, method=self.criticOptMethod, tol=1e-7, bounds=bnds, options=self.criticOptOptions).x
-
-            
-            return W
-
-        def actorCost(self, U, y, N, W, delta, mode):
-            myU = np.reshape(U, [N, self.dimInput])
-            
-            Y = np.zeros([N, self.dimOutput])
-            
-            # System output prediction
-            if (mode==1) or (mode==3) or (mode==5):    # Via true model
-                Y[0, :] = y
-                x = self.closedLoopStat_x0true
-                for k in range(1, self.Nactor):
-                    x = x + delta * sysStateDyn([], x, myU[k-1, :], [])  # Euler scheme
-                    Y[k, :] = sysOut(x)
-                    # Y[k, :] = Y[k-1, :] + dt * sysStateDyn([], Y[k-1, :], myU[k-1, :], [])  # Euler scheme
-            elif (mode==2) or (mode==4) or (mode==6):    # Via estimated model
-                myU_upsampled = myU.repeat(int(delta/self.dt), axis=0)
-                Yupsampled, _ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, myU_upsampled, ctrlStat.x0est, y)
-                Y = Yupsampled[::int(delta/self.dt)]
-            
-            J = 0         
-            if (mode==1) or (mode==2):     # MPC
-                for k in range(N):
-                    J += self.gamma**k * rcost(Y[k, :], myU[k, :])
-            elif (mode==3) or (mode==4):     # RL: Q-learning with Ncritic roll-outs of running cost
-                 for k in range(N-1):
-                    J += gamma**k * rcost(Y[k, :], myU[k, :])
-                 J += W @ Phi( Y[-1, :], myU[-1, :] )
-            elif (mode==5) or (mode==6):     # RL: (normalized) stacked Q-learning
-                 for k in range(N):
-                    Q = W @ Phi( Y[k, :], myU[k, :] )
-                    J += 1/N * Q
-           
-                
-            return J
-
-        # Optimal controller a.k.a. actor in RL terminology
-        def actor(self, y, Uinit, N, W, A, B, C, D, x0, delta, mode):
-            global actorOptMethod, actorOptOptions, Umin, Umax
-            
-            myUinit = np.reshape(Uinit, [N*dimInput,])
-            
-            bnds = sp.optimize.Bounds(Umin, Umax, keep_feasible=True)
-            
-            try:
-                if isGlobOpt:
-                    minimizer_kwargs = {'method': actorOptMethod, 'bounds': bnds, 'tol': 1e-7, 'options': actorOptOptions}
-                    U = basinhopping(lambda U: actorCost(U, y, N, W, delta, mode), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
-                else:
-                    U = minimize(lambda U: actorCost(U, y, N, W, delta, mode), myUinit, method=actorOptMethod, tol=1e-7, bounds=bnds, options=actorOptOptions).x        
-            except ValueError:
-                print('Actor''s optimizer failed. Returning default action')
-                U = myUinit
-            
-
-            R  = '\033[31m'
-            Bl  = '\033[30m'
-            myU = np.reshape(U, [N, dimInput])    
-            myU_upsampled = myU.repeat(int(delta/dt), axis=0)
-            Yupsampled, _ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, myU_upsampled, ctrlStat.x0est, y)
-            Y = Yupsampled[::int(delta/dt)]
-            Yt = np.zeros([N, dimOutput])
-            Yt[0, :] = y
-            x = closedLoopStat.x0true
-            for k in range(1, Nactor):
+    def actorCost(self, U, y, N, W, delta, mode):
+        myU = np.reshape(U, [N, self.dimInput])
+        
+        Y = np.zeros([N, self.dimOutput])
+        
+        # System output prediction
+        if (mode==1) or (mode==3) or (mode==5):    # Via true model
+            Y[0, :] = y
+            x = self.closedLoopStat_x0true
+            for k in range(1, self.Nactor):
                 x = x + delta * sysStateDyn([], x, myU[k-1, :], [])  # Euler scheme
-                Yt[k, :] = sysOut(x)           
-            headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']  
-            dataRow = []
-            for k in range(dimOutput):
-                dataRow.append( np.mean(Y[:,k] - Yt[:,k]) )
-            rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')   
-            table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
-            print(R+table+Bl)
-            # /DEBUG ==================================================================     
+                Y[k, :] = sysOut(x)
+                # Y[k, :] = Y[k-1, :] + dt * sysStateDyn([], Y[k-1, :], myU[k-1, :], [])  # Euler scheme
+        elif (mode==2) or (mode==4) or (mode==6):    # Via estimated model
+            myU_upsampled = myU.repeat(int(delta/self.dt), axis=0)
+            Yupsampled, _ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, myU_upsampled, ctrlStat.x0est, y)
+            Y = Yupsampled[::int(delta/self.dt)]
+        
+        J = 0         
+        if (mode==1) or (mode==2):     # MPC
+            for k in range(N):
+                J += self.gamma**k * rcost(Y[k, :], myU[k, :])
+        elif (mode==3) or (mode==4):     # RL: Q-learning with Ncritic roll-outs of running cost
+             for k in range(N-1):
+                J += gamma**k * rcost(Y[k, :], myU[k, :])
+             J += W @ Phi( Y[-1, :], myU[-1, :] )
+        elif (mode==5) or (mode==6):     # RL: (normalized) stacked Q-learning
+             for k in range(N):
+                Q = W @ Phi( Y[k, :], myU[k, :] )
+                J += 1/N * Q
+       
             
-            return U[:dimInput]    # Return first action
+        return J
+
+    # Optimal controller a.k.a. actor in RL terminology
+    def actor(self, y, Uinit, N, W, A, B, C, D, x0, delta, mode):
+        global actorOptMethod, actorOptOptions, Umin, Umax
+        
+        myUinit = np.reshape(Uinit, [N*dimInput,])
+        
+        bnds = sp.optimize.Bounds(Umin, Umax, keep_feasible=True)
+        
+        try:
+            if isGlobOpt:
+                minimizer_kwargs = {'method': actorOptMethod, 'bounds': bnds, 'tol': 1e-7, 'options': actorOptOptions}
+                U = basinhopping(lambda U: actorCost(U, y, N, W, delta, mode), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
+            else:
+                U = minimize(lambda U: actorCost(U, y, N, W, delta, mode), myUinit, method=actorOptMethod, tol=1e-7, bounds=bnds, options=actorOptOptions).x        
+        except ValueError:
+            print('Actor''s optimizer failed. Returning default action')
+            U = myUinit
+        
+
+        R  = '\033[31m'
+        Bl  = '\033[30m'
+        myU = np.reshape(U, [N, dimInput])    
+        myU_upsampled = myU.repeat(int(delta/dt), axis=0)
+        Yupsampled, _ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, myU_upsampled, ctrlStat.x0est, y)
+        Y = Yupsampled[::int(delta/dt)]
+        Yt = np.zeros([N, dimOutput])
+        Yt[0, :] = y
+        x = closedLoopStat.x0true
+        for k in range(1, Nactor):
+            x = x + delta * sysStateDyn([], x, myU[k-1, :], [])  # Euler scheme
+            Yt[k, :] = sysOut(x)           
+        headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']  
+        dataRow = []
+        for k in range(dimOutput):
+            dataRow.append( np.mean(Y[:,k] - Yt[:,k]) )
+        rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')   
+        table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+        print(R+table+Bl)
+        # /DEBUG ==================================================================     
+        
+        return U[:dimInput]    # Return first action
         
