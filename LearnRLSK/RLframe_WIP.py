@@ -396,9 +396,6 @@ class LearnRLSK:
         self.ZOHs = cZOHs(u = ZOH(initTime=t0, initVal=u0, sampleTime=dt),
                      y = ZOH(initTime=t0, initVal=y0, sampleTime=dt))
 
-
-
-
     #%% Service
     def toColVec(self, argin):
         if argin.ndim < 2:
@@ -507,7 +504,7 @@ class LearnRLSK:
         return thetaVal
 
 
-    def Cart2NH(CartCoords): 
+    def Cart2NH(self, CartCoords): 
         xNI = np.zeros(3)
         eta = np.zeros(2)
         
@@ -650,9 +647,9 @@ class LearnRLSK:
         try:
             if self.isGlobOpt:
                 minimizer_kwargs = {'method': self.actorOptMethod, 'bounds': bnds, 'tol': 1e-7, 'options': self.actorOptOptions}
-                U = basinhopping(lambda U: actorCost(U, y, N, W, delta, mode), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
+                U = basinhopping(lambda U: self.actorCost(U, y, N, W, delta, mode), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
             else:
-                U = minimize(lambda U: actorCost(U, y, N, W, delta, mode), myUinit, method=self.actorOptMethod, tol=1e-7, bounds=bnds, options=self.actorOptOptions).x        
+                U = minimize(lambda U: self.actorCost(U, y, N, W, delta, mode), myUinit, method=self.actorOptMethod, tol=1e-7, bounds=bnds, options=self.actorOptOptions).x        
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
             U = myUinit
@@ -662,7 +659,7 @@ class LearnRLSK:
         Bl  = '\033[30m'
         myU = np.reshape(U, [N, dimInput])    
         myU_upsampled = myU.repeat(int(delta/dt), axis=0)
-        Yupsampled, _ = dssSim(self.ctrlStat_A, self.ctrlStat_B, self.ctrlStat_C, self.ctrlStat_D, myU_upsampled, self.ctrlStat_x0est, y)
+        Yupsampled, _ = self.dssSim(self.ctrlStat_A, self.ctrlStat_B, self.ctrlStat_C, self.ctrlStat_D, myU_upsampled, self.ctrlStat_x0est, y)
         Y = Yupsampled[::int(delta/self.dt)]
         Yt = np.zeros([N, self.dimOutput])
         Yt[0, :] = y
@@ -682,7 +679,7 @@ class LearnRLSK:
         return U[:self.dimInput]
 
 
-    def ctrlStat(y, t):
+    def ctrlStat(self, y, t):
         # In ctrlStat, a ZOH is built-in
         timeInSample = t - self.ctrlStat_CtrlClock
         
@@ -817,7 +814,7 @@ class LearnRLSK:
                     self.ctrlStat_sampled_u = actor(y, Uinit, self.Nactor, W, self.ctrlStat_A, self.ctrlStat_B, self.ctrlStat_C, self.ctrlStat_D, self.ctrlStat_x0est, predStepSize, self.ctrlStatMode)
         
     # ===> ToDo: buffer update to move outside the simulator <===
-    def ctrlDyn(t, u, y):
+    def ctrlDyn(self, t, u, y):
         self.ctrlDyn_ybuffer = pushVec(self.ctrlDyn_ybuffer, y)
         
         Du = np.zeros(dimInput)
@@ -845,7 +842,7 @@ class LearnRLSK:
     #%% Disturbance dynamics
 
     # Simple 1st order filter of white Gaussian noise
-    def disturbDyn(t, q):
+    def disturbDyn(self, t, q):
         Dq = np.zeros(self.dimDisturb)
         for k in range(0, self.dimDisturb):
             Dq[k] = - self.tau_q_DEF[k] * ( q[k] + self.sigma_q_DEF[k] * randn() + self.mu_q_DEF[k])
@@ -853,7 +850,7 @@ class LearnRLSK:
 
     #%% Closed loop
 
-    def closedLoopStat(t, ksi):        
+    def closedLoopStat(self, t, ksi):        
         DfullState = np.zeros(self.dimFullStateStat)
         
         x = ksi[0:self.dimState]
@@ -866,24 +863,23 @@ class LearnRLSK:
             u[0] = np.clip(u[0], self.Fmin, self.Fmax)
             u[1] = np.clip(u[1], self.Mmin, self.Mmax)
         
-        DfullState[0:dimState] = sysStateDyn(t, x, u, q)
-        DfullState[dimState:] = disturbDyn(t, q)
+        DfullState[0:dimState] = self.sysStateDyn(t, x, u, q)
+        DfullState[dimState:] = self.disturbDyn(t, q)
         
         # Track system's state for some controllers
         self.closedLoopStat_x0true = x
         
         return DfullState
 
-    def closedLoopDyn(t, ksi, sigma_q=sigma_q_DEF, mu_q=mu_q_DEF, tau_q=tau_q_DEF):
-        global ctrlConstraintOn, ZOHs
-        
+    def closedLoopDyn(self, t, ksi):
+    
         DfullState = np.zeros(dimFullStateDyn)
         
-        x = ksi[0:dimState]
-        q = ksi[dimState:dimState+dimDisturb]
-        u = ksi[-dimInput:]
+        x = ksi[0:self.dimState]
+        q = ksi[self.dimState:self.dimState+self.dimDisturb]
+        u = ksi[-self.dimInput:]
         
-        u = ZOHs.u.hold(u, t)
+        u = self.ZOHs.u.hold(u, t)
         
         y = sysOut(x)
         
@@ -891,274 +887,25 @@ class LearnRLSK:
             u[0] = np.clip(u[0], Fmin, Fmax)
             u[1] = np.clip(u[1], Mmin, Mmax)
         
-        DfullState[0:dimState] = sysStateDyn(t, x, u, q)
-        DfullState[dimState:dimState+dimDisturb] = disturbDyn(t, q, sigma_q = sigma_q, mu_q = mu_q, tau_q = tau_q)
-        DfullState[-dimInput:] = ctrlDyn(t, u, y)
+        DfullState[0:self.dimState] = self.sysStateDyn(t, x, u, q)
+        DfullState[self.dimState:self.dimState+self.dimDisturb] = self.disturbDyn(t, q)
+        DfullState[-self.dimInput:] = self.ctrlDyn(t, u, y)
         
         return DfullState
 
     #%% Cost 
-    def updateLine(line, newX, newY):
+    def updateLine(self, line, newX, newY):
         line.set_xdata( np.append( line.get_xdata(), newX) )
         line.set_ydata( np.append( line.get_ydata(), newY) )  
         
-    def resetLine(line):
+    def resetLine(self, line):
         line.set_data([], [])     
      
-    def updateScatter(scatter, newX, newY):
+    def updateScatter(self, scatter, newX, newY):
         scatter.set_offsets( np.vstack( [ scatter.get_offsets().data, np.c_[newX, newY] ] ) )
         
-    def updateText(textHandle, newText):
+    def updateText(self, textHandle, newText):
         textHandle.set_text(newText)
-
-
-    def onKeyPress(event):
-        global lines    
-
-        if event.key==' ':
-            if anm.running:
-                anm.event_source.stop()
-                
-            else:
-                anm.event_source.start()
-            anm.running ^= True
-        elif event.key=='q':
-            plt.close('all')
-            raise Exception('exit')
-            
-    def run_sim(self):
-        dataFile = create_datafile()
-        
-        if isPrintSimStep:
-            warnings.filterwarnings('ignore')
-
-        #------------------------------------visuals
-        if isVisualization:  
-           
-            plt.close('all')
-             
-            simFig = plt.figure(figsize=(10,10))    
-                
-            # xy plane  
-            xyPlaneAxs = simFig.add_subplot(221, autoscale_on=False, xlim=(xMin,xMax), ylim=(yMin,yMax), xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
-            xyPlaneAxs.set_aspect('equal', adjustable='box')
-            xyPlaneAxs.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
-            xyPlaneAxs.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
-            trajLine, = xyPlaneAxs.plot(xCoord0, yCoord0, 'b--', lw=0.5)
-            robotMarker = pltMarker(angle=alphaDeg0)
-            textTime = 't = {time:2.3f}'.format(time = t0)
-            textTimeHandle = xyPlaneAxs.text(0.05, 0.95, textTime, horizontalalignment='left', verticalalignment='center', transform=xyPlaneAxs.transAxes)
-            xyPlaneAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
-            
-            # Solution
-            solAxs = simFig.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
-            solAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-            normLine, = solAxs.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
-            alphaLine, = solAxs.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
-            solAxs.legend(fancybox=True, loc='upper right')
-            solAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
-            
-            # Cost
-            costAxs = simFig.add_subplot(223, autoscale_on=False,
-                                         xlim=(t0,t1),
-                                         ylim=(0, 1e3*rcost( y0, u0 ) ),
-                                         yscale='symlog', xlabel='t [s]')
-            r = self.rcost(y0, u0)
-            # textRcost = 'r = {r:2.3f}'.format(r = r)
-            # textRcostHandle = simFig.text(0.05, 0.05, textRcost, horizontalalignment='left', verticalalignment='center')
-            textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost = icost.val)
-            textIcostHandle = simFig.text(0.05, 0.5, textIcost, horizontalalignment='left', verticalalignment='center')
-            rcostLine, = costAxs.plot(t0, r, 'r-', lw=0.5, label='r')
-            icostLine, = costAxs.plot(t0, icost.val, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
-            costAxs.legend(fancybox=True, loc='upper right')
-            
-            # Control
-            ctrlAxs = simFig.add_subplot(224, autoscale_on=False, xlim=(t0,t1), ylim=(1.1*np.min([Fmin, Mmin]), 1.1*np.max([Fmax, Mmax])), xlabel='t [s]')
-            ctrlAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-            ctrlLines = ctrlAxs.plot(t0, toColVec(u0).T, lw=0.5)
-            ctrlAxs.legend(iter(ctrlLines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
-            
-            # Pack all lines together
-            cLines = namedtuple('lines', ['trajLine', 'normLine', 'alphaLine', 'rcostLine', 'icostLine', 'ctrlLines'])
-            lines = cLines(trajLine=trajLine, normLine=normLine, alphaLine=alphaLine, rcostLine=rcostLine, icostLine=icostLine, ctrlLines=ctrlLines)
-            
-            # Enable data cursor
-            for item in lines:
-                if isinstance(item, list):
-                    for subitem in item:
-                        datacursor(subitem)
-                else:
-                    datacursor(item)
-
-        animate_solScatter = xyPlaneAxs.scatter(xCoord0, yCoord0, marker=robotMarker_marker, s=400, c='b')
-        animate_currRun = 1
-
-        
-        #------------------------------------simStep
-        simulator.step()
-        
-        t = simulator.t
-        ksi = simulator.y
-        
-        x = ksi[0:dimState]
-        y = sysOut(x)
-        
-        if isDynCtrl:
-            u = ksi[-dimInput:]
-        else:
-            ctrlStat(y, t, sampleTime=dt)   # Updates self.ctrlStat_sampled_u
-            u = self.ctrlStat_sampled_u
-        
-        xCoord = ksi[0]
-        yCoord = ksi[1]
-        alpha = ksi[2]
-        alphaDeg = alpha/np.pi*180
-        v = ksi[3]
-        omega = ksi[4]
-        
-        r = rcost(y, u)
-        icost.val = icost(r, t)
-        
-        if isPrintSimStep:
-            printSimStep(t, xCoord, yCoord, alpha, v, omega, icost.val, u)
-            
-        if isLogData:
-            logDataRow(dataFile, t, xCoord, yCoord, alpha, v, omega, icost.val, u)
-        
-        #------------------------------------visuals     
-        # xy plane    
-        textTime = 't = {time:2.3f}'.format(time = t)
-        updateText(textTimeHandle, textTime)
-        updateLine(trajLine, *ksi[:2])  # Update the robot's track on the plot
-        
-        robotMarker.rotate(alphaDeg)    # Rotate the robot on the plot  
-        animate.solScatter.remove()
-        animate.solScatter = xyPlaneAxs.scatter(xCoord, yCoord, marker=robotMarker.marker, s=400, c='b')
-        
-        # Solution
-        updateLine(normLine, t, la.norm([xCoord, yCoord]))
-        updateLine(alphaLine, t, alpha)
-
-        # Cost
-        updateLine(rcostLine, t, r)
-        updateLine(icostLine, t, icost.val)
-        textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'.format(icost = icost.val)
-        updateText(textIcostHandle, textIcost)
-        # Control
-        for (line, uSingle) in zip(ctrlLines, u):
-            updateLine(line, t, uSingle)
-
-        #------------------------------------run done
-        if t >= t1:  
-            if isPrintSimStep:
-                    print('.....................................Run {run:2d} done.....................................'.format(run = animate.currRun))
-                
-            animate.currRun += 1
-            
-            if animate.currRun > Nruns:
-                anm.event_source.stop()
-                return
-            
-            if isLogData:
-                dataFile = dataFiles[animate.currRun-1]
-            
-            # Reset simulator
-            simulator.status = 'running'
-            simulator.t = t0
-            simulator.y = ksi0
-            
-            # Reset controller
-            if isDynCtrl:
-                self.ctrlDyn_ybuffer = repMat(y0, 2, 1)
-                self.ctrlDyn_itime = t0
-            else:
-                self.ctrlStat_CtrlClock = t0
-                self.ctrlStat_sampled_u = u0
-            
-            icost.val = 0      
-            
-            for item in lines:
-                if item != trajLine:
-                    if isinstance(item, list):
-                        for subitem in item:
-                            resetLine(subitem)
-                    else:
-                        resetLine(item)
-
-            updateLine(trajLine, np.nan, np.nan)
-
-
-        if isVisualization:
-            cId = simFig.canvas.mpl_connect('key_press_event', onKeyPress)
-               
-            anm = animation.FuncAnimation(simFig, animate, init_func=initAnim, blit=False, interval=dt/1e3, repeat=False)
-            anm.running = True
-            
-            simFig.tight_layout()
-            
-            plt.show()
-            
-        else:   
-            t = simulator.t
-            
-            animate.currRun = 1
-            
-            while True:
-                simulator.step()
-                
-                t = simulator.t
-                ksi = simulator.y
-                
-                x = ksi[0:dimState]
-                y = sysOut(x)
-                
-                if isDynCtrl:
-                    u = ksi[-dimInput:]
-                else:
-                    ctrlStat(y, t, sampleTime=dt)   # Updates self.ctrlStat_sampled_u
-                    u = self.ctrlStat_sampled_u
-                
-                xCoord = ksi[0]
-                yCoord = ksi[1]
-                alpha = ksi[2]
-                v = ksi[3]
-                omega = ksi[4]
-                
-                r = rcost(y, u)
-                icost.val = icost(r, t)
-                
-                if isPrintSimStep:
-                    printSimStep(t, xCoord, yCoord, alpha, v, omega, icost.val, u)
-                    
-                if isLogData:
-                    logDataRow(dataFile, t, xCoord, yCoord, alpha, v, omega, icost.val, u)
-                
-                if t >= t1:  
-                    if isPrintSimStep:
-                        print('.....................................Run {run:2d} done.....................................'.format(run = animate.currRun))
-                        
-                    animate.currRun += 1
-                    
-                    if animate.currRun > Nruns:
-                        break
-                        
-                    if isLogData:
-                        dataFile = dataFiles[animate.currRun-1]
-                    
-                    # Reset simulator
-                    simulator.status = 'running'
-                    simulator.t = t0
-                    simulator.y = ksi0
-                    
-                    # Reset controller
-                    if isDynCtrl:
-                        self.ctrlDyn_ybuffer = repMat(y0, 2, 1)
-                        self.ctrlDyn_itime = t0
-                    else:
-                        self.ctrlStat_CtrlClock = t0
-                        self.ctrlStat_sampled_u = u0
-                    
-                    icost.val = 0
 
     def create_datafile(self):
         if isLogData:
@@ -1181,5 +928,259 @@ class LearnRLSK:
             dataFile = dataFiles[0]
 
             return dataFile
+
+    def sysOut(self, x):
+        y = np.zeros(dimOutput)
+        # y = x[:3] + measNoise # <-- Measure only position and orientation
+        y = x  # <-- Position, force and torque sensors on
+        return y    
+
+
+    def enable_viz(self):
+        if self.isVisualization:
+            plt.close('all')
+             
+            self.simFig = plt.figure(figsize=(10,10))    
+                
+            # xy plane  
+            self.xyPlaneAxs = self.simFig.add_subplot(221, autoscale_on=False, xlim=(self.xMin,self.xMax), ylim=(self.yMin,self.yMax), xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+            self.xyPlaneAxs.set_aspect('equal', adjustable='box')
+            self.xyPlaneAxs.plot([self.xMin, self.xMax], [0, 0], 'k--', lw=0.75)   # Help line
+            self.xyPlaneAxs.plot([0, 0], [self.yMin, self.yMax], 'k--', lw=0.75)   # Help line
+            trajLine, = self.xyPlaneAxs.plot(xCoord0, yCoord0, 'b--', lw=0.5)
+            self.robotMarker = pltMarker(angle=alphaDeg0)
+            self.textTime = 't = {time:2.3f}'.format(time = t0)
+            self.textTimeHandle = self.xyPlaneAxs.text(0.05, 0.95, self.textTime, horizontalalignment='left', verticalalignment='center', transform=self.xyPlaneAxs.transAxes)
+            self.xyPlaneAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+            
+            # Solution
+            self.solAxs = self.simFig.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([self.xMin, self.yMin]), 2 * np.max([self.xMax, self.yMax]) ), xlabel='t [s]')
+            self.solAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+            self.normLine, = solAxs.plot(t0, la.norm([self.xCoord0, self.yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+            self.alphaLine, = solAxs.plot(self.t0, self.alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
+            self.solAxs.legend(fancybox=True, loc='upper right')
+            self.solAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+            
+            # Cost
+            self.costAxs = self.simFig.add_subplot(223, 
+                            autoscale_on=False,
+                            xlim=(self.t0,self.t1),
+                            ylim=(0, 1e3*self.rcost(self.y0, self.u0 )),
+                            yscale='symlog', 
+                            xlabel='t [s]')
+            r = self.rcost(self.y0, self.u0)
+            # textRcost = 'r = {r:2.3f}'.format(r = r)
+            # textRcostHandle = self.simFig.text(0.05, 0.05, textRcost, horizontalalignment='left', verticalalignment='center')
+            self.textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost = self.icost_val)
+            self.textIcostHandle = self.simFig.text(0.05, 0.5, textIcost, horizontalalignment='left', verticalalignment='center')
+            self.rcostLine, = self.costAxs.plot(self.t0, r, 'r-', lw=0.5, label='r')
+            self.icostLine, = self.costAxs.plot(self.t0, self.icost_val, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+            costAxs.legend(fancybox=True, loc='upper right')
+            
+            # Control
+            self.ctrlAxs = self.simFig.add_subplot(224, autoscale_on=False, xlim=(self.t0,self.t1), ylim=(1.1*np.min([self.Fmin, self.Mmin]), 1.1*np.max([self.Fmax, self.Mmax])), xlabel='t [s]')
+            self.ctrlAxs.plot([self.t0, self.t1], [0, 0], 'k--', lw=0.75)   
+
+            # Help line
+            self.ctrlLines = self.ctrlAxs.plot(self.t0, toColVec(self.u0).T, lw=0.5)
+            self.ctrlAxs.legend(iter(self.ctrlLines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
+            
+            # Pack all lines together
+            cLines = namedtuple('lines', ['trajLine', 'normLine', 'alphaLine', 'rcostLine', 'icostLine', 'ctrlLines'])
+            self.lines = cLines(trajLine=trajLine, normLine=normLine, alphaLine=alphaLine, rcostLine=self.rcostLine, icostLine=self.icostLine, ctrlLines=self.ctrlLines)
+            
+            # Enable data cursor
+            for item in self.lines:
+                if isinstance(item, list):
+                    for subitem in item:
+                        datacursor(subitem)
+                else:
+                    datacursor(item)
+
+    def initAnim(self):
+        self.animate_solScatter = self.xyPlaneAxs.scatter(self.xCoord0, self.yCoord0, marker=self.robotMarker.marker, s=400, c='b')
+        self.animate_currRun = 1
+        return self.animate_solScatter, self.animate_currRun,
+
+        
+    def animate(self, k):
+        #------------------------------------simStep
+        simulator.step()
+        
+        t = simulator.t
+        ksi = simulator.y
+        
+        x = ksi[0:self.dimState]
+        y = self.sysOut(x)
+        
+        if self.isDynCtrl:
+            u = ksi[-self.dimInput:]
+        else:
+            self.ctrlStat(y, t)   # Updates self.ctrlStat_sampled_u
+            u = self.ctrlStat_sampled_u
+        
+        xCoord = ksi[0]
+        yCoord = ksi[1]
+        alpha = ksi[2]
+        alphaDeg = alpha/np.pi*180
+        v = ksi[3]
+        omega = ksi[4]
+        
+        r = self.rcost(y, u)
+        self.icost_val = self.icost(r, t)
+        
+        if isPrintSimStep:
+            printSimStep(t, xCoord, yCoord, alpha, v, omega, self.icost_val, u)
+            
+        if isLogData:
+            logDataRow(dataFile, t, xCoord, yCoord, alpha, v, omega, self.icost_val, u)
+        
+        #------------------------------------visuals     
+        # xy plane    
+        self.textTime = 't = {time:2.3f}'.format(time = t)
+        self.updateText(self.textTimeHandle, self.textTime)
+        self.updateLine(self.trajLine, *ksi[:2])  # Update the robot's track on the plot
+        
+        self.robotMarker.rotate(alphaDeg)    # Rotate the robot on the plot  
+        self.animate_solScatter.remove()
+        self.animate_solScatter = self.xyPlaneAxs.scatter(xCoord, yCoord, marker=self.robotMarker.marker, s=400, c='b')
+        
+        # Solution
+        self.updateLine(self.normLine, t, la.norm([xCoord, yCoord]))
+        self.updateLine(self.alphaLine, t, alpha)
+
+        # Cost
+        self.updateLine(self.rcostLine, t, r)
+        self.updateLine(self.icostLine, t, self.icost_val)
+        self.textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'.format(icost = self.icost_val)
+        self.updateText(self.textIcostHandle, self.textIcost)
+        # Control
+        for (line, uSingle) in zip(ctrlLines, u):
+            self.updateLine(line, t, uSingle)
+
+        #------------------------------------run done
+        if t >= t1:  
+            if isPrintSimStep:
+                    print('.....................................Run {run:2d} done.....................................'.format(run = self.animate_currRun))
+                
+            self.animate_currRun += 1
+            
+            if self.animate_currRun > Nruns:
+                anm.event_source.stop()
+                return
+            
+            if isLogData:
+                dataFile = dataFiles[self.animate_currRun-1]
+            
+            # Reset simulator
+            simulator.status = 'running'
+            simulator.t = self.t0
+            simulator.y = self.ksi0
+            
+            # Reset controller
+            if isDynCtrl:
+                ctrlDyn.ybuffer = repMat(y0, 2, 1)
+                ctrlDyn.itime = self.t0
+            else:
+                self.ctrlStat_ctrlClock = self.t0
+                self.ctrlStat_sampled_u = self.u0
+            
+            self.icost_val = 0      
+            
+            for item in lines:
+                if item != trajLine:
+                    if isinstance(item, list):
+                        for subitem in item:
+                            resetLine(subitem)
+                    else:
+                        resetLine(item)
+
+            updateLine(trajLine, np.nan, np.nan)
+        
+        return self.animate_solScatter
+
+
+    def run_sim(self):
+        dataFile = create_datafile()
+        
+        if isPrintSimStep:
+            warnings.filterwarnings('ignore')
+
+        enable_viz()
+
+        if self.isVisualization:
+            anm = animation.FuncAnimation(self.simFig, self.animate, init_func=self.initAnim, blit=False, interval=self.dt/1e3, repeat=False)
+
+
+            anm.running = True
+            
+            self.simFig.tight_layout()
+            
+            plt.show()
+            
+        else:   
+            t = simulator.t
+            
+            self.animate_currRun = 1
+            
+            while True:
+                simulator.step()
+                
+                t = simulator.t
+                ksi = simulator.y
+                
+                x = ksi[0:dimState]
+                y = sysOut(x)
+                
+                if isDynCtrl:
+                    u = ksi[-dimInput:]
+                else:
+                    self.ctrlStat(y, t)   # Updates self.ctrlStat_sampled_u
+                    u = self.ctrlStat_sampled_u
+                
+                xCoord = ksi[0]
+                yCoord = ksi[1]
+                alpha = ksi[2]
+                v = ksi[3]
+                omega = ksi[4]
+                
+                r = self.rcost(y, u)
+                self.icost_val = self.icost(r, t)
+                
+                if isPrintSimStep:
+                    printSimStep(t, xCoord, yCoord, alpha, v, omega, self.icost_val, u)
+                    
+                if isLogData:
+                    logDataRow(dataFile, t, xCoord, yCoord, alpha, v, omega, self.icost_val, u)
+                
+                if t >= t1:  
+                    if self.isPrintSimStep:
+                        print('.....................................Run {run:2d} done.....................................'.format(run = self.animate_currRun))
+                        
+                    self.animate_currRun += 1
+                    
+                    if self.animate_currRun > Nruns:
+                        break
+                        
+                    if isLogData:
+                        dataFile = dataFiles[self.animate_currRun-1]
+                    
+                    # Reset simulator
+                    simulator.status = 'running'
+                    simulator.t = self.t0
+                    simulator.y = self.ksi0
+                    
+                    # Reset controller
+                    if isDynCtrl:
+                        ctrlDyn.ybuffer = repMat(y0, 2, 1)
+                        ctrlDyn.itime = self.t0
+                    else:
+                        self.ctrlStat_ctrlClock = self.t0
+                        self.ctrlStat_sampled_u = self.u0
+                    
+                    self.icost_val = 0
+
+
+
 
 
