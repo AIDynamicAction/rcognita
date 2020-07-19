@@ -228,7 +228,6 @@ isProbNoise = 1
 # Use global optimization algorithm in actor (increases computation time significantly)
 isGlobOpt = 0
 
-
 #%% Service
 def toColVec(argin):
     if argin.ndim < 2:
@@ -999,6 +998,217 @@ def onKeyPress(event):
     elif event.key=='q':
         plt.close('all')
         raise Exception('exit')
+        
+#%% Simulation & visualization: setup
+
+#------------------------------------main
+
+y0 = sysOut(x0)
+
+icost.val = 0
+icost.itime = t0
+
+xCoord0 = x0[0]
+yCoord0 = x0[1]
+alpha0 = x0[2]
+alphaDeg0 = alpha0/2/np.pi
+
+if isLogData:
+    # Data logging init
+    
+    import os
+    import pathlib
+    
+    cwd = os.getcwd()
+    datafolder = '/data'
+    dataFolder_path = cwd + datafolder
+    
+    # create data dir
+    pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True) 
+
+    date = datetime.now().strftime("%Y-%m-%d")
+    time = datetime.now().strftime("%Hh%Mm%Ss")
+    dataFiles = [None] * Nruns
+    for k in range(0, Nruns):
+        dataFiles[k] = dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+        with open(dataFiles[k], 'w', newline='') as outfile:
+            writer = csv.writer(outfile)
+            writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
+    dataFile = dataFiles[0]
+
+# Do not display annoying warnings when print is on
+if isPrintSimStep:
+    warnings.filterwarnings('ignore')
+
+# Track system's state for some controllers
+closedLoopStat.x0true = x0    
+
+#------------------------------------model estimator
+if isDynCtrl:
+    pass
+else:
+    ctrlStat.estClock = t0
+    ctrlStat.modEst_ubuffer = np.zeros([ modEstBufferSize, dimInput] )
+    ctrlStat.modEst_ybuffer = np.zeros( [modEstBufferSize, dimOutput] )
+    
+    # Initial model estimate is subject to tuning
+    ctrlStat.A = np.zeros( [modelOrder, modelOrder] )
+    ctrlStat.B = np.zeros( [modelOrder, dimInput] )
+    ctrlStat.C = np.zeros( [dimOutput, modelOrder] )
+    ctrlStat.D = np.zeros( [dimOutput, dimInput] )
+    ctrlStat.x0est = np.zeros( modelOrder )
+    
+ctrlStat.modEstAstack = [ctrlStat.A] * modEstchecks
+ctrlStat.modEstBstack = [ctrlStat.B] * modEstchecks
+ctrlStat.modEstCstack = [ctrlStat.C] * modEstchecks
+ctrlStat.modEstDstack = [ctrlStat.D] * modEstchecks
+
+#------------------------------------controller
+if isDynCtrl:
+    ctrlDyn.ybuffer = repMat(y0, 1, 2)
+    ctrlDyn.itime = t0
+else:
+    ctrlStat.ctrlClock = t0
+    ctrlStat.sampled_u = u0
+  
+# Stack constraints    
+uMin = np.array([Fmin, Mmin])
+uMax = np.array([Fmax, Mmax])
+Umin = repMat(uMin, 1, Nactor)
+Umax = repMat(uMax, 1, Nactor)
+    
+# Optimization method of actor    
+# Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
+actorOptMethod = 'SLSQP'
+if actorOptMethod == 'trust-constr':
+    actorOptOptions = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
+else:
+    actorOptOptions = {'maxiter': 300, 'maxfev': 5000, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2}    
+
+cPID = namedtuple('PID', ['P', 'I', 'D'])
+PID = cPID(P=[1, 1], I=[.5, .5], D=[0, 0])
+
+#------------------------------------RL elements
+    
+if criticStruct == 1:
+    dimCrit = ( ( dimOutput + dimInput ) + 1 ) * ( dimOutput + dimInput )/2 + (dimOutput + dimInput)  
+    Wmin = -1e3*np.ones(dimCrit) 
+    Wmax = 1e3*np.ones(dimCrit) 
+elif criticStruct == 2:
+    dimCrit = ( ( dimOutput + dimInput ) + 1 ) * ( dimOutput + dimInput )/2
+    Wmin = np.zeros(dimCrit) 
+    Wmax = 1e3*np.ones(dimCrit)    
+elif criticStruct == 3:
+    dimCrit = dimOutput + dimInput
+    Wmin = np.zeros(dimCrit) 
+    Wmax = 1e3*np.ones(dimCrit)    
+elif criticStruct == 4:
+    dimCrit = dimOutput + dimOutput * dimInput + dimInput
+    Wmin = -1e3*np.ones(dimCrit) 
+    Wmax = 1e3*np.ones(dimCrit)    
+  
+# Critic weights
+Winit = rand(dimCrit)
+
+if isDynCtrl:
+    pass
+else:
+    ctrlStat.Wprev = Winit
+    ctrlStat.criticClock = 0
+
+# Optimization method of critic    
+# Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
+criticOptMethod = 'SLSQP'
+if actorOptMethod == 'trust-constr':
+    criticOptOptions = {'maxiter': 200, 'disp': False} #'disp': True, 'verbose': 2}
+else:
+    criticOptOptions = {'maxiter': 200, 'maxfev': 1500, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2} 
+
+# Clip critic buffer size
+Ncritic = np.min([Ncritic, modEstBufferSize-1])
+
+#------------------------------------digital elements
+
+# Differentiator filters
+diffFilterNum = signal.remez(diffFiltOrd+1, [0, cutoff], [1], Hz=sampleFreq, type='differentiator')
+diffFilterDen = np.array([1.0])
+
+cdiffFilters = namedtuple('diffFilter', ['y', 'Dy'])
+diffFilters = cdiffFilters(y = dfilter(diffFilterNum, diffFilterDen, initVal=y0, initTime=t0, sampleTime=dt, bufferSize = 4),
+                           Dy = dfilter(diffFilterNum, diffFilterDen, initVal=y0, initTime=t0, sampleTime=dt, bufferSize = 4))
+
+# Zero-order holds
+cZOHs = namedtuple('ZOH', ['u', 'y'])
+ZOHs = cZOHs(u = ZOH(initTime=t0, initVal=u0, sampleTime=dt),
+             y = ZOH(initTime=t0, initVal=y0, sampleTime=dt))
+
+#------------------------------------simulator
+if isDynCtrl:
+    ksi0 = np.concatenate([x0, q0, u0])
+    simulator = sp.integrate.RK45(lambda t, ksi: closedLoopDyn(t, ksi, sigma_q, mu_q, tau_q, dt), 
+                                  t0, ksi0, t1, first_step=1e-6, atol=atol, rtol=rtol)
+else:
+    ksi0 = np.concatenate([x0, q0])
+    simulator = sp.integrate.RK45(lambda t, ksi: closedLoopStat(t, ksi, sigma_q, mu_q, tau_q, dt), 
+                                  t0, ksi0, t1, first_step=1e-6, atol=atol, rtol=rtol)
+
+#------------------------------------visuals
+if isVisualization:  
+   
+    plt.close('all')
+     
+    simFig = plt.figure(figsize=(10,10))    
+        
+    # xy plane  
+    xyPlaneAxs = simFig.add_subplot(221, autoscale_on=False, xlim=(xMin,xMax), ylim=(yMin,yMax), xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+    xyPlaneAxs.set_aspect('equal', adjustable='box')
+    xyPlaneAxs.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
+    xyPlaneAxs.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
+    trajLine, = xyPlaneAxs.plot(xCoord0, yCoord0, 'b--', lw=0.5)
+    robotMarker = pltMarker(angle=alphaDeg0)
+    textTime = 't = {time:2.3f}'.format(time = t0)
+    textTimeHandle = xyPlaneAxs.text(0.05, 0.95, textTime, horizontalalignment='left', verticalalignment='center', transform=xyPlaneAxs.transAxes)
+    xyPlaneAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+    
+    # Solution
+    solAxs = simFig.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
+    solAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+    normLine, = solAxs.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+    alphaLine, = solAxs.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
+    solAxs.legend(fancybox=True, loc='upper right')
+    solAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+    
+    # Cost
+    costAxs = simFig.add_subplot(223, autoscale_on=False,
+                                 xlim=(t0,t1),
+                                 ylim=(0, 1e3*rcost( y0, u0 ) ),
+                                 yscale='symlog', xlabel='t [s]')
+    r = rcost(y0, u0)
+    # textRcost = 'r = {r:2.3f}'.format(r = r)
+    # textRcostHandle = simFig.text(0.05, 0.05, textRcost, horizontalalignment='left', verticalalignment='center')
+    textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost = icost.val)
+    textIcostHandle = simFig.text(0.05, 0.5, textIcost, horizontalalignment='left', verticalalignment='center')
+    rcostLine, = costAxs.plot(t0, r, 'r-', lw=0.5, label='r')
+    icostLine, = costAxs.plot(t0, icost.val, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+    costAxs.legend(fancybox=True, loc='upper right')
+    
+    # Control
+    ctrlAxs = simFig.add_subplot(224, autoscale_on=False, xlim=(t0,t1), ylim=(1.1*np.min([Fmin, Mmin]), 1.1*np.max([Fmax, Mmax])), xlabel='t [s]')
+    ctrlAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+    ctrlLines = ctrlAxs.plot(t0, toColVec(u0).T, lw=0.5)
+    ctrlAxs.legend(iter(ctrlLines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
+    
+    # Pack all lines together
+    cLines = namedtuple('lines', ['trajLine', 'normLine', 'alphaLine', 'rcostLine', 'icostLine', 'ctrlLines'])
+    lines = cLines(trajLine=trajLine, normLine=normLine, alphaLine=alphaLine, rcostLine=rcostLine, icostLine=icostLine, ctrlLines=ctrlLines)
+    
+    # Enable data cursor
+    for item in lines:
+        if isinstance(item, list):
+            for subitem in item:
+                datacursor(subitem)
+        else:
+            datacursor(item)
 
 #%% Simulation & visualization: init & animate
 
@@ -1105,449 +1315,76 @@ def animate(k):
     
     return animate.solScatter
 
+#%% Simulation & visualization: main loop
 
-def run_sim():
-    #%% Simulation & visualization: setup
-
-    #------------------------------------main
-
-    y0 = sysOut(x0)
-
-    icost.val = 0
-    icost.itime = t0
-
-    xCoord0 = x0[0]
-    yCoord0 = x0[1]
-    alpha0 = x0[2]
-    alphaDeg0 = alpha0/2/np.pi
-
-    if isLogData:
-        # Data logging init
-        
-        import os
-        import pathlib
-        
-        cwd = os.getcwd()
-        datafolder = '/data'
-        dataFolder_path = cwd + datafolder
-        
-        # create data dir
-        pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True) 
-
-        date = datetime.now().strftime("%Y-%m-%d")
-        time = datetime.now().strftime("%Hh%Mm%Ss")
-        dataFiles = [None] * Nruns
-        for k in range(0, Nruns):
-            dataFiles[k] = dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
-            with open(dataFiles[k], 'w', newline='') as outfile:
-                writer = csv.writer(outfile)
-                writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
-        dataFile = dataFiles[0]
-
-    # Do not display annoying warnings when print is on
-    if isPrintSimStep:
-        warnings.filterwarnings('ignore')
-
-    # Track system's state for some controllers
-    closedLoopStat.x0true = x0    
-
-    #------------------------------------model estimator
-    if isDynCtrl:
-        pass
-    else:
-        ctrlStat.estClock = t0
-        ctrlStat.modEst_ubuffer = np.zeros([ modEstBufferSize, dimInput] )
-        ctrlStat.modEst_ybuffer = np.zeros( [modEstBufferSize, dimOutput] )
-        
-        # Initial model estimate is subject to tuning
-        ctrlStat.A = np.zeros( [modelOrder, modelOrder] )
-        ctrlStat.B = np.zeros( [modelOrder, dimInput] )
-        ctrlStat.C = np.zeros( [dimOutput, modelOrder] )
-        ctrlStat.D = np.zeros( [dimOutput, dimInput] )
-        ctrlStat.x0est = np.zeros( modelOrder )
-        
-    ctrlStat.modEstAstack = [ctrlStat.A] * modEstchecks
-    ctrlStat.modEstBstack = [ctrlStat.B] * modEstchecks
-    ctrlStat.modEstCstack = [ctrlStat.C] * modEstchecks
-    ctrlStat.modEstDstack = [ctrlStat.D] * modEstchecks
-
-    #------------------------------------controller
-    if isDynCtrl:
-        ctrlDyn.ybuffer = repMat(y0, 1, 2)
-        ctrlDyn.itime = t0
-    else:
-        ctrlStat.ctrlClock = t0
-        ctrlStat.sampled_u = u0
-      
-    # Stack constraints    
-    uMin = np.array([Fmin, Mmin])
-    uMax = np.array([Fmax, Mmax])
-    Umin = repMat(uMin, 1, Nactor)
-    Umax = repMat(uMax, 1, Nactor)
-        
-    # Optimization method of actor    
-    # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-    actorOptMethod = 'SLSQP'
-    if actorOptMethod == 'trust-constr':
-        actorOptOptions = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
-    else:
-        actorOptOptions = {'maxiter': 300, 'maxfev': 5000, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2}    
-
-    cPID = namedtuple('PID', ['P', 'I', 'D'])
-    PID = cPID(P=[1, 1], I=[.5, .5], D=[0, 0])
-
-    #------------------------------------RL elements
-        
-    if criticStruct == 1:
-        dimCrit = ( ( dimOutput + dimInput ) + 1 ) * ( dimOutput + dimInput )/2 + (dimOutput + dimInput)  
-        Wmin = -1e3*np.ones(dimCrit) 
-        Wmax = 1e3*np.ones(dimCrit) 
-    elif criticStruct == 2:
-        dimCrit = ( ( dimOutput + dimInput ) + 1 ) * ( dimOutput + dimInput )/2
-        Wmin = np.zeros(dimCrit) 
-        Wmax = 1e3*np.ones(dimCrit)    
-    elif criticStruct == 3:
-        dimCrit = dimOutput + dimInput
-        Wmin = np.zeros(dimCrit) 
-        Wmax = 1e3*np.ones(dimCrit)    
-    elif criticStruct == 4:
-        dimCrit = dimOutput + dimOutput * dimInput + dimInput
-        Wmin = -1e3*np.ones(dimCrit) 
-        Wmax = 1e3*np.ones(dimCrit)    
-      
-    # Critic weights
-    Winit = rand(dimCrit)
-
-    if isDynCtrl:
-        pass
-    else:
-        ctrlStat.Wprev = Winit
-        ctrlStat.criticClock = 0
-
-    # Optimization method of critic    
-    # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-    criticOptMethod = 'SLSQP'
-    if actorOptMethod == 'trust-constr':
-        criticOptOptions = {'maxiter': 200, 'disp': False} #'disp': True, 'verbose': 2}
-    else:
-        criticOptOptions = {'maxiter': 200, 'maxfev': 1500, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2} 
-
-    # Clip critic buffer size
-    Ncritic = np.min([Ncritic, modEstBufferSize-1])
-
-    #------------------------------------digital elements
-
-    # Differentiator filters
-    diffFilterNum = signal.remez(diffFiltOrd+1, [0, cutoff], [1], Hz=sampleFreq, type='differentiator')
-    diffFilterDen = np.array([1.0])
-
-    cdiffFilters = namedtuple('diffFilter', ['y', 'Dy'])
-    diffFilters = cdiffFilters(y = dfilter(diffFilterNum, diffFilterDen, initVal=y0, initTime=t0, sampleTime=dt, bufferSize = 4),
-                               Dy = dfilter(diffFilterNum, diffFilterDen, initVal=y0, initTime=t0, sampleTime=dt, bufferSize = 4))
-
-    # Zero-order holds
-    cZOHs = namedtuple('ZOH', ['u', 'y'])
-    ZOHs = cZOHs(u = ZOH(initTime=t0, initVal=u0, sampleTime=dt),
-                 y = ZOH(initTime=t0, initVal=y0, sampleTime=dt))
-
-    #------------------------------------simulator
-    if isDynCtrl:
-        ksi0 = np.concatenate([x0, q0, u0])
-        simulator = sp.integrate.RK45(lambda t, ksi: closedLoopDyn(t, ksi, sigma_q, mu_q, tau_q, dt), 
-                                      t0, ksi0, t1, first_step=1e-6, atol=atol, rtol=rtol)
-    else:
-        ksi0 = np.concatenate([x0, q0])
-        simulator = sp.integrate.RK45(lambda t, ksi: closedLoopStat(t, ksi, sigma_q, mu_q, tau_q, dt), 
-                                      t0, ksi0, t1, first_step=1e-6, atol=atol, rtol=rtol)
-
-    #------------------------------------visuals
-    if isVisualization:  
+if isVisualization:
+    cId = simFig.canvas.mpl_connect('key_press_event', onKeyPress)
        
-        plt.close('all')
-         
-        simFig = plt.figure(figsize=(10,10))    
-            
-        # xy plane  
-        xyPlaneAxs = simFig.add_subplot(221, autoscale_on=False, xlim=(xMin,xMax), ylim=(yMin,yMax), xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
-        xyPlaneAxs.set_aspect('equal', adjustable='box')
-        xyPlaneAxs.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
-        xyPlaneAxs.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
-        trajLine, = xyPlaneAxs.plot(xCoord0, yCoord0, 'b--', lw=0.5)
-        robotMarker = pltMarker(angle=alphaDeg0)
-        textTime = 't = {time:2.3f}'.format(time = t0)
-        textTimeHandle = xyPlaneAxs.text(0.05, 0.95, textTime, horizontalalignment='left', verticalalignment='center', transform=xyPlaneAxs.transAxes)
-        xyPlaneAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+    anm = animation.FuncAnimation(simFig, animate, init_func=initAnim, blit=False, interval=dt/1e3, repeat=False)
+    anm.running = True
+    
+    simFig.tight_layout()
+    
+    plt.show()
+    
+else:   
+    t = simulator.t
+    
+    animate.currRun = 1
+    
+    while True:
+        simulator.step()
         
-        # Solution
-        solAxs = simFig.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
-        solAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-        normLine, = solAxs.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
-        alphaLine, = solAxs.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
-        solAxs.legend(fancybox=True, loc='upper right')
-        solAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
-        
-        # Cost
-        costAxs = simFig.add_subplot(223, autoscale_on=False,
-                                     xlim=(t0,t1),
-                                     ylim=(0, 1e3*rcost( y0, u0 ) ),
-                                     yscale='symlog', xlabel='t [s]')
-        r = rcost(y0, u0)
-        # textRcost = 'r = {r:2.3f}'.format(r = r)
-        # textRcostHandle = simFig.text(0.05, 0.05, textRcost, horizontalalignment='left', verticalalignment='center')
-        textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost = icost.val)
-        textIcostHandle = simFig.text(0.05, 0.5, textIcost, horizontalalignment='left', verticalalignment='center')
-        rcostLine, = costAxs.plot(t0, r, 'r-', lw=0.5, label='r')
-        icostLine, = costAxs.plot(t0, icost.val, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
-        costAxs.legend(fancybox=True, loc='upper right')
-        
-        # Control
-        ctrlAxs = simFig.add_subplot(224, autoscale_on=False, xlim=(t0,t1), ylim=(1.1*np.min([Fmin, Mmin]), 1.1*np.max([Fmax, Mmax])), xlabel='t [s]')
-        ctrlAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-        ctrlLines = ctrlAxs.plot(t0, toColVec(u0).T, lw=0.5)
-        ctrlAxs.legend(iter(ctrlLines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
-        
-        # Pack all lines together
-        cLines = namedtuple('lines', ['trajLine', 'normLine', 'alphaLine', 'rcostLine', 'icostLine', 'ctrlLines'])
-        lines = cLines(trajLine=trajLine, normLine=normLine, alphaLine=alphaLine, rcostLine=rcostLine, icostLine=icostLine, ctrlLines=ctrlLines)
-        
-        # Enable data cursor
-        for item in lines:
-            if isinstance(item, list):
-                for subitem in item:
-                    datacursor(subitem)
-            else:
-                datacursor(item)
-
-
-
-    #%% Simulation & visualization: main loop
-
-    if isVisualization:
-        cId = simFig.canvas.mpl_connect('key_press_event', onKeyPress)
-        matplotlib.use('qt4')
-           
-        anm = animation.FuncAnimation(simFig, animate, init_func=initAnim, blit=False, interval=dt/1e3, repeat=False)
-        anm.running = True
-        
-        simFig.tight_layout()
-        
-        plt.show()
-        
-    else:   
         t = simulator.t
+        ksi = simulator.y
         
-        animate.currRun = 1
+        x = ksi[0:dimState]
+        y = sysOut(x)
         
-        while True:
-            simulator.step()
+        if isDynCtrl:
+            u = ksi[-dimInput:]
+        else:
+            ctrlStat(y, t, sampleTime=dt)   # Updates ctrlStat.sampled_u
+            u = ctrlStat.sampled_u
+        
+        xCoord = ksi[0]
+        yCoord = ksi[1]
+        alpha = ksi[2]
+        v = ksi[3]
+        omega = ksi[4]
+        
+        r = rcost(y, u)
+        icost.val = icost(r, t)
+        
+        if isPrintSimStep:
+            printSimStep(t, xCoord, yCoord, alpha, v, omega, icost.val, u)
             
-            t = simulator.t
-            ksi = simulator.y
-            
-            x = ksi[0:dimState]
-            y = sysOut(x)
-            
-            if isDynCtrl:
-                u = ksi[-dimInput:]
-            else:
-                ctrlStat(y, t, sampleTime=dt)   # Updates ctrlStat.sampled_u
-                u = ctrlStat.sampled_u
-            
-            xCoord = ksi[0]
-            yCoord = ksi[1]
-            alpha = ksi[2]
-            v = ksi[3]
-            omega = ksi[4]
-            
-            r = rcost(y, u)
-            icost.val = icost(r, t)
-            
+        if isLogData:
+            logDataRow(dataFile, t, xCoord, yCoord, alpha, v, omega, icost.val, u)
+        
+        if t >= t1:  
             if isPrintSimStep:
-                printSimStep(t, xCoord, yCoord, alpha, v, omega, icost.val, u)
+                print('.....................................Run {run:2d} done.....................................'.format(run = animate.currRun))
+                
+            animate.currRun += 1
+            
+            if animate.currRun > Nruns:
+                break
                 
             if isLogData:
-                logDataRow(dataFile, t, xCoord, yCoord, alpha, v, omega, icost.val, u)
+                dataFile = dataFiles[animate.currRun-1]
             
-            if t >= t1:  
-                if isPrintSimStep:
-                    print('.....................................Run {run:2d} done.....................................'.format(run = animate.currRun))
-                    
-                animate.currRun += 1
-                
-                if animate.currRun > Nruns:
-                    break
-                    
-                if isLogData:
-                    dataFile = dataFiles[animate.currRun-1]
-                
-                # Reset simulator
-                simulator.status = 'running'
-                simulator.t = t0
-                simulator.y = ksi0
-                
-                # Reset controller
-                if isDynCtrl:
-                    ctrlDyn.ybuffer = repMat(y0, 2, 1)
-                    ctrlDyn.itime = t0
-                else:
-                    ctrlStat.ctrlClock = t0
-                    ctrlStat.sampled_u = u0
-                
-                icost.val = 0      
-
-if __name__ == "__main__":
-    #%% Initialization 
-
-    #------------------------------------system
-    # System
-    dimState = 5
-    dimInput = 2
-    dimOutput = 5
-    dimDisturb = 2
-
-    m = 10 # [kg]
-    I = 1 # [kg m^2]
-
-    dimFullStateStat = dimState + dimDisturb
-    dimFullStateDyn = dimState + dimDisturb + dimInput
-
-    # Disturbance
-    sigma_q_DEF = 1e-3 * np.ones(dimDisturb)
-    mu_q_DEF = np.zeros(dimDisturb)
-    tau_q_DEF = np.ones(dimDisturb)
-
-    sigma_q = sigma_q_DEF
-    mu_q = mu_q_DEF
-    tau_q = tau_q_DEF
-
-    #------------------------------------simulation
-    t0 = 0
-    t1 = 100
-    Nruns = 1
-
-    x0 = np.zeros(dimState)
-    x0[0] = 5
-    x0[1] = 5
-    x0[2] = np.pi/2
-
-    u0 = 0 * np.ones(dimInput)
-    q0 = 0 * np.ones(dimDisturb)
-
-    # Solver
-    atol = 1e-5
-    rtol = 1e-5
-
-    # xy-plane
-    xMin = -10
-    xMax = 10
-    yMin = -10
-    yMax = 10
-
-    #------------------------------------digital elements
-    # Digital elements sampling time
-    dt = 0.05 # [s], controller sampling time
-    sampleFreq = 1/dt # [Hz]
-
-    # Parameters
-    cutoff = 1 # [Hz]
-
-    # Digital differentiator filter order
-    diffFiltOrd = 4
-
-    #------------------------------------model estimator
-    modEstPhase = 2 # [s]
-    modEstPeriod = 1*dt # [s]
-    modEstBufferSize = 200
-
-    modelOrder = 5
-
-    probNoisePow = 8
-
-    # Model estimator stores models in a stack and recall the best of modEstchecks
-    modEstchecks = 0
-
-    #------------------------------------controller
-    # u[0]: Pushing force F [N]
-    # u[1]: Steering torque M [N m]
-
-    # Manual control
-    Fman = -3
-    Nman = -1
-
-    # Control constraints
-    Fmin = -5
-    Fmax = 5
-    Mmin = -1
-    Mmax = 1
-
-    # Control horizon length
-    Nactor = 6
-
-    # Should be a multiple of dt
-    predStepSize = 5*dt # [s]
-
-    #------------------------------------RL elements
-    # Running cost structure and parameters
-    # Notation: chi = [y, u]
-    # 1     - quadratic chi.T R1 chi 
-    # 2     - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
-    # R1, R2 must be positive-definite
-    rcostStruct = 1
-
-    R1 = np.diag([10, 10, 1, 0, 0, 0, 0])  # No mixed terms, full-state measurement
-    # R1 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
-    # R1 = np.array([[10, 2, 1, 0, 0], [0, 10, 2, 0, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in y
-    # R1 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 1, 1, 1], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
-
-    # R2 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
-    R2 = np.array([[10, 2, 1, 0, 0], [0, 10, 2, 0, 0], [0, 0, 10, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in y
-    # R2 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 10, 1, 1], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
-
-    # Critic stack size, not greater than modEstBufferSize
-    Ncritic = 50
-
-    # Discounting factor
-    gamma = 1
-
-    # Critic is updated every criticPeriod seconds
-    criticPeriod = 5*dt # [s]
-
-    # Critic structure choice
-    # 1 - quadratic-linear
-    # 2 - quadratic
-    # 3 - quadratic, no mixed terms
-    # 4 - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...] u[0]^2 + ... 
-    criticStruct = 3
-
-    #------------------------------------main switches
-    isLogData = 1
-    isVisualization = 1
-    isPrintSimStep = 1
-
-    disturbOn = 0
-    ctrlConstraintOn = 1
-
-    # Static or dynamic controller
-    isDynCtrl = 0
-
-    # Static controller mode (see definition of ctrlStat)
-    # 0     - manual constant control
-    # 10    - nominal parking controller
-    # 1     - model-predictive control (MPC). Prediction via discretized true model
-    # 2     - adaptive MPC. Prediction via estimated model
-    # 3     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via discretized true model
-    # 4     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via estimated model
-    # 5     - RL: stacked Q-learning. Prediction via discretized true model
-    # 6     - RL: stacked Q-learning. Prediction via estimated model
-    ctrlStatMode = 5 
-
-    # Dynamic controller mode (see definition of ctrlDyn)
-    # 0 - PID-controller
-    ctrlDynMode = 0
-
-    # Use or not probing noise during modEstPhase seconds
-    isProbNoise = 1
-
-    # Use global optimization algorithm in actor (increases computation time significantly)
-    isGlobOpt = 0
-    main()
+            # Reset simulator
+            simulator.status = 'running'
+            simulator.t = t0
+            simulator.y = ksi0
+            
+            # Reset controller
+            if isDynCtrl:
+                ctrlDyn.ybuffer = repMat(y0, 2, 1)
+                ctrlDyn.itime = t0
+            else:
+                ctrlStat.ctrlClock = t0
+                ctrlStat.sampled_u = u0
+            
+            icost.val = 0      
