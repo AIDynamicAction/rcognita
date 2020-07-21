@@ -209,13 +209,14 @@ def main(args):
         myAnimator = animator(objects=(simulator, sys, myNominalCtrl, agent, dataFiles, ctrlSelector, printSimStep, logDataRow),
                               pars=(dimState, x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, Fmin, Fmax, Mmin, Mmax, ctrlMode, uMan, Nruns, isPrintSimStep, isLogData))
         
-        cId = myAnimator.simFig.canvas.mpl_connect('key_press_event', onKeyPress)
         
         anm = animation.FuncAnimation(myAnimator.simFig, myAnimator.animate,
                                       init_func= myAnimator.initAnim,
                                       blit=False, interval=dt/1e6, repeat=False)
-        
+
         anm.running = True
+        
+        cId = myAnimator.simFig.canvas.mpl_connect('key_press_event', lambda event: onKeyPress(event, anm))
         
         myAnimator.simFig.tight_layout()
         

@@ -7,12 +7,10 @@ from mpldatacursor import datacursor
 from datetime import datetime
 from tabulate import tabulate
 
-# np
 import numpy as np
 from numpy.matlib import repmat
 import numpy.linalg as la
 
-# matplot
 import matplotlib as mpl 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -77,7 +75,7 @@ def logdata(Nruns, save=False):
 
     return dataFiles        
 
-def onKeyPress(event):  
+def onKeyPress(event, anm):  
     if event.key==' ':
         if anm.running:
             anm.event_source.stop()
@@ -135,8 +133,6 @@ def ctrlSelector(t, y, uMan, nominalCtrl, agent, mode):
         
     return u
 
-
-# classes
 
 class model:
     """
@@ -227,8 +223,6 @@ class dfilter:
         return bufferFiltered[-1,:]
     
 
-#%% Visuals
-    
 class pltMarker:
     """
     Robot marker for visualization
@@ -455,5 +449,4 @@ class animator:
     
             self.updateLine(self.trajLine, np.nan, np.nan)
         
-        return self.solScatter 
-
+        return self.solScatter

@@ -217,7 +217,7 @@ class system:
         
         """
         
-        Du = np.zeros(dimInput)
+        Du = np.zeros(self.dimInput)
     
         return Du   
     
@@ -387,8 +387,8 @@ class controller:
         
         .. math::
             \\begin{array}{ll}
-    			\\hat x^+ & = A \\hat x + B u \\newline
-    			y^+  & = C \\hat x + D u,
+                \\hat x^+ & = A \\hat x + B u \\newline
+                y^+  & = C \\hat x + D u,
             \\end{array}             
         
         **See** :func:`~RLframe.controller._estimateModel` . **This is just a particular model estimator.
@@ -786,7 +786,7 @@ class controller:
             uNext = U[k, :]
             
             # Temporal difference
-            e = W @ self._Phi( yPrev, uPrev ) - gamma * self.Wprev @ self._Phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
+            e = W @ self._Phi( yPrev, uPrev ) - self.gamma * self.Wprev @ self._Phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
             
             Jc += 1/2 * e**2
             
@@ -843,7 +843,7 @@ class controller:
         if (mode==1) or (mode==3) or (mode==5):    # Via exogenously passed model
             Y[0, :] = y
             x = self.xSys
-            for k in range(1, Nactor):
+            for k in range(1, self.Nactor):
                 x = x + delta * self.sysRHS([], x, myU[k-1, :], [])  # Euler scheme
                 Y[k, :] = self.sysOut(x)
 
@@ -926,7 +926,7 @@ class controller:
         # print(R+table+Bl)
         # /DEBUG ==================================================================     
         
-        return U[:dimInput]    # Return first action
+        return U[:self.dimInput]    # Return first action
                     
     def computeAction(self, t, y):
         """
@@ -1010,6 +1010,7 @@ class controller:
     
         else:
             return self.uCurr
+
     
 class nominalController:
     """
