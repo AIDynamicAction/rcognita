@@ -2,14 +2,11 @@ from .RLframe import *
 from .utilities import * 
 import numpy as np
 import warnings
-
-if __name__ == "__main__":
-    main()
+import sys
 
 
-def main():
+def run_model():
     #------------------------------------system
-    # System
     dimState = 5
     dimInput = 2
     dimOutput = 5
@@ -154,6 +151,16 @@ def main():
     # 6     - RL: stacked Q-learning. Prediction via estimated model
     ctrlMode = 5
 
+    default_args = (dimState, dimInput, dimOutput, dimDisturb, m, I, sigma_q, mu_q, tau_q, t0, t1, Nruns, x0, u0, q0, atol, rtol, xMin, xMax, yMin, yMax, dt, modEstPhase, modEstPeriod, modelOrder, probNoisePow, modEstChecks, Fman, Nman, uMan, Fmin, Fmax, Mmin, Mmax, Nactor, predStepSize, bufferSize, rcostStruct, R1, R2, Ncritic, gamma, criticPeriod, criticStruct, isLogData, isVisualization, isPrintSimStep, isDisturb, isDynCtrl, ctrlMode)
+
+    args = sys.argv[1:]
+
+    if len(args) == 0 or args[0] == '1':
+        main(default_args)
+
+
+def main(args):
+    dimState, dimInput, dimOutput, dimDisturb, m, I, sigma_q, mu_q, tau_q, t0, t1, Nruns, x0, u0, q0, atol, rtol, xMin, xMax, yMin, yMax, dt, modEstPhase, modEstPeriod, modelOrder, probNoisePow, modEstChecks, Fman, Nman, uMan, Fmin, Fmax, Mmin, Mmax, Nactor, predStepSize, bufferSize, rcostStruct, R1, R2, Ncritic, gamma, criticPeriod, criticStruct, isLogData, isVisualization, isPrintSimStep, isDisturb, isDynCtrl, ctrlMode = (*args,)
 
     #------------------------------------environment
     sys = system(dimState, dimInput, dimOutput, dimDisturb,
@@ -271,3 +278,7 @@ def main():
                     myNominalCtrl.reset(t0)
                 
                 icost = 0
+
+
+if __name__ == "__main__":
+    main()
