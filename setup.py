@@ -18,8 +18,14 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    entry_points={
+        'console_scripts': [
+            'lrl = LearnRLSK.__main__:main',
+        ],
+    },
     python_requires="~=3.7",
     install_requires=[
+        "sippy @ https://github.com/ebolotin6/SIPPY/archive/master.zip"
         "numpy",
         "scipy",
         "matplotlib",
