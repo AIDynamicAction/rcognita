@@ -25,7 +25,7 @@ setuptools.setup(
     },
     python_requires="~=3.7",
     install_requires=[
-        "sippy @ https://github.com/ebolotin6/SIPPY/archive/master.zip"
+        "sippy @ https://github.com/ebolotin6/SIPPY/archive/master.zip",
         "numpy",
         "scipy",
         "matplotlib",

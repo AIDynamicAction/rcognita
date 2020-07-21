@@ -1,6 +1,22 @@
 import os
 import pathlib
 
+from svgpath2mpl import parse_path
+from collections import namedtuple
+from mpldatacursor import datacursor
+from datetime import datetime
+from tabulate import tabulate
+
+# np
+import numpy as np
+from numpy.matlib import repmat
+import numpy.linalg as la
+
+# matplot
+import matplotlib as mpl 
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
 #%% Utilities
 def toColVec(argin):
     if argin.ndim < 2:
@@ -39,22 +55,27 @@ def uptria2vec(mat):
             vec[j] = mat[i, j]
             k += 1
 
-def logdata():
-    cwd = os.getcwd()
-    datafolder = '/data'
-    dataFolder_path = cwd + datafolder
-    
-    # create data dir
-    pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True) 
-
-    date = datetime.now().strftime("%Y-%m-%d")
-    time = datetime.now().strftime("%Hh%Mm%Ss")
+def logdata(Nruns, save=False):
     dataFiles = [None] * Nruns
-    for k in range(0, Nruns):
-        dataFiles[k] = dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
-        with open(dataFiles[k], 'w', newline='') as outfile:
-            writer = csv.writer(outfile)
-            writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
+
+    if save:
+        cwd = os.getcwd()
+        datafolder = '/data'
+        dataFolder_path = cwd + datafolder
+        
+        # create data dir
+        pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True) 
+
+        date = datetime.now().strftime("%Y-%m-%d")
+        time = datetime.now().strftime("%Hh%Mm%Ss")
+        dataFiles = [None] * Nruns
+        for k in range(0, Nruns):
+            dataFiles[k] = dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+            with open(dataFiles[k], 'w', newline='') as outfile:
+                writer = csv.writer(outfile)
+                writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
+
+    return dataFiles        
 
 def onKeyPress(event):  
     if event.key==' ':
@@ -251,7 +272,7 @@ class animator:
         # Unpack entities (adjust for custom use)
         self.simulator, self.sys, self.nominalCtrl, self.agent, self.dataFiles, self.ctrlSelector, self.printSimStep, self.logDataRow = self.objects
         
-        x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrlMode, uMan, Nruns, isPrintSimStep, isLogData = self.pars 
+        self.dimState, self.x0, u0, self.t0, self.t1, self.ksi0, xMin, xMax, yMin, yMax, Fmin, Fmax, Mmin, Mmax, ctrlMode, uMan, Nruns, isPrintSimStep, isLogData = self.pars 
         
         self.ctrlMode = ctrlMode
         self.uMan = uMan
@@ -259,10 +280,10 @@ class animator:
         self.isPrintSimStep = isPrintSimStep
         self.isLogData = isLogData
         
-        y0 = self.sys.out(x0)
-        xCoord0 = x0[0]
-        yCoord0 = x0[1]
-        alpha0 = x0[2]
+        y0 = self.sys.out(self.x0)
+        xCoord0 = self.x0[0]
+        yCoord0 = self.x0[1]
+        alpha0 = self.x0[2]
         alphaDeg0 = alpha0/2/np.pi
         
         plt.close('all')
@@ -277,33 +298,33 @@ class animator:
         self.xyPlaneAxs.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
         self.trajLine, = self.xyPlaneAxs.plot(xCoord0, yCoord0, 'b--', lw=0.5)
         self.robotMarker = pltMarker(angle=alphaDeg0)
-        textTime = 't = {time:2.3f}'.format(time = t0)
+        textTime = 't = {time:2.3f}'.format(time = self.t0)
         self.textTimeHandle = self.xyPlaneAxs.text(0.05, 0.95, textTime,
                                                    horizontalalignment='left', verticalalignment='center', transform=self.xyPlaneAxs.transAxes)
         self.xyPlaneAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
         
         # Solution
-        self.solAxs = self.simFig.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
-        self.solAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-        self.normLine, = self.solAxs.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
-        self.alphaLine, = self.solAxs.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
+        self.solAxs = self.simFig.add_subplot(222, autoscale_on=False, xlim=(self.t0,self.t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
+        self.solAxs.plot([self.t0, self.t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.normLine, = self.solAxs.plot(self.t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+        self.alphaLine, = self.solAxs.plot(self.t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
         self.solAxs.legend(fancybox=True, loc='upper right')
         self.solAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
         
         # Cost
-        self.costAxs = self.simFig.add_subplot(223, autoscale_on=False, xlim=(t0,t1), ylim=(0, 1e4*self.agent.rcost( y0, u0 ) ), yscale='symlog', xlabel='t [s]')
+        self.costAxs = self.simFig.add_subplot(223, autoscale_on=False, xlim=(self.t0,self.t1), ylim=(0, 1e4*self.agent.rcost( y0, u0 ) ), yscale='symlog', xlabel='t [s]')
         
         r = self.agent.rcost(y0, u0)
         textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost = 0)
         self.textIcostHandle = self.simFig.text(0.05, 0.5, textIcost, horizontalalignment='left', verticalalignment='center')
-        self.rcostLine, = self.costAxs.plot(t0, r, 'r-', lw=0.5, label='r')
-        self.icostLine, = self.costAxs.plot(t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+        self.rcostLine, = self.costAxs.plot(self.t0, r, 'r-', lw=0.5, label='r')
+        self.icostLine, = self.costAxs.plot(self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
         self.costAxs.legend(fancybox=True, loc='upper right')
         
         # Control
-        self.ctrlAxs = self.simFig.add_subplot(224, autoscale_on=False, xlim=(t0,t1), ylim=(1.1*np.min([Fmin, Mmin]), 1.1*np.max([Fmax, Mmax])), xlabel='t [s]')
-        self.ctrlAxs.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-        self.ctrlLines = self.ctrlAxs.plot(t0, toColVec(u0).T, lw=0.5)
+        self.ctrlAxs = self.simFig.add_subplot(224, autoscale_on=False, xlim=(self.t0,self.t1), ylim=(1.1*np.min([Fmin, Mmin]), 1.1*np.max([Fmax, Mmax])), xlabel='t [s]')
+        self.ctrlAxs.plot([self.t0, self.t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.ctrlLines = self.ctrlAxs.plot(self.t0, toColVec(u0).T, lw=0.5)
         self.ctrlAxs.legend(iter(self.ctrlLines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
         
         # Pack all lines together
@@ -324,10 +345,8 @@ class animator:
                 datacursor(item)
     
     def initAnim(self):
-        x0, *_ = self.pars
-        
-        xCoord0 = x0[0]
-        yCoord0 = x0[1]       
+        xCoord0 = self.x0[0]
+        yCoord0 = self.x0[1]       
         
         self.solScatter = self.xyPlaneAxs.scatter(xCoord0, yCoord0, marker=self.robotMarker.marker, s=400, c='b')
         self.currRun = 1
@@ -353,13 +372,13 @@ class animator:
         t = self.simulator.t
         ksi = self.simulator.y
         
-        x = ksi[0:sys.dimState]
+        x = ksi[0:self.dimState]
         y = self.sys.out(x)
         
         u = self.ctrlSelector(t, y, self.uMan, self.nominalCtrl, self.agent, self.ctrlMode)
 
         self.sys.receiveAction(u)
-        self.agent.receiveSysState(sys._x) 
+        self.agent.receiveSysState(self.sys._x) 
         self.agent.update_icost(y, u)
         
         xCoord = ksi[0]
@@ -401,7 +420,7 @@ class animator:
             self.updateLine(line, t, uSingle)
     
         # Run done
-        if t >= t1:  
+        if t >= self.t1:  
             if self.isPrintSimStep:
                     print('.....................................Run {run:2d} done.....................................'.format(run = self.currRun))
                 
@@ -415,14 +434,14 @@ class animator:
             
             # Reset simulator
             self.simulator.status = 'running'
-            self.simulator.t = t0
-            self.simulator.y = ksi0
+            self.simulator.t = self.t0
+            self.simulator.y = self.ksi0
             
             # Reset controller
             if self.ctrlMode > 0:
-                self.agent.reset(t0)
+                self.agent.reset(self.t0)
             else:
-                self.nominalCtrl.reset(t0)
+                self.nominalCtrl.reset(self.t0)
             
             icost = 0      
             

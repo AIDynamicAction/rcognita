@@ -21,32 +21,22 @@ All buffers are trated as of type [L, n] where each row is a vector
 Buffers are updated from bottom
 """
 
-#%% Imports
+# imports
 
-from datetime import datetime
-from tabulate import tabulate
+# scipy
 import scipy as sp
-import numpy as np
-import numpy.linalg as la
 from scipy.optimize import minimize
 from scipy.optimize import basinhopping
-from numpy.matlib import repmat
+
+# numpy
+import numpy as np
 from numpy.random import rand
 from numpy.random import randn
-
-import matplotlib as mpl 
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from mpldatacursor import datacursor
 from scipy import signal
-
-from svgpath2mpl import parse_path
-from collections import namedtuple
-
 import sippy  # Github:CPCLAB-UNIPI/SIPPY
-import warnings
 
-from utilities import *
+# LearnRLSK
+from .utilities import *
 
 class system:  
     """
@@ -316,8 +306,8 @@ class system:
         q = ksi[self.dimState:]
         
         if self.isDynCtrl:
-            u = ksi[-dimInput:]
-            DfullState[-dimInput:] = self._ctrlDyn(t, u, y)
+            u = ksi[-self.dimInput:]
+            DfullState[-self.dimInput:] = self._ctrlDyn(t, u, y)
         else:
             # Fetch the control action stored in the system
             u = self.u
@@ -326,10 +316,10 @@ class system:
             for k in range(self.dimInput):
                 u[k] = np.clip(u[k], self.ctrlBnds[k, 0], self.ctrlBnds[k, 1])
         
-        DfullState[0:dimState] = self._stateDyn(t, x, u, q)
+        DfullState[0:self.dimState] = self._stateDyn(t, x, u, q)
         
         if self.isDisturb:
-            DfullState[dimState:] = self._disturbDyn(t, q)
+            DfullState[self.dimState:] = self._disturbDyn(t, q)
         
         # Track system's state
         self._x = x
@@ -534,7 +524,7 @@ class controller:
         D = np.zeros( [self.dimOutput, self.dimInput] )
         x0est = np.zeros( self.modelOrder )
         
-        self.myModel = self.model(A, B, C, D, x0est)
+        self.myModel = model(A, B, C, D, x0est)
         
         self.modelStack = []
         for k in range(self.modEstChecks):
