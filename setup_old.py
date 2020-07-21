@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="LearnRLSK", # Replace with your own username
-    version="1.1.0",
+    version="1.0.9",
     author="Pavel Osinenko",
     author_email="p.osinenko@skoltech.ru",
     description="Learning Reinforcement Learning - Skoltech",
@@ -19,5 +19,24 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires="~=3.7",
-    install_requires=open('requirements.txt').readlines(),
+    install_requires=[
+        "numpy",
+        "scipy",
+        "matplotlib",
+        "control",
+        "slycot",
+        "bleach",
+        "docutils",
+        "Pygments",
+        "future",
+        "tabulate",
+        "mpldatacursor",
+        "svgpath2mpl",
+        "nbconvert",
+        "cmake",
+        "scikit-build",
+        "colorama",
+        "pkginfo",
+        "requests",
+        "tqdm"],
 )
