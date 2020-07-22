@@ -6,6 +6,10 @@ import sys
 
 
 def run_model():
+    """
+    Function used to execute various simulation routines. Currently there is only 1 routine, defined in main(), but more could be added.
+    """
+    
     #------------------------------------system
     dimState = 5
     dimInput = 2
@@ -155,6 +159,7 @@ def run_model():
 
     args = sys.argv[1:]
 
+    # This section dictates which simulation routine is executed given the hyperparameters above. Currently there is only 1 routine, but more could be added, such as for RLframe-experimental.
     if len(args) == 0 or args[0] == '1' or __name__ == '__main__':
         main(default_args)
 
