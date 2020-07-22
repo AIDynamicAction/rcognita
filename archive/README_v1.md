@@ -9,83 +9,22 @@ N-rollout Q-learning, model is learned on-the-fly in one single episode:
 
 <img src="https://github.com/OsinenkoP/learnRL-py/blob/master/data-experimental.gif" width="500" />
 
-## Note:
+## Abstract
 
-Both the package and README are under construction
-
-## About
-
-This is a Python framework for reinforcement learning aimed specifically at RL study and research. The playground is based upon a model of a mobile robot, referred to as the so-called "extended non-holonomic double integrator" (ENDI). In the simulation above, the objective of the robot is to park itself in a designated area. 
-
-* See [these notes](ENDI-notes.pdf) for its description.
-* A custom model can be easily implemented -- more below.
-* A flowchart of the overall code can be found in [here](Python-RL-flowchart.pdf).
-
-Brief background: an *agent* (referred to also as the *controller*) is attached to the *environment* (the system) and generates *actions* so as to minimize running costs (or maximize rewards, utility) over an infinite horizon in future. The controller is multi-modal and can be compared/benchmarked to various baselines (nominal parking controller, model-predictive controller with or without on-the-fly model estimation).
+This is a framework of **reinforcement learning** with a rich variety of settings, aimed specifically at studying and research.
+The playground is based upon model of a mobile robot, referred to as the so called "extended non-holonomic double integrator" (ENDI).
+See [these notes](ENDI-notes.pdf) for its description.
+A custom model can be easily implemented -- read below.
+A flowchart of the overall code can be found in [here](Python-RL-flowchart.pdf).
+Basically, an *agent* (referred to also as the *controller*) is attached to the *environment* (the system) and generates *actions* so as to minimize running costs (also called rewards, utility, stage costs etc.) over an infinite horizon in future.
+This software package aims at the objective of parking the robot, as an example.
+The controller is multi-modal and allows comparison with various baselines (nominal parking controller, model-predictive controller with or without on-the-fly model estimation).
 
 Please see [paper 1](https://www.sciencedirect.com/science/article/pii/S2405896317312570) and [paper 2](https://arxiv.org/abs/2006.14034) for some underlying theory.
 
 Also, see [an analogous package](https://github.com/OsinenkoP/learnRL) in MATLAB®.
 
-## Installation
-
-This package requires **Python 3.7**. To install this package, simply run:
-
-```
-pip install LearnRLSK
-```
-
-**Keep in mind:**
-
-To isolate dependencies which might be potentially conflicting, we recommend installing this package into a virtual environment. This can be approached in a number of ways:
-
-### Option 1: virtualenv
-
-```
-pip install virtualenv
-```
-
-Then run:
-```
-virtualenv venv --python=python3.7.0
-# or alternatively: virtualenv -p /path/to/any/bin/python venv)
-source venv/bin/activate
-```
-
-### Option 2: anaconda
-
-Install anaconda: [https://www.anaconda.com/products/individual](https://www.anaconda.com/products/individual)
-
-Then, open terminal and create a virtualenv:
-
-```
-conda init
-conda create -n venv python=3.7.0
-conda info --envs
-conda activate venv
-```
-
-## Usage
-
-This package can be called as a script or imported (say, in Jupyter Notebooks). Calling the package as a script be accomplished in 2 ways:
-
-After installing the package via `pip`, open terminal and type:
-
-### Option 1:
-
-```
-lrl [--options]
-```
-
-### Option 2:
-
-```
-python3 -m LearnRLSK
-```
-
-
-Scroll down to [here](#running) for the standard scenario, without MATLAB.
-
+**The code was developed in Python 3.7, tested in Python 3.6, 3.7.**
 
 ## Main content of the package
 
@@ -117,6 +56,36 @@ The controller as well.
 In the deterministic case, the controller assigns a fixed action to each output.
 In the stochastic case, the policy is described by a probability distribution and actions are sampled from it.
 
+## Usage
+
+### Preliminaries
+
+First, take care of the dependencies.
+For the basic scenario, you will require:
+* [`tabulate`](https://pypi.org/project/tabulate/)
+* [`mpldatacursor`](https://pypi.org/project/mpldatacursor/)
+* [`svgpath2mpl`](https://pypi.org/project/svgpath2mpl/)
+* [`sippy`](https://github.com/CPCLAB-UNIPI/SIPPY)
+
+These can be installed by
+
+`pip install <package>`
+
+or put directly into the code as
+
+`!pip install <package>`
+
+if you want to use it as an IPython notebook.
+
+Regarding `sippy`, follow the instructions from the respective repository.
+To get their `setup.py` working, you might need to do
+
+    pip install nbconvert
+    pip install cmake
+    pip install scikit-build
+    sudo apt-get install gfortran
+
+Scroll down to [here](#running) for the standard scenario, without MATLAB.
 
 ### Usage with MATLAB
 
@@ -133,10 +102,13 @@ The same applies to [RLframe-experimental-MATLAB.py](RLframe-experimental-MATLAB
 
 Read this [nice guide(]https://mscipio.github.io/post/matlab-from-python/) on how to use MATLAB in Python.
 
-### Running in an IDE
+### Running
 
+If everything was installed properly, simply run [RLframe.py](RLframe.py) in whatever environment you prefer.
+[Spyder](https://www.spyder-ide.org/) is a nice one designed specifically for scientific computing.
 To get the visualization working properly, you might need to set `backend` option in the tab `IPython console` to automatic.
-
+You can always switch it off in case of problems.
+See the customization description below.
 If you choose to log data by setting `isLogData` to `1`, data files for each episode (or run) will be created in `data` folder.
 To play back a data file, run `simulateData.py` whereby specify the file name in `dataFile` of section `Initialization`.
 You can choose to print each time step, visualize stactically or dynamically, as if the simulator were running.
