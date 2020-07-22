@@ -32,6 +32,7 @@ Also, see [an analogous package](https://github.com/OsinenkoP/learnRL) in MATLAB
 This package requires **Python 3.7**. To install this package, simply run:
 
 ```
+pip install git+https://github.com/ebolotin6/SIPPY.git
 pip install LearnRLSK
 ```
 
