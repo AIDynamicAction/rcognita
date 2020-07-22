@@ -36,7 +36,7 @@ from scipy import signal
 import sippy  # Github:CPCLAB-UNIPI/SIPPY
 
 # LearnRLSK
-from .utilities import *
+from LearnRLSK.utilities import *
 
 class system:  
     """

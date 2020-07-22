@@ -1,5 +1,5 @@
-from .RLframe import *
-from .utilities import * 
+from LearnRLSK.RLframe import *
+from LearnRLSK.utilities import *
 import numpy as np
 import warnings
 import sys
