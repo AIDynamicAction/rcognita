@@ -5,19 +5,24 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="LearnRLSK", # Replace with your own username
-    version="1.0.9",
+    version="1.1.0",
     author="Pavel Osinenko",
     author_email="p.osinenko@skoltech.ru",
     description="Learning Reinforcement Learning - Skoltech",
     long_description="See homepage",
     long_description_content_type="text/markdown",
     url="https://github.com/OsinenkoP/LearnRLSK",
-    packages=setuptools.find_packages(),
+    packages=['LearnRLSK'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    entry_points={
+        'console_scripts': [
+            'lrl = LearnRLSK.__main__:run_model',
+        ],
+    },
     python_requires="~=3.7",
     install_requires=[
         "numpy",
