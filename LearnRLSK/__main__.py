@@ -155,7 +155,7 @@ def run_model():
 
     args = sys.argv[1:]
 
-    if len(args) == 0 or args[0] == '1':
+    if len(args) == 0 or args[0] == '1' or __name__ == '__main__':
         main(default_args)
 
 
@@ -179,11 +179,22 @@ def main(args):
 
     myNominalCtrl = nominalController(m, I, ctrlGain=0.5, ctrlBnds=ctrlBnds, t0=t0, samplTime=dt)
 
-    agent = controller(dimInput, dimOutput, ctrlMode, ctrlBnds=ctrlBnds, t0=t0, samplTime=dt, Nactor=Nactor, predStepSize=predStepSize,
-                     sysRHS=sys._stateDyn, sysOut=sys.out, xSys=x0,
-                     probNoisePow = probNoisePow, modEstPhase=modEstPhase, modEstPeriod=modEstPeriod, bufferSize=bufferSize,
-                     modelOrder=modelOrder, modEstChecks=modEstChecks,
-                     gamma=gamma, Ncritic=Ncritic, criticPeriod=criticPeriod, criticStruct=criticStruct, rcostStruct=rcostStruct, rcostPars=[R1, R2])
+    agent = controller(dimInput, dimOutput, ctrlMode, 
+        ctrlBnds=ctrlBnds, t0=t0, samplTime=dt, Nactor=Nactor, 
+        predStepSize=predStepSize, sysRHS=sys._stateDyn, 
+        sysOut=sys.out, xSys=x0,
+        probNoisePow = probNoisePow, 
+        modEstPhase=modEstPhase, 
+        modEstPeriod=modEstPeriod, 
+        bufferSize=bufferSize,
+        modelOrder=modelOrder, 
+        modEstChecks=modEstChecks,
+        gamma=gamma, 
+        Ncritic=Ncritic, 
+        criticPeriod=criticPeriod, 
+        criticStruct=criticStruct, 
+        rcostStruct=rcostStruct, 
+        rcostPars=[R1, R2])
 
     #------------------------------------simulator
     if isDynCtrl:
@@ -192,7 +203,11 @@ def main(args):
         ksi0 = np.concatenate([x0, q0])
 
     simulator = sp.integrate.RK45(sys.closedLoop, 
-                                  t0, ksi0, t1, max_step = dt/2, first_step=1e-6, atol=atol, rtol=rtol)
+                                  t0, ksi0, t1, 
+                                  max_step = dt/2, 
+                                  first_step=1e-6, 
+                                  atol=atol, 
+                                  rtol=rtol)
 
     #------------------------------------extras
 
@@ -209,10 +224,10 @@ def main(args):
         myAnimator = animator(objects=(simulator, sys, myNominalCtrl, agent, dataFiles, ctrlSelector, printSimStep, logDataRow),
                               pars=(dimState, x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, Fmin, Fmax, Mmin, Mmax, ctrlMode, uMan, Nruns, isPrintSimStep, isLogData))
         
-        
+
         anm = animation.FuncAnimation(myAnimator.simFig, myAnimator.animate,
-                                      init_func= myAnimator.initAnim,
-                                      blit=False, interval=dt/1e6, repeat=False)
+                                      init_func = myAnimator.initAnim,
+                                      blit=False, interval=dt/1e6, repeat=True)
 
         anm.running = True
         
@@ -282,4 +297,4 @@ def main(args):
 
 
 if __name__ == "__main__":
-    main()
+    run_model()

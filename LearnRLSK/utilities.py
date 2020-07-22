@@ -83,6 +83,7 @@ def onKeyPress(event, anm):
         else:
             anm.event_source.start()
         anm.running ^= True
+
     elif event.key=='q':
         plt.close('all')
         raise Exception('exit')
@@ -282,19 +283,30 @@ class animator:
         
         plt.close('all')
      
-        self.simFig = plt.figure(figsize=(10,10))    
+        self.simFig = plt.figure(figsize=(10,10))
             
         # xy plane  
-        self.xyPlaneAxs = self.simFig.add_subplot(221, autoscale_on=False, xlim=(xMin,xMax), ylim=(yMin,yMax),
-                                                  xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+        self.xyPlaneAxs = self.simFig.add_subplot(221, 
+            autoscale_on=False, 
+            xlim=(xMin,xMax), 
+            ylim=(yMin,yMax),
+            xlabel='x [m]', 
+            ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+        
         self.xyPlaneAxs.set_aspect('equal', adjustable='box')
         self.xyPlaneAxs.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
         self.xyPlaneAxs.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
         self.trajLine, = self.xyPlaneAxs.plot(xCoord0, yCoord0, 'b--', lw=0.5)
         self.robotMarker = pltMarker(angle=alphaDeg0)
+
         textTime = 't = {time:2.3f}'.format(time = self.t0)
-        self.textTimeHandle = self.xyPlaneAxs.text(0.05, 0.95, textTime,
-                                                   horizontalalignment='left', verticalalignment='center', transform=self.xyPlaneAxs.transAxes)
+
+        self.textTimeHandle = self.xyPlaneAxs.text(0.05, 0.95, 
+            textTime,
+            horizontalalignment='left', 
+            verticalalignment='center', 
+            transform=self.xyPlaneAxs.transAxes)
+
         self.xyPlaneAxs.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
         
         # Solution
