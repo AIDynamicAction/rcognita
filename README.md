@@ -85,9 +85,6 @@ python3 -m LearnRLSK
 ```
 
 
-Scroll down to [here](#running) for the standard scenario, without MATLAB.
-
-
 ## Main content of the package
 
 * [RLframe.py](RLframe.py) - main code, configured for quick demonstration
