@@ -5,7 +5,7 @@ import warnings
 import sys
 
 
-def run_model():
+def specify_args():
     """
     Function used to execute various simulation routines. Currently there is only 1 routine, defined in main(), but more could be added.
     """
@@ -157,14 +157,10 @@ def run_model():
 
     default_args = (dimState, dimInput, dimOutput, dimDisturb, m, I, sigma_q, mu_q, tau_q, t0, t1, Nruns, x0, u0, q0, atol, rtol, xMin, xMax, yMin, yMax, dt, modEstPhase, modEstPeriod, modelOrder, probNoisePow, modEstChecks, Fman, Nman, uMan, Fmin, Fmax, Mmin, Mmax, Nactor, predStepSize, bufferSize, rcostStruct, R1, R2, Ncritic, gamma, criticPeriod, criticStruct, isLogData, isVisualization, isPrintSimStep, isDisturb, isDynCtrl, ctrlMode)
 
-    args = sys.argv[1:]
-
-    # This section dictates which simulation routine is executed given the hyperparameters above. Currently there is only 1 routine, but more could be added, such as for RLframe-experimental.
-    if len(args) == 0 or args[0] == '1' or __name__ == '__main__':
-        main(default_args)
+    return default_args
 
 
-def main(args):
+def run_sim(args):
     dimState, dimInput, dimOutput, dimDisturb, m, I, sigma_q, mu_q, tau_q, t0, t1, Nruns, x0, u0, q0, atol, rtol, xMin, xMax, yMin, yMax, dt, modEstPhase, modEstPeriod, modelOrder, probNoisePow, modEstChecks, Fman, Nman, uMan, Fmin, Fmax, Mmin, Mmax, Nactor, predStepSize, bufferSize, rcostStruct, R1, R2, Ncritic, gamma, criticPeriod, criticStruct, isLogData, isVisualization, isPrintSimStep, isDisturb, isDynCtrl, ctrlMode = (*args,)
 
     #------------------------------------environment
@@ -300,6 +296,10 @@ def main(args):
                 
                 icost = 0
 
+def main():
+    command_line_args = sys.argv[1:]
+    default_args = specify_args()
+    run_sim(default_args)    
 
 if __name__ == "__main__":
-    run_model()
+    main()
