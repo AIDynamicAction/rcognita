@@ -20,7 +20,7 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'lrl = LearnRLSK.__main__:run_model',
+            'lrl = LearnRLSK.__main__',
         ],
     },
     python_requires="~=3.7",
