@@ -98,7 +98,7 @@ class Simulation:
                             [0, 0, 0, 0, 0]])
         self.n_critic = n_critic
         self.gamma = gamma
-        self.criticPeriod = 5 * dt
+        self.critic_period = 5 * dt
         self.critic_struct = critic_struct
         self.is_log_data = is_log_data
         self.is_visualization = is_visualization
@@ -135,22 +135,22 @@ class Simulation:
                            ctrlBnds=ctrlBnds,
                            t0=self.t0,
                            samplTime=self.dt,
-                           nactor=self.nactor,
+                           Nactor=self.nactor,
                            predStepSize=self.predStepSize,
                            sysRHS=sys._stateDyn,
                            sysOut=sys.out,
                            xSys=self.x0,
-                           prob_noise_pow=self.prob_noise_pow,
-                           mod_est_phase=self.mod_est_phase,
+                           probNoisePow=self.prob_noise_pow,
+                           modEstPhase=self.mod_est_phase,
                            modEstPeriod=self.modEstPeriod,
-                           buffer_size=self.buffer_size,
-                           model_order=self.model_order,
-                           mod_est_checks=self.mod_est_checks,
+                           bufferSize=self.buffer_size,
+                           modelOrder=self.model_order,
+                           modEstChecks=self.mod_est_checks,
                            gamma=self.gamma,
-                           n_critic=self.n_critic,
-                           criticPeriod=self.criticPeriod,
-                           critic_struct=self.critic_struct,
-                           r_cost_struct=self.r_cost_struct,
+                           Ncritic=self.n_critic,
+                           criticPeriod=self.critic_period,
+                           criticStruct=self.critic_struct,
+                           rcostStruct=self.r_cost_struct,
                            rcostPars=[self.R1, self.R2])
 
         # simulator
@@ -163,8 +163,8 @@ class Simulation:
                                       self.t0, ksi0, self.t1,
                                       max_step=self.dt / 2,
                                       first_step=1e-6,
-                                      a_tol=self.a_tol,
-                                      r_tol=self.r_tol)
+                                      atol=self.a_tol,
+                                      rtol=self.r_tol)
 
         # extras
         dataFiles = logdata(self.n_runs, save=self.is_log_data)

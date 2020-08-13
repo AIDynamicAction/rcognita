@@ -181,9 +181,13 @@ def run_sim(args):
     myNominalCtrl = nominalController(m, I, ctrlGain=0.5, ctrlBnds=ctrlBnds, t0=t0, samplTime=dt)
 
     agent = controller(dimInput, dimOutput, ctrlMode, 
-        ctrlBnds=ctrlBnds, t0=t0, samplTime=dt, Nactor=Nactor, 
-        predStepSize=predStepSize, sysRHS=sys._stateDyn, 
-        sysOut=sys.out, xSys=x0,
+        ctrlBnds=ctrlBnds, t0=t0, 
+        samplTime=dt, 
+        Nactor=Nactor, 
+        predStepSize=predStepSize, 
+        sysRHS=sys._stateDyn, 
+        sysOut=sys.out, 
+        xSys=x0,
         probNoisePow = probNoisePow, 
         modEstPhase=modEstPhase, 
         modEstPeriod=modEstPeriod, 
