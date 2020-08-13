@@ -14,6 +14,7 @@ class Simulation:
                  dimOutput=5,
                  dimDisturb=2,
                  m=10,
+                 I=1,
                  t0=0,
                  t1=100,
                  Nruns=1,
@@ -115,7 +116,7 @@ class Simulation:
                      self.dimInput,
                      self.dimOutput,
                      self.dimDisturb,
-                     pars=[m, I],
+                     pars=[self.m, self.I],
                      ctrlBnds=ctrlBnds)
 
         alpha0 = self.x0[2]
@@ -135,7 +136,7 @@ class Simulation:
                            t0=self.t0,
                            samplTime=self.dt,
                            Nactor=self.Nactor,
-                           predStepSize=predStepSize,
+                           predStepSize=self.predStepSize,
                            sysRHS=sys._stateDyn,
                            sysOut=sys.out,
                            xSys=self.x0,
@@ -153,14 +154,14 @@ class Simulation:
                            rcostPars=[self.R1, self.R2])
 
         # simulator
-        if isDynCtrl:
+        if self.isDynCtrl:
             ksi0 = np.concatenate([self.x0, self.q0, self.u0])
         else:
             ksi0 = np.concatenate([self.x0, self.q0])
 
         simulator = sp.integrate.RK45(sys.closedLoop,
                                       self.t0, ksi0, self.t1,
-                                      max_step=dt / 2,
+                                      max_step=self.dt / 2,
                                       first_step=1e-6,
                                       atol=self.atol,
                                       rtol=self.rtol)
@@ -181,7 +182,7 @@ class Simulation:
                                   agent,
                                   dataFiles,
                                   ctrlSelector,
-                                  self.printSimStep,
+                                  printSimStep,
                                   logDataRow),
                                   pars=(self.dimState,
                                         self.x0,
@@ -203,11 +204,11 @@ class Simulation:
                                         self.isPrintSimStep,
                                         self.isLogData))
 
-            anm = animation.FuncAnimation(myAnimator.simFig,
-                                          myAnimator.animate,
-                                          init_fun=myAnimator.initAnim,
-                                          blit=False,
-                                          interval=dt / 1e6,
+            anm = animation.FuncAnimation(myAnimator.simFig, 
+                                          myAnimator.animate, 
+                                          init_func = myAnimator.initAnim, 
+                                          blit=False, 
+                                          interval=self.dt/1e6, 
                                           repeat=True)
 
             anm.running = True
@@ -264,6 +265,10 @@ class Simulation:
                         myNominalCtrl.reset(self.t0)
                     icost = 0
 
+def main(args=None):
+    sim = Simulation()
+    sim.run_sim()
+
 if __name__ == "__main__":
     command_line_args = sys.argv[1:]
 
@@ -305,5 +310,4 @@ if __name__ == "__main__":
     isDynCtrl = 0,
     ctrlMode = 5
 
-    sim = simulation()
-    sim.run_sim()
+    main(command_line_args)
