@@ -1541,15 +1541,20 @@ class Simulation:
 
             while True:
                 simulator.step()
+
                 t = simulator.t
                 ksi = simulator.y
+
                 x = ksi[0:dim_state]
                 y = sys.out(x)
+
                 u = ctrlSelector(
                     t, y, self.uMan, myNominalCtrl, agent, ctrl_mode)
+                
                 sys.receiveAction(u)
                 agent.receiveSysState(sys._x)
                 agent.update_icost(y, u)
+                
                 xCoord = ksi[0]
                 yCoord = ksi[1]
                 alpha = ksi[2]
