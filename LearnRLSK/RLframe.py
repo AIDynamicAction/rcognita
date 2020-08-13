@@ -1286,16 +1286,22 @@ class Simulation:
                  is_disturb=0,
                  is_dyn_ctrl=0,
                  ctrl_mode=5):
-        """init."""
+        """hyperparams and variables"""
+
+        # system
         self.dim_state = dim_state
         self.dim_input = dim_input
         self.dim_output = dim_output
         self.dimDisturb = dimDisturb
         self.m = m
         self.I = I
+
+        # disturbance
         self.sigma_q = 1e-3 * np.ones(dimDisturb)
         self.mu_q = np.zeros(dimDisturb)
         self.tau_q = np.ones(dimDisturb)
+
+        # simulation
         self.t0 = t0
         self.t1 = t1
         self.n_runs = n_runs
@@ -1305,44 +1311,119 @@ class Simulation:
         self.x0[2] = np.pi / 2
         self.u0 = 0 * np.ones(dim_input)
         self.q0 = 0 * np.ones(dimDisturb)
+
+        # solver
         self.a_tol = a_tol
         self.r_tol = r_tol
+
+        # xy-plane
         self.x_min = x_min
         self.x_max = x_max
         self.y_min = y_min
         self.y_max = y_max
+
+        # digital elements
         self.dt = dt
+
+        # sampleFreq = 1/dt # [Hz]
+
+        # Parameters
+        # cutoff = 1 # [Hz]
+
+        # Digital differentiator filter order
+        # diffFiltOrd = 4
+
+        # model estimator
         self.mod_est_phase = mod_est_phase
         self.modEstPeriod = 1 * dt
         self.model_order = model_order
         self.prob_noise_pow = prob_noise_pow
+
+        # Model estimator stores models in a stack and recall the best of modEstChecks
         self.mod_est_checks = mod_est_checks
+
+        """controller."""
+        # u[0]: Pushing force F [N]
+        # u[1]: Steering torque M [N m]    
+            
+        # manual control
         self.f_man = f_man
         self.n_man = n_man
         self.uMan = np.array([f_man, n_man])
+
+        # control constraints
         self.f_min = f_min
         self.f_max = f_max
         self.m_min = m_min
         self.m_max = m_max
+
+        # control horizon length
         self.nactor = nactor
+
+        # Should be a multiple of dt
         self.predStepSize = 5 * dt
+
+        # Size of data buffers (used, e.g., in model estimation and critic)
         self.buffer_size = buffer_size
+
+        """RL elements"""
+        # Running cost structure and parameters
+        # Notation: chi = [y, u]
+        # 1     - quadratic chi.T R1 chi 
+        # 2     - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
+        # R1, R2 must be positive-definite
+
         self.r_cost_struct = r_cost_struct
         self.R1 = np.diag([10, 10, 1, 0, 0, 0, 0])
+        # R1 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
+            # R1 = np.array([[10, 2, 1, 0, 0], [0, 10, 2, 0, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in y
+            # R1 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 1, 1, 1], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
+        
+        # R2 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
         self.R2 = np.array([[10, 2, 1, 0, 0],
                             [0, 10, 2, 0, 0],
                             [0, 0, 10, 0, 0],
                             [0, 0, 0, 0, 0],
                             [0, 0, 0, 0, 0]])
+        # R2 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 10, 1, 1], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
+        
+        # Critic stack size, not greater than bufferSize
         self.n_critic = n_critic
+
+        # Discounting factor
         self.gamma = gamma
+
+        # Critic is updated every criticPeriod seconds
         self.critic_period = 5 * dt
+
+        """critic structure"""
+        # 1 - quadratic-linear
+        # 2 - quadratic
+        # 3 - quadratic, no mixed terms
+        # 4 - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...] u[0]^2 + ... 
         self.critic_struct = critic_struct
+
+        #%% User settings: main switches
         self.is_log_data = is_log_data
         self.is_visualization = is_visualization
         self.is_print_sim_step = is_print_sim_step
         self.is_disturb = is_disturb
+
+        # Static or dynamic controller
         self.is_dyn_ctrl = is_dyn_ctrl
+
+        """control mode"""
+        #
+        #   Modes with online model estimation are experimental
+        #
+        # 0     - manual constant control (only for basic testing)
+        # -1    - nominal parking controller (for benchmarking optimal controllers)
+        # 1     - model-predictive control (MPC). Prediction via discretized true model
+        # 2     - adaptive MPC. Prediction via estimated model
+        # 3     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via discretized true model
+        # 4     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via estimated model
+        # 5     - RL: stacked Q-learning. Prediction via discretized true model
+        # 6     - RL: stacked Q-learning. Prediction via estimated model        
         self.ctrl_mode = ctrl_mode
 
     def run_sim(self):
