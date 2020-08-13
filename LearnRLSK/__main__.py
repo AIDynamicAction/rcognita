@@ -3,54 +3,55 @@ from LearnRLSK.utilities import *
 import numpy as np
 import warnings
 import sys
+import argparse
 
 
 class Simulation:
     """class to create simulation and run simulation."""
 
     def __init__(self,
-                 dimState=5,
-                 dimInput=2,
-                 dimOutput=5,
+                 dim_state=5,
+                 dim_input=2,
+                 dim_output=5,
                  dimDisturb=2,
                  m=10,
                  I=1,
                  t0=0,
                  t1=100,
-                 Nruns=1,
-                 atol=1e-5,
-                 rtol=1e-3,
-                 xMin=-10,
-                 xMax=10,
-                 yMin=-10,
-                 yMax=10,
+                 n_runs=1,
+                 a_tol=1e-5,
+                 r_tol=1e-3,
+                 x_min=-10,
+                 x_max=10,
+                 y_min=-10,
+                 y_max=10,
                  dt=0.05,
-                 modEstPhase=2,
-                 modelOrder=5,
-                 probNoisePow=8,
-                 modEstChecks=0,
-                 Fman=-3,
-                 Nman=-1,
-                 Fmin=-5,
-                 Fmax=5,
-                 Mmin=-1,
-                 Mmax=1,
-                 Nactor=6,
-                 bufferSize=200,
-                 rcostStruct=1,
-                 Ncritic=50,
+                 mod_est_phase=2,
+                 model_order=5,
+                 prob_noise_pow=8,
+                 mod_est_checks=0,
+                 f_man=-3,
+                 n_man=-1,
+                 f_min=-5,
+                 f_max=5,
+                 m_min=-1,
+                 m_max=1,
+                 nactor=6,
+                 buffer_size=200,
+                 r_cost_struct=1,
+                 n_critic=50,
                  gamma=1,
-                 criticStruct=3,
-                 isLogData=0,
-                 isVisualization=1,
-                 isPrintSimStep=1,
-                 isDisturb=0,
-                 isDynCtrl=0,
-                 ctrlMode=5):
+                 critic_struct=3,
+                 is_log_data=0,
+                 is_visualization=1,
+                 is_print_sim_step=1,
+                 is_disturb=0,
+                 is_dyn_ctrl=0,
+                 ctrl_mode=5):
         """init."""
-        self.dimState = dimState
-        self.dimInput = dimInput
-        self.dimOutput = dimOutput
+        self.dim_state = dim_state
+        self.dim_input = dim_input
+        self.dim_output = dim_output
         self.dimDisturb = dimDisturb
         self.m = m
         self.I = I
@@ -59,62 +60,61 @@ class Simulation:
         self.tau_q = np.ones(dimDisturb)
         self.t0 = t0
         self.t1 = t1
-        self.Nruns = Nruns
-        self.x0 = np.zeros(dimState)
+        self.n_runs = n_runs
+        self.x0 = np.zeros(dim_state)
         self.x0[0] = 5
         self.x0[1] = 5
         self.x0[2] = np.pi / 2
-        self.u0 = 0 * np.ones(dimInput)
+        self.u0 = 0 * np.ones(dim_input)
         self.q0 = 0 * np.ones(dimDisturb)
-        self.atol = atol
-        self.rtol = rtol
-        self.xMin = xMin
-        self.xMax = xMax
-        self.yMin = yMin
-        self.yMax = yMax
+        self.a_tol = a_tol
+        self.r_tol = r_tol
+        self.x_min = x_min
+        self.x_max = x_max
+        self.y_min = y_min
+        self.y_max = y_max
         self.dt = dt
-        self.modEstPhase = modEstPhase
+        self.mod_est_phase = mod_est_phase
         self.modEstPeriod = 1 * dt
-        self.modelOrder = modelOrder
-        self.probNoisePow = probNoisePow
-        self.modEstChecks = modEstChecks
-        self.Fman = Fman
-        self.Nman = Nman
-        self.uMan = np.array([Fman, Nman])
-        self.Fmin = Fmin
-        self.Fmax = Fmax
-        self.Mmin = Mmin
-        self.Mmax = Mmax
-        self.Nactor = Nactor
+        self.model_order = model_order
+        self.prob_noise_pow = prob_noise_pow
+        self.mod_est_checks = mod_est_checks
+        self.f_man = f_man
+        self.n_man = n_man
+        self.uMan = np.array([f_man, n_man])
+        self.f_min = f_min
+        self.f_max = f_max
+        self.m_min = m_min
+        self.m_max = m_max
+        self.nactor = nactor
         self.predStepSize = 5 * dt
-        self.bufferSize = bufferSize
-        self.rcostStruct = rcostStruct
+        self.buffer_size = buffer_size
+        self.r_cost_struct = r_cost_struct
         self.R1 = np.diag([10, 10, 1, 0, 0, 0, 0])
         self.R2 = np.array([[10, 2, 1, 0, 0],
                             [0, 10, 2, 0, 0],
                             [0, 0, 10, 0, 0],
                             [0, 0, 0, 0, 0],
                             [0, 0, 0, 0, 0]])
-        self.Ncritic = Ncritic
+        self.n_critic = n_critic
         self.gamma = gamma
         self.criticPeriod = 5 * dt
-        self.criticStruct = criticStruct
-        self.isLogData = isLogData
-        self.isVisualization = isVisualization
-        self.isPrintSimStep = isPrintSimStep
-        self.isDisturb = isDisturb
-        self.isDynCtrl = isDynCtrl
-        self.ctrlMode = ctrlMode
-
+        self.critic_struct = critic_struct
+        self.is_log_data = is_log_data
+        self.is_visualization = is_visualization
+        self.is_print_sim_step = is_print_sim_step
+        self.is_disturb = is_disturb
+        self.is_dyn_ctrl = is_dyn_ctrl
+        self.ctrl_mode = ctrl_mode
 
     def run_sim(self):
         """run sim."""
-        ctrlBnds = np.array([[self.Fmin, self.Fmax], [self.Mmin, self.Mmax]])
+        ctrlBnds = np.array([[self.f_min, self.f_max], [self.m_min, self.m_max]])
 
         # environment
-        sys = system(self.dimState,
-                     self.dimInput,
-                     self.dimOutput,
+        sys = system(self.dim_state,
+                     self.dim_input,
+                     self.dim_output,
                      self.dimDisturb,
                      pars=[self.m, self.I],
                      ctrlBnds=ctrlBnds)
@@ -129,32 +129,32 @@ class Simulation:
                                           t0=self.t0,
                                           samplTime=self.dt)
 
-        agent = controller(self.dimInput,
-                           self.dimOutput,
-                           self.ctrlMode,
+        agent = controller(self.dim_input,
+                           self.dim_output,
+                           self.ctrl_mode,
                            ctrlBnds=ctrlBnds,
                            t0=self.t0,
                            samplTime=self.dt,
-                           Nactor=self.Nactor,
+                           nactor=self.nactor,
                            predStepSize=self.predStepSize,
                            sysRHS=sys._stateDyn,
                            sysOut=sys.out,
                            xSys=self.x0,
-                           probNoisePow=self.probNoisePow,
-                           modEstPhase=self.modEstPhase,
+                           prob_noise_pow=self.prob_noise_pow,
+                           mod_est_phase=self.mod_est_phase,
                            modEstPeriod=self.modEstPeriod,
-                           bufferSize=self.bufferSize,
-                           modelOrder=self.modelOrder,
-                           modEstChecks=self.modEstChecks,
+                           buffer_size=self.buffer_size,
+                           model_order=self.model_order,
+                           mod_est_checks=self.mod_est_checks,
                            gamma=self.gamma,
-                           Ncritic=self.Ncritic,
+                           n_critic=self.n_critic,
                            criticPeriod=self.criticPeriod,
-                           criticStruct=self.criticStruct,
-                           rcostStruct=self.rcostStruct,
+                           critic_struct=self.critic_struct,
+                           r_cost_struct=self.r_cost_struct,
                            rcostPars=[self.R1, self.R2])
 
         # simulator
-        if self.isDynCtrl:
+        if self.is_dyn_ctrl:
             ksi0 = np.concatenate([self.x0, self.q0, self.u0])
         else:
             ksi0 = np.concatenate([self.x0, self.q0])
@@ -163,60 +163,59 @@ class Simulation:
                                       self.t0, ksi0, self.t1,
                                       max_step=self.dt / 2,
                                       first_step=1e-6,
-                                      atol=self.atol,
-                                      rtol=self.rtol)
+                                      a_tol=self.a_tol,
+                                      r_tol=self.r_tol)
 
         # extras
-        dataFiles = logdata(self.Nruns, save=self.isLogData)
+        dataFiles = logdata(self.n_runs, save=self.is_log_data)
 
-        if self.isPrintSimStep:
+        if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
-
 
         # main loop
 
-        if self.isVisualization:
+        if self.is_visualization:
             myAnimator = animator(objects=(simulator,
-                                  sys,
-                                  myNominalCtrl,
-                                  agent,
-                                  dataFiles,
-                                  ctrlSelector,
-                                  printSimStep,
-                                  logDataRow),
-                                  pars=(self.dimState,
+                                           sys,
+                                           myNominalCtrl,
+                                           agent,
+                                           dataFiles,
+                                           ctrlSelector,
+                                           printSimStep,
+                                           logDataRow),
+                                  pars=(self.dim_state,
                                         self.x0,
                                         self.u0,
                                         self.t0,
                                         self.t1,
                                         ksi0,
-                                        self.xMin,
-                                        self.xMax,
-                                        self.yMin,
-                                        self.yMax,
-                                        self.Fmin,
-                                        self.Fmax,
-                                        self.Mmin,
-                                        self.Mmax,
-                                        self.ctrlMode,
+                                        self.x_min,
+                                        self.x_max,
+                                        self.y_min,
+                                        self.y_max,
+                                        self.f_min,
+                                        self.f_max,
+                                        self.m_min,
+                                        self.m_max,
+                                        self.ctrl_mode,
                                         self.uMan,
-                                        self.Nruns,
-                                        self.isPrintSimStep,
-                                        self.isLogData))
+                                        self.n_runs,
+                                        self.is_print_sim_step,
+                                        self.is_log_data))
 
-            anm = animation.FuncAnimation(myAnimator.simFig, 
-                                          myAnimator.animate, 
-                                          init_func = myAnimator.initAnim, 
-                                          blit=False, 
-                                          interval=self.dt/1e6, 
+            anm = animation.FuncAnimation(myAnimator.simFig,
+                                          myAnimator.animate,
+                                          init_func=myAnimator.initAnim,
+                                          blit=False,
+                                          interval=self.dt / 1e6,
                                           repeat=True)
 
             anm.running = True
-            myAnimator.simFig.canvas.mpl_connect('key_press_event', 
+            myAnimator.simFig.canvas.mpl_connect('key_press_event',
                                                  lambda event: onKeyPress(event, anm))
             myAnimator.simFig.tight_layout()
             plt.show()
-        
+
         else:
             currRun = 1
             dataFile = dataFiles[0]
@@ -224,10 +223,11 @@ class Simulation:
             while True:
                 simulator.step()
                 t = simulator.t
-                ksi = simulator.y 
-                x = ksi[0:dimState]
+                ksi = simulator.y
+                x = ksi[0:dim_state]
                 y = sys.out(x)
-                u = ctrlSelector(t, y, self.uMan, myNominalCtrl, agent, ctrlMode)
+                u = ctrlSelector(
+                    t, y, self.uMan, myNominalCtrl, agent, ctrl_mode)
                 sys.receiveAction(u)
                 agent.receiveSysState(sys._x)
                 agent.update_icost(y, u)
@@ -238,76 +238,127 @@ class Simulation:
                 omega = ksi[4]
                 icost = agent.icostVal
 
-                if self.isPrintSimStep:
+                if self.is_print_sim_step:
                     printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u)
 
-                if self.isLogData:
-                    logDataRow(dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u)
+                if self.is_log_data:
+                    logDataRow(dataFile, t, xCoord, yCoord,
+                               alpha, v, omega, icost, u)
 
-                if t >= self.t1:  
-                    if isPrintSimStep:
-                        print('.....................................Run {run:2d} done.....................................'.format(run = currRun))
+                if t >= self.t1:
+                    if is_print_sim_step:
+                        print('.....................................Run {run:2d} done.....................................'.format(
+                            run=currRun))
                     currRun += 1
-                    if currRun > Nruns:
+                    if currRun > n_runs:
                         break
 
-                    if self.isLogData:
-                        dataFile = dataFiles[currRun-1]
+                    if self.is_log_data:
+                        dataFile = dataFiles[currRun - 1]
 
                     # Reset simulator
                     simulator.status = 'running'
                     simulator.t = t0
                     simulator.y = ksi0
 
-                    if ctrlMode > 0:
+                    if ctrl_mode > 0:
                         agent.reset(self.t0)
                     else:
                         myNominalCtrl.reset(self.t0)
                     icost = 0
 
+
 def main(args=None):
-    sim = Simulation()
+    """main."""
+    if args is not None:
+        parser = argparse.ArgumentParser()
+        parser.add_argument('-dim_state', type=int, default=5, help="description")
+        parser.add_argument('-dim_input', type=int, default=2, help="description")
+        parser.add_argument('-dim_output', type=int, default=5, help="description")
+        parser.add_argument('-dim_disturb', type=int, default=2, help="description")
+        parser.add_argument('-m', type=int, default=10, help="description")
+        parser.add_argument('-I', dest="I", type=int, default=1, help="description")
+        parser.add_argument('-t0', type=int, default=0, help="description")
+        parser.add_argument('-t1', type=int, default=100, help="description")
+        parser.add_argument('-n_runs', type=int, default=1, help="description")
+        parser.add_argument('-a_tol', type=float, default=1e-5, help="description")
+        parser.add_argument('-r_tol', type=float, default=1e-3, help="description")
+        parser.add_argument('-x_min', type=int, default=-10, help="description")
+        parser.add_argument('-x_max', type=int, default=10, help="description")
+        parser.add_argument('-y_min', type=int, default=-10, help="description")
+        parser.add_argument('-y_max', type=int, default=10, help="description")
+        parser.add_argument('-dt', type=float, default=0.05, help="description")
+        parser.add_argument('-mod_est_phase', type=int, default=2, help="description")
+        parser.add_argument('-model_order', type=int, default=5, help="description")
+        parser.add_argument('-prob_noise_pow', type=int, default=8, help="description")
+        parser.add_argument('-mod_est_checks', type=int, default=0, help="description")
+        parser.add_argument('-f_man', type=int, default=-3, help="description")
+        parser.add_argument('-n_man', type=int, default=-1, help="description")
+        parser.add_argument('-f_min', type=int, default=5, help="description")
+        parser.add_argument('-f_max', type=int, default=5, help="description")
+        parser.add_argument('-m_min', type=int, default=-1, help="description")
+        parser.add_argument('-m_max', type=int, default=1, help="description")
+        parser.add_argument('-nactor', type=int, default=6, help="description")
+        parser.add_argument('-buffer_size', type=int, default=200, help="description")
+        parser.add_argument('-r_cost_struct', type=int, default=1, help="description")
+        parser.add_argument('-n_critic', type=int, default=50, help="description")
+        parser.add_argument('-gamma', type=int, default=1, help="description")
+        parser.add_argument('-critic_struct', type=int, default=3, help="description")
+        parser.add_argument('-is_log_data', type=int, default=0, help="description")
+        parser.add_argument('-is_visualization', type=int, default=1, help="description")
+        parser.add_argument('-is_print_sim_step', type=int, default=1, help="description")
+        parser.add_argument('-is_disturb', type=int, default=0, help="description")
+        parser.add_argument('-is_dyn_ctrl', type=int, default=0, help="description")
+        parser.add_argument('-ctrl_mode', type=int, default=5, help="description")
+
+        args = parser.parse_args()
+
+        dim_state=args.dim_state,
+        dim_input=args.dim_input,
+        dim_output=args.dim_output,
+        dim_disturb=args.dim_disturb,
+        m=args.m,
+        I=args.I,
+        t0=args.t0,
+        t1=args.t1,
+        n_runs=args.n_runs,
+        a_tol=args.a_tol,
+        r_tol=args.r_tol,
+        x_min=args.x_min,
+        x_max=args.x_max,
+        y_min=args.y_min,
+        y_max=args.y_max,
+        dt=args.dt,
+        mod_est_phase=args.mod_est_phase,
+        model_order=args.model_order,
+        prob_noise_pow=args.prob_noise_pow,
+        mod_est_checks=args.mod_est_checks,
+        f_man=args.f_man,
+        n_man=args.n_man,
+        f_min=args.f_min,
+        f_max=args.f_max,
+        m_min=args.m_min,
+        m_max=args.m_max,
+        nactor=args.nactor,
+        buffer_size=args.buffer_size,
+        r_cost_struct=args.r_cost_struct,
+        n_critic=args.n_critic,
+        gamma=args.gamma,
+        critic_struct=args.critic_struct,
+        is_log_data=args.is_log_data,
+        is_visualization=args.is_visualization,
+        is_print_sim_step=args.is_print_sim_step,
+        is_disturb=args.is_disturb,
+        is_dyn_ctrl=args.is_dyn_ctrl,
+        ctrl_mode=args.ctrl_mode
+
+        sim = Simulation(dim_state, dim_input, dim_output, dim_disturb, m, I, t0, t1, n_runs, a_tol, r_tol, x_min, x_max, y_min, y_max, dt, mod_est_phase, model_order, prob_noise_pow, mod_est_checks, f_man, n_man, f_min, f_max, m_min, m_max, nactor, buffer_size, r_cost_struct, n_critic, gamma, critic_struct, is_log_data, is_visualization, is_print_sim_step, is_disturb, is_dyn_ctrl, ctrl_mode)
+
+    else:
+        sim = Simulation()
+
     sim.run_sim()
 
 if __name__ == "__main__":
     command_line_args = sys.argv[1:]
-
-    dimState = 5,
-    dimInput = 2,
-    dimOutput = 5,
-    dimDisturb = 2,
-    m = 10,
-    t0 = 0,
-    t1 = 100,
-    Nruns = 1,
-    atol = 1e-5,
-    rtol = 1e-3,
-    xMin = -10,
-    xMax = 10,
-    yMin = -10,
-    yMax = 10,
-    dt = 0.05,
-    modEstPhase = 2,
-    modelOrder = 5,
-    probNoisePow = 8,
-    modEstChecks = 0,
-    Fman = -3,
-    Nman = -1,
-    Fmin = -5,
-    Fmax = 5,
-    Mmin = -1,
-    Mmax = 1,
-    Nactor = 6,
-    bufferSize = 200,
-    rcostStruct = 1,
-    Ncritic = 50,
-    gamma = 1,
-    criticStruct = 3,
-    isLogData = 0,
-    isVisualization = 1,
-    isPrintSimStep = 1,
-    isDisturb = 0,
-    isDynCtrl = 0,
-    ctrlMode = 5
-
     main(command_line_args)
