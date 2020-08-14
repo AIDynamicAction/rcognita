@@ -75,19 +75,20 @@ def logdata(Nruns, save=False):
 
     return dataFiles        
 
-def onKeyPress(event, anm):  
-    if event.key==' ':
-        if anm.running:
+def onKeyPress(event, anm):
+    if event.key == ' ':
+        if anm.running is True:
             anm.event_source.stop()
+            anm.running = False
             
-        else:
+        elif anm.running is False:
             anm.event_source.start()
-        anm.running ^= True
-
-    elif event.key=='q':
+            anm.running = True
+        
+    elif event.key == 'q':
         plt.close('all')
-        raise Exception('exit')
-
+        print("Program exit")
+        os._exit(1)
 
 def printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u):
     # alphaDeg = alpha/np.pi*180      
@@ -357,10 +358,12 @@ class animator:
         self.solScatter = self.xyPlaneAxs.scatter(xCoord0, yCoord0, marker=self.robotMarker.marker, s=400, c='b')
         self.currRun = 1
         self.currDataFile = self.dataFiles[0]
+
+        return self.solScatter
      
     def updateLine(self, line, newX, newY):
         line.set_xdata( np.append( line.get_xdata(), newX) )
-        line.set_ydata( np.append( line.get_ydata(), newY) )  
+        line.set_ydata( np.append( line.get_ydata(), newY) )
         
     def resetLine(self, line):
         line.set_data([], [])     
@@ -372,7 +375,7 @@ class animator:
         textHandle.set_text(newText)
    
     def animate(self, k):
-
+        # take step
         self.simulator.step()
         
         t = self.simulator.t
@@ -403,7 +406,7 @@ class animator:
         if self.isLogData:
             self.logDataRow(self.currDataFile, t, xCoord, yCoord, alpha, v, omega, icost.val, u)
         
-        # xy plane    
+        # update scatter plot
         textTime = 't = {time:2.3f}'.format(time = t)
         self.updateText(self.textTimeHandle, textTime)
         self.updateLine(self.trajLine, *ksi[:2])  # Update the robot's track on the plot
@@ -419,46 +422,46 @@ class animator:
         # Cost
         self.updateLine(self.rcostLine, t, r)
         self.updateLine(self.icostLine, t, icost)
-        textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'.format(icost = icost)
+        textIcost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
         self.updateText(self.textIcostHandle, textIcost)
         # Control
         for (line, uSingle) in zip(self.ctrlLines, u):
             self.updateLine(line, t, uSingle)
     
-        # Run done
-        if t >= self.t1:  
-            if self.isPrintSimStep:
-                    print('.....................................Run {run:2d} done.....................................'.format(run = self.currRun))
+        # # Run done
+        # if t >= self.t1:  
+        #     if self.isPrintSimStep:
+        #             print('.....................................Run {run:2d} done.....................................'.format(run = self.currRun))
                 
-            self.currRun += 1
+        #     self.currRun += 1
             
-            if self.currRun > self.Nruns:
-                return
+        #     if self.currRun > self.Nruns:
+        #         return
             
-            if isLogData:
-                self.currDataFile = self.dataFiles[self.currRun-1]
+        #     if isLogData:
+        #         self.currDataFile = self.dataFiles[self.currRun-1]
             
-            # Reset simulator
-            self.simulator.status = 'running'
-            self.simulator.t = self.t0
-            self.simulator.y = self.ksi0
+        #     # Reset simulator
+        #     self.simulator.status = 'running'
+        #     self.simulator.t = self.t0
+        #     self.simulator.y = self.ksi0
             
-            # Reset controller
-            if self.ctrlMode > 0:
-                self.agent.reset(self.t0)
-            else:
-                self.nominalCtrl.reset(self.t0)
+        #     # Reset controller
+        #     if self.ctrlMode > 0:
+        #         self.agent.reset(self.t0)
+        #     else:
+        #         self.nominalCtrl.reset(self.t0)
             
-            icost = 0      
+        #     icost = 0      
             
-            for item in self.lines:
-                if item != self.trajLine:
-                    if isinstance(item, list):
-                        for subitem in item:
-                            self.resetLine(subitem)
-                    else:
-                        self.resetLine(item)
+        #     for item in self.lines:
+        #         if item != self.trajLine:
+        #             if isinstance(item, list):
+        #                 for subitem in item:
+        #                     self.resetLine(subitem)
+        #             else:
+        #                 self.resetLine(item)
     
-            self.updateLine(self.trajLine, np.nan, np.nan)
+        #     self.updateLine(self.trajLine, np.nan, np.nan)
         
         return self.solScatter

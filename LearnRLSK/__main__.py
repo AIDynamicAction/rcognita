@@ -1,5 +1,6 @@
 from LearnRLSK import Simulation
 import argparse
+import sys
 
 def main(args=None):
     """main."""
@@ -43,47 +44,46 @@ def main(args=None):
         parser.add_argument('-is_disturb', type=int, default=0, help="description")
         parser.add_argument('-is_dyn_ctrl', type=int, default=0, help="description")
         parser.add_argument('-ctrl_mode', type=int, default=5, help="description")
-
         args = parser.parse_args()
 
-        dim_state=args.dim_state,
-        dim_input=args.dim_input,
-        dim_output=args.dim_output,
-        dim_disturb=args.dim_disturb,
-        m=args.m,
-        I=args.I,
-        t0=args.t0,
-        t1=args.t1,
-        n_runs=args.n_runs,
-        a_tol=args.a_tol,
-        r_tol=args.r_tol,
-        x_min=args.x_min,
-        x_max=args.x_max,
-        y_min=args.y_min,
-        y_max=args.y_max,
-        dt=args.dt,
-        mod_est_phase=args.mod_est_phase,
-        model_order=args.model_order,
-        prob_noise_pow=args.prob_noise_pow,
-        mod_est_checks=args.mod_est_checks,
-        f_man=args.f_man,
-        n_man=args.n_man,
-        f_min=args.f_min,
-        f_max=args.f_max,
-        m_min=args.m_min,
-        m_max=args.m_max,
-        nactor=args.nactor,
-        buffer_size=args.buffer_size,
-        r_cost_struct=args.r_cost_struct,
-        n_critic=args.n_critic,
-        gamma=args.gamma,
-        critic_struct=args.critic_struct,
-        is_log_data=args.is_log_data,
-        is_visualization=args.is_visualization,
-        is_print_sim_step=args.is_print_sim_step,
-        is_disturb=args.is_disturb,
-        is_dyn_ctrl=args.is_dyn_ctrl,
-        ctrl_mode=args.ctrl_mode
+        dim_state = args.dim_state,
+        dim_input = args.dim_input,
+        dim_output = args.dim_output,
+        dim_disturb = args.dim_disturb,
+        m = args.m,
+        I = args.I,
+        t0 = args.t0,
+        t1 = args.t1,
+        n_runs = args.n_runs,
+        a_tol = args.a_tol,
+        r_tol = args.r_tol,
+        x_min = args.x_min,
+        x_max = args.x_max,
+        y_min = args.y_min,
+        y_max = args.y_max,
+        dt = args.dt,
+        mod_est_phase = args.mod_est_phase,
+        model_order = args.model_order,
+        prob_noise_pow = args.prob_noise_pow,
+        mod_est_checks = args.mod_est_checks,
+        f_man = args.f_man,
+        n_man = args.n_man,
+        f_min = args.f_min,
+        f_max = args.f_max,
+        m_min = args.m_min,
+        m_max = args.m_max,
+        nactor = args.nactor,
+        buffer_size = args.buffer_size,
+        r_cost_struct = args.r_cost_struct,
+        n_critic = args.n_critic,
+        gamma = args.gamma,
+        critic_struct = args.critic_struct,
+        is_log_data = args.is_log_data,
+        is_visualization = args.is_visualization,
+        is_print_sim_step = args.is_print_sim_step,
+        is_disturb = args.is_disturb,
+        is_dyn_ctrl = args.is_dyn_ctrl,
+        ctrl_mode = args.ctrl_mode
 
         sim = Simulation(dim_state, dim_input, dim_output, dim_disturb, m, I, t0, t1, n_runs, a_tol, r_tol, x_min, x_max, y_min, y_max, dt, mod_est_phase, model_order, prob_noise_pow, mod_est_checks, f_man, n_man, f_min, f_max, m_min, m_max, nactor, buffer_size, r_cost_struct, n_critic, gamma, critic_struct, is_log_data, is_visualization, is_print_sim_step, is_disturb, is_dyn_ctrl, ctrl_mode)
 
