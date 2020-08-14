@@ -3,7 +3,7 @@ import argparse
 import sys
 
 def main(args=None):
-    """main."""
+    """main"""
     if args is not None:
         parser = argparse.ArgumentParser()
         parser.add_argument('-dim_state', type=int, default=5, help="description")
