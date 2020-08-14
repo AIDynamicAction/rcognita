@@ -1477,17 +1477,7 @@ class Simulation:
         # 6     - RL: stacked Q-learning. Prediction via estimated model
         self.ctrl_mode = ctrl_mode
 
-    def _create_figure(self, simulator, sys, myNominalCtrl, agent, dataFiles, ctrlSelector, printSimStep, logDataRow, ksi0):
-        self.simulator = simulator
-        self.sys = sys
-        self.nominalCtrl = myNominalCtrl
-        self.agent = agent
-        self.dataFiles = dataFiles
-        self.ctrlSelector = ctrlSelector
-        self.printSimStep = printSimStep
-        self.logDataRow = logDataRow
-        self.ksi0 = ksi0
-
+    def _create_figure(self):
         y0 = self.sys.out(self.x0)
         xCoord0 = self.x0[0]
         yCoord0 = self.x0[1]
@@ -1601,49 +1591,14 @@ class Simulation:
     def _resetLine(self, line):
         line.set_data([], [])
 
-    def _updateScatter(self, scatter, newX, newY):
-        scatter.set_offsets(
-            np.vstack([scatter.get_offsets().data, np.c_[newX, newY]]))
+    # def _updateScatter(self, scatter, newX, newY):
+    #     scatter.set_offsets(
+    #         np.vstack([scatter.get_offsets().data, np.c_[newX, newY]]))
 
     def _updateText(self, textHandle, newText):
         textHandle.set_text(newText)
 
-    def _animate(self, k):
-        # take step
-        self.simulator.step()
-
-        t = self.simulator.t
-        ksi = self.simulator.y
-
-        x = ksi[0:self.dim_state]
-        y = self.sys.out(x)
-
-        u = self.ctrlSelector(
-            t, y, self.uMan, self.nominalCtrl, self.agent, self.ctrl_mode)
-
-        self.sys.receiveAction(u)
-        self.agent.receiveSysState(self.sys._x)
-        self.agent.update_icost(y, u)
-
-        xCoord = ksi[0]
-        yCoord = ksi[1]
-        alpha = ksi[2]
-        alphaDeg = alpha / np.pi * 180
-        v = ksi[3]
-        omega = ksi[4]
-
-        r = self.agent.rcost(y, u)
-        icost = self.agent.icostVal
-
-        if self.is_print_sim_step:
-            self.printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u)
-
-        if self.is_log_data:
-            self.logDataRow(self.currDataFile, t, xCoord,
-                            yCoord, alpha, v, omega, icost.val, u)
-
-        # update scatter plot
-        textTime = 't = {time:2.3f}'.format(time=t)
+    def _updateScatter(self, textTime, ksi, alphaDeg, xCoord, yCoord, t, alpha, r, icost, u):
         self._updateText(self.textTimeHandle, textTime)
         # Update the robot's track on the plot
         self._updateLine(self.trajLine, *ksi[:2])
@@ -1666,44 +1621,84 @@ class Simulation:
         for (line, uSingle) in zip(self.ctrlLines, u):
             self._updateLine(line, t, uSingle)
 
+    def _reset_sim(self):
+        if self.is_print_sim_step:
+            print('.....................................Run {run:2d} done.....................................'.format(
+                run=self.currRun))
+
+        self.currRun += 1
+
+        if self.currRun > self.Nruns:
+            return
+
+        if self.isLogData:
+            self.currDataFile = self.dataFiles[self.currRun - 1]
+
+        # Reset simulator
+        self.simulator.status = 'running'
+        self.simulator.t = self.t0
+        self.simulator.y = self.ksi0
+
+        # Reset controller
+        if self.ctrl_mode > 0:
+            self.agent.reset(self.t0)
+        else:
+            self.nominalCtrl.reset(self.t0)
+
+    def _take_step(self, k, animate=False):
+        # take step
+        self.simulator.step()
+
+        t = self.simulator.t
+        ksi = self.simulator.y
+
+        x = ksi[0:self.dim_state]
+        y = self.sys.out(x)
+
+        u = ctrlSelector(
+            t, y, self.uMan, self.nominalCtrl, self.agent, self.ctrl_mode)
+
+        self.sys.receiveAction(u)
+        self.agent.receiveSysState(self.sys._x)
+        self.agent.update_icost(y, u)
+
+        xCoord = ksi[0]
+        yCoord = ksi[1]
+        alpha = ksi[2]
+        v = ksi[3]
+        omega = ksi[4]
+        icost = self.agent.icostVal
+        
+        if self.is_print_sim_step:
+            printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u)
+
+        if self.is_log_data:
+            logDataRow(self.currDataFile, t, xCoord,
+                            yCoord, alpha, v, omega, icost.val, u)
+
+        if animate == True:
+            alphaDeg = alpha / np.pi * 180
+            r = self.agent.rcost(y, u)
+            textTime = 't = {time:2.3f}'.format(time=t)
+            self._updateScatter(textTime, ksi, alphaDeg, xCoord, yCoord, t, alpha, r, icost, u)
+
         # Run done
         if t >= self.t1:
-            if self.is_print_sim_step:
-                print('.....................................Run {run:2d} done.....................................'.format(
-                    run=self.currRun))
+            self._reset_sim()
+            # icost = 0
 
-            self.currRun += 1
+            # for item in self.lines:
+            #     if item != self.trajLine:
+            #         if isinstance(item, list):
+            #             for subitem in item:
+            #                 self._resetLine(subitem)
+            #         else:
+            #             self._resetLine(item)
 
-            if self.currRun > self.Nruns:
-                return
+            # self._updateLine(self.trajLine, np.nan, np.nan)
 
-            if isLogData:
-                self.currDataFile = self.dataFiles[self.currRun - 1]
-
-            # Reset simulator
-            self.simulator.status = 'running'
-            self.simulator.t = self.t0
-            self.simulator.y = self.ksi0
-
-            # Reset controller
-            if self.ctrl_mode > 0:
-                self.agent.reset(self.t0)
-            else:
-                self.nominalCtrl.reset(self.t0)
-
-            icost = 0
-
-            for item in self.lines:
-                if item != self.trajLine:
-                    if isinstance(item, list):
-                        for subitem in item:
-                            self._resetLine(subitem)
-                    else:
-                        self._resetLine(item)
-
-            self._updateLine(self.trajLine, np.nan, np.nan)
-
-        return self.solScatter
+        if animate == True:
+            return self.solScatter
 
     def run_sim(self):
         """run sim."""
@@ -1711,24 +1706,24 @@ class Simulation:
             [[self.f_min, self.f_max], [self.m_min, self.m_max]])
 
         # environment
-        sys = system(self.dim_state,
+        self.sys = system(self.dim_state,
                      self.dim_input,
                      self.dim_output,
                      self.dimDisturb,
                      pars=[self.m, self.I],
                      ctrlBnds=ctrlBnds)
 
-        alpha0 = self.x0[2]
+        self.alpha0 = self.x0[2]
 
         # agent
-        myNominalCtrl = nominalController(self.m,
+        self.nominalCtrl = nominalController(self.m,
                                           self.I,
                                           ctrlGain=0.5,
                                           ctrlBnds=ctrlBnds,
                                           t0=self.t0,
                                           samplTime=self.dt)
 
-        agent = controller(self.dim_input,
+        self.agent = controller(self.dim_input,
                            self.dim_output,
                            self.ctrl_mode,
                            ctrlBnds=ctrlBnds,
@@ -1736,8 +1731,8 @@ class Simulation:
                            samplTime=self.dt,
                            Nactor=self.nactor,
                            predStepSize=self.predStepSize,
-                           sysRHS=sys._stateDyn,
-                           sysOut=sys.out,
+                           sysRHS=self.sys._stateDyn,
+                           sysOut=self.sys.out,
                            xSys=self.x0,
                            probNoisePow=self.prob_noise_pow,
                            modEstPhase=self.mod_est_phase,
@@ -1754,30 +1749,40 @@ class Simulation:
 
         # simulator
         if self.is_dyn_ctrl:
-            ksi0 = np.concatenate([self.x0, self.q0, self.u0])
+            self.ksi0 = np.concatenate([self.x0, self.q0, self.u0])
         else:
-            ksi0 = np.concatenate([self.x0, self.q0])
+            self.ksi0 = np.concatenate([self.x0, self.q0])
 
-        simulator = sp.integrate.RK45(sys.closedLoop,
-                                      self.t0, ksi0, self.t1,
+        self.simulator = sp.integrate.RK45(self.sys.closedLoop,
+                                      self.t0, 
+                                      self.ksi0, 
+                                      self.t1,
                                       max_step=self.dt / 2,
                                       first_step=1e-6,
                                       atol=self.a_tol,
                                       rtol=self.r_tol)
 
         # extras
-        dataFiles = logdata(self.n_runs, save=self.is_log_data)
+        self.dataFiles = logdata(self.n_runs, save=self.is_log_data)
 
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
 
         # main loop
-        if self.is_visualization:
-            self.simFig = self._create_figure(
-                simulator, sys, myNominalCtrl, agent, dataFiles, ctrlSelector, printSimStep, logDataRow, ksi0)
+        if self.is_visualization == 0:
+            self.currRun = 1
+            self.currDataFile = dataFiles[0]
 
+            while True:
+                self._take_step()
+
+        else:
+            self.simFig = self._create_figure()
+
+            animate = True
             anm = animation.FuncAnimation(self.simFig,
-                                          self._animate,
+                                          self._take_step,
+                                          fargs=(animate,),
                                           init_func=self._initialize_figure,
                                           interval=1)
 
@@ -1787,58 +1792,3 @@ class Simulation:
             self.simFig.tight_layout()
             plt.show()
 
-        else:
-            currRun = 1
-            dataFile = dataFiles[0]
-
-            while True:
-                simulator.step()
-
-                t = simulator.t
-                ksi = simulator.y
-
-                x = ksi[0:dim_state]
-                y = sys.out(x)
-
-                u = ctrlSelector(
-                    t, y, self.uMan, myNominalCtrl, agent, ctrl_mode)
-
-                sys.receiveAction(u)
-                agent.receiveSysState(sys._x)
-                agent.update_icost(y, u)
-
-                xCoord = ksi[0]
-                yCoord = ksi[1]
-                alpha = ksi[2]
-                v = ksi[3]
-                omega = ksi[4]
-                icost = agent.icostVal
-
-                if self.is_print_sim_step:
-                    printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u)
-
-                if self.is_log_data:
-                    logDataRow(dataFile, t, xCoord, yCoord,
-                               alpha, v, omega, icost, u)
-
-                if t >= self.t1:
-                    if is_print_sim_step:
-                        print('.....................................Run {run:2d} done.....................................'.format(
-                            run=currRun))
-                    currRun += 1
-                    if currRun > n_runs:
-                        break
-
-                    if self.is_log_data:
-                        dataFile = dataFiles[currRun - 1]
-
-                    # Reset simulator
-                    simulator.status = 'running'
-                    simulator.t = t0
-                    simulator.y = ksi0
-
-                    if ctrl_mode > 0:
-                        agent.reset(self.t0)
-                    else:
-                        myNominalCtrl.reset(self.t0)
-                    icost = 0
