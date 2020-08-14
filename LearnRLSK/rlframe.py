@@ -35,12 +35,19 @@ from numpy.random import randn
 from scipy import signal
 import sippy  # Github:CPCLAB-UNIPI/SIPPY
 
+# plotting
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+
 # LearnRLSK
 from .utilities import *
 
 # other
 import warnings
 import sys
+from collections import namedtuple
+from mpldatacursor import datacursor
 
 
 class system:
@@ -1470,6 +1477,234 @@ class Simulation:
         # 6     - RL: stacked Q-learning. Prediction via estimated model
         self.ctrl_mode = ctrl_mode
 
+    def _create_figure(self, simulator, sys, myNominalCtrl, agent, dataFiles, ctrlSelector, printSimStep, logDataRow, ksi0):
+        self.simulator = simulator
+        self.sys = sys
+        self.nominalCtrl = myNominalCtrl
+        self.agent = agent
+        self.dataFiles = dataFiles
+        self.ctrlSelector = ctrlSelector
+        self.printSimStep = printSimStep
+        self.logDataRow = logDataRow
+        self.ksi0 = ksi0
+
+        y0 = self.sys.out(self.x0)
+        xCoord0 = self.x0[0]
+        yCoord0 = self.x0[1]
+        alpha0 = self.x0[2]
+        alphaDeg0 = alpha0 / 2 / np.pi
+
+        plt.close('all')
+
+        self.simFig = plt.figure(figsize=(10, 10))
+
+        # xy plane
+        self.xyPlaneAxs = self.simFig.add_subplot(221,
+                                                  autoscale_on=False,
+                                                  xlim=(self.x_min,
+                                                        self.x_max),
+                                                  ylim=(self.y_min,
+                                                        self.y_max),
+                                                  xlabel='x [m]',
+                                                  ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+
+        self.xyPlaneAxs.set_aspect('equal', adjustable='box')
+        self.xyPlaneAxs.plot([self.x_min, self.x_max], [
+                             0, 0], 'k--', lw=0.75)   # Help line
+        self.xyPlaneAxs.plot([0, 0], [self.y_min, self.y_max],
+                             'k--', lw=0.75)   # Help line
+        self.trajLine, = self.xyPlaneAxs.plot(xCoord0, yCoord0, 'b--', lw=0.5)
+        self.robotMarker = pltMarker(angle=alphaDeg0)
+
+        textTime = 't = {time:2.3f}'.format(time=self.t0)
+
+        self.textTimeHandle = self.xyPlaneAxs.text(0.05, 0.95,
+                                                   textTime,
+                                                   horizontalalignment='left',
+                                                   verticalalignment='center',
+                                                   transform=self.xyPlaneAxs.transAxes)
+
+        self.xyPlaneAxs.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
+
+        # Solution
+        self.solAxs = self.simFig.add_subplot(222, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+            2 * np.min([self.x_min, self.y_min]), 2 * np.max([self.x_max, self.y_max])), xlabel='t [s]')
+        self.solAxs.plot([self.t0, self.t1], [0, 0],
+                         'k--', lw=0.75)   # Help line
+        self.normLine, = self.solAxs.plot(self.t0, la.norm(
+            [xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+        self.alphaLine, = self.solAxs.plot(
+            self.t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
+        self.solAxs.legend(fancybox=True, loc='upper right')
+        self.solAxs.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
+
+        # Cost
+        self.costAxs = self.simFig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+            0, 1e4 * self.agent.rcost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
+
+        r = self.agent.rcost(y0, self.u0)
+        textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
+        self.textIcostHandle = self.simFig.text(
+            0.05, 0.5, textIcost, horizontalalignment='left', verticalalignment='center')
+        self.rcostLine, = self.costAxs.plot(
+            self.t0, r, 'r-', lw=0.5, label='r')
+        self.icostLine, = self.costAxs.plot(
+            self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+        self.costAxs.legend(fancybox=True, loc='upper right')
+
+        # Control
+        self.ctrlAxs = self.simFig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+            1.1 * np.min([self.f_min, self.m_min]), 1.1 * np.max([self.f_max, self.m_max])), xlabel='t [s]')
+        self.ctrlAxs.plot([self.t0, self.t1], [0, 0],
+                          'k--', lw=0.75)   # Help line
+        self.ctrlLines = self.ctrlAxs.plot(
+            self.t0, toColVec(self.u0).T, lw=0.5)
+        self.ctrlAxs.legend(
+            iter(self.ctrlLines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
+
+        # Pack all lines together
+        cLines = namedtuple('lines', [
+                            'trajLine', 'normLine', 'alphaLine', 'rcostLine', 'icostLine', 'ctrlLines'])
+        self.lines = cLines(trajLine=self.trajLine,
+                            normLine=self.normLine,
+                            alphaLine=self.alphaLine,
+                            rcostLine=self.rcostLine,
+                            icostLine=self.icostLine,
+                            ctrlLines=self.ctrlLines)
+
+        self.currDataFile = self.dataFiles[0]
+
+        # Enable data cursor
+        for item in self.lines:
+            if isinstance(item, list):
+                for subitem in item:
+                    datacursor(subitem)
+            else:
+                datacursor(item)
+
+        return self.simFig
+
+    def _initialize_figure(self):
+        xCoord0 = self.x0[0]
+        yCoord0 = self.x0[1]
+
+        self.solScatter = self.xyPlaneAxs.scatter(
+            xCoord0, yCoord0, marker=self.robotMarker.marker, s=400, c='b')
+        self.currRun = 1
+
+        return self.solScatter
+
+    def _updateLine(self, line, newX, newY):
+        line.set_xdata(np.append(line.get_xdata(), newX))
+        line.set_ydata(np.append(line.get_ydata(), newY))
+
+    def _resetLine(self, line):
+        line.set_data([], [])
+
+    def _updateScatter(self, scatter, newX, newY):
+        scatter.set_offsets(
+            np.vstack([scatter.get_offsets().data, np.c_[newX, newY]]))
+
+    def _updateText(self, textHandle, newText):
+        textHandle.set_text(newText)
+
+    def _animate(self, k):
+        # take step
+        self.simulator.step()
+
+        t = self.simulator.t
+        ksi = self.simulator.y
+
+        x = ksi[0:self.dim_state]
+        y = self.sys.out(x)
+
+        u = self.ctrlSelector(
+            t, y, self.uMan, self.nominalCtrl, self.agent, self.ctrl_mode)
+
+        self.sys.receiveAction(u)
+        self.agent.receiveSysState(self.sys._x)
+        self.agent.update_icost(y, u)
+
+        xCoord = ksi[0]
+        yCoord = ksi[1]
+        alpha = ksi[2]
+        alphaDeg = alpha / np.pi * 180
+        v = ksi[3]
+        omega = ksi[4]
+
+        r = self.agent.rcost(y, u)
+        icost = self.agent.icostVal
+
+        if self.is_print_sim_step:
+            self.printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u)
+
+        if self.is_log_data:
+            self.logDataRow(self.currDataFile, t, xCoord,
+                            yCoord, alpha, v, omega, icost.val, u)
+
+        # update scatter plot
+        textTime = 't = {time:2.3f}'.format(time=t)
+        self._updateText(self.textTimeHandle, textTime)
+        # Update the robot's track on the plot
+        self._updateLine(self.trajLine, *ksi[:2])
+
+        self.robotMarker.rotate(alphaDeg)    # Rotate the robot on the plot
+        self.solScatter.remove()
+        self.solScatter = self.xyPlaneAxs.scatter(
+            xCoord, yCoord, marker=self.robotMarker.marker, s=400, c='b')
+
+        # Solution
+        self._updateLine(self.normLine, t, la.norm([xCoord, yCoord]))
+        self._updateLine(self.alphaLine, t, alpha)
+
+        # Cost
+        self._updateLine(self.rcostLine, t, r)
+        self._updateLine(self.icostLine, t, icost)
+        textIcost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
+        self._updateText(self.textIcostHandle, textIcost)
+        # Control
+        for (line, uSingle) in zip(self.ctrlLines, u):
+            self._updateLine(line, t, uSingle)
+
+        # Run done
+        if t >= self.t1:
+            if self.is_print_sim_step:
+                print('.....................................Run {run:2d} done.....................................'.format(
+                    run=self.currRun))
+
+            self.currRun += 1
+
+            if self.currRun > self.Nruns:
+                return
+
+            if isLogData:
+                self.currDataFile = self.dataFiles[self.currRun - 1]
+
+            # Reset simulator
+            self.simulator.status = 'running'
+            self.simulator.t = self.t0
+            self.simulator.y = self.ksi0
+
+            # Reset controller
+            if self.ctrl_mode > 0:
+                self.agent.reset(self.t0)
+            else:
+                self.nominalCtrl.reset(self.t0)
+
+            icost = 0
+
+            for item in self.lines:
+                if item != self.trajLine:
+                    if isinstance(item, list):
+                        for subitem in item:
+                            self._resetLine(subitem)
+                    else:
+                        self._resetLine(item)
+
+            self._updateLine(self.trajLine, np.nan, np.nan)
+
+        return self.solScatter
+
     def run_sim(self):
         """run sim."""
         ctrlBnds = np.array(
@@ -1538,44 +1773,18 @@ class Simulation:
 
         # main loop
         if self.is_visualization:
-            myAnimator = animator(objects=(simulator,
-                                           sys,
-                                           myNominalCtrl,
-                                           agent,
-                                           dataFiles,
-                                           ctrlSelector,
-                                           printSimStep,
-                                           logDataRow),
-                                  pars=(self.dim_state,
-                                        self.x0,
-                                        self.u0,
-                                        self.t0,
-                                        self.t1,
-                                        ksi0,
-                                        self.x_min,
-                                        self.x_max,
-                                        self.y_min,
-                                        self.y_max,
-                                        self.f_min,
-                                        self.f_max,
-                                        self.m_min,
-                                        self.m_max,
-                                        self.ctrl_mode,
-                                        self.uMan,
-                                        self.n_runs,
-                                        self.is_print_sim_step,
-                                        self.is_log_data))
+            self.simFig = self._create_figure(
+                simulator, sys, myNominalCtrl, agent, dataFiles, ctrlSelector, printSimStep, logDataRow, ksi0)
 
-            anm = animation.FuncAnimation(myAnimator.simFig,
-                                          myAnimator.animate,
-                                          init_func=myAnimator.initAnim,
-                                          blit=False,
+            anm = animation.FuncAnimation(self.simFig,
+                                          self._animate,
+                                          init_func=self._initialize_figure,
                                           interval=1)
 
             anm.running = True
-            myAnimator.simFig.canvas.mpl_connect(
+            self.simFig.canvas.mpl_connect(
                 'key_press_event', lambda event: onKeyPress(event, anm))
-            myAnimator.simFig.tight_layout()
+            self.simFig.tight_layout()
             plt.show()
 
         else:
