@@ -1668,19 +1668,20 @@ class Simulation:
         v = ksi[3]
         omega = ksi[4]
         icost = self.agent.icostVal
-        
+
         if self.is_print_sim_step:
             printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u)
 
         if self.is_log_data:
             logDataRow(self.currDataFile, t, xCoord,
-                            yCoord, alpha, v, omega, icost.val, u)
+                       yCoord, alpha, v, omega, icost.val, u)
 
         if animate == True:
             alphaDeg = alpha / np.pi * 180
             r = self.agent.rcost(y, u)
             textTime = 't = {time:2.3f}'.format(time=t)
-            self._updateScatter(textTime, ksi, alphaDeg, xCoord, yCoord, t, alpha, r, icost, u)
+            self._updateScatter(textTime, ksi, alphaDeg,
+                                xCoord, yCoord, t, alpha, r, icost, u)
 
         # Run done
         if t >= self.t1:
@@ -1707,45 +1708,42 @@ class Simulation:
 
         # environment
         self.sys = system(self.dim_state,
-                     self.dim_input,
-                     self.dim_output,
-                     self.dimDisturb,
-                     pars=[self.m, self.I],
-                     ctrlBnds=ctrlBnds)
-
-        self.alpha0 = self.x0[2]
+                          self.dim_input,
+                          self.dim_output,
+                          self.dimDisturb,
+                          pars=[self.m, self.I],
+                          ctrlBnds=ctrlBnds)
 
         # agent
-        self.nominalCtrl = nominalController(self.m,
-                                          self.I,
-                                          ctrlGain=0.5,
-                                          ctrlBnds=ctrlBnds,
-                                          t0=self.t0,
-                                          samplTime=self.dt)
+        self.nominalCtrl = nominalController(self.m, self.I,
+                                             ctrlGain=0.5,
+                                             ctrlBnds=ctrlBnds,
+                                             t0=self.t0,
+                                             samplTime=self.dt)
 
         self.agent = controller(self.dim_input,
-                           self.dim_output,
-                           self.ctrl_mode,
-                           ctrlBnds=ctrlBnds,
-                           t0=self.t0,
-                           samplTime=self.dt,
-                           Nactor=self.nactor,
-                           predStepSize=self.predStepSize,
-                           sysRHS=self.sys._stateDyn,
-                           sysOut=self.sys.out,
-                           xSys=self.x0,
-                           probNoisePow=self.prob_noise_pow,
-                           modEstPhase=self.mod_est_phase,
-                           modEstPeriod=self.modEstPeriod,
-                           bufferSize=self.buffer_size,
-                           modelOrder=self.model_order,
-                           modEstChecks=self.mod_est_checks,
-                           gamma=self.gamma,
-                           Ncritic=self.n_critic,
-                           criticPeriod=self.critic_period,
-                           criticStruct=self.critic_struct,
-                           rcostStruct=self.r_cost_struct,
-                           rcostPars=[self.R1, self.R2])
+                                self.dim_output,
+                                self.ctrl_mode,
+                                ctrlBnds=ctrlBnds,
+                                t0=self.t0,
+                                samplTime=self.dt,
+                                Nactor=self.nactor,
+                                predStepSize=self.predStepSize,
+                                sysRHS=self.sys._stateDyn,
+                                sysOut=self.sys.out,
+                                xSys=self.x0,
+                                probNoisePow=self.prob_noise_pow,
+                                modEstPhase=self.mod_est_phase,
+                                modEstPeriod=self.modEstPeriod,
+                                bufferSize=self.buffer_size,
+                                modelOrder=self.model_order,
+                                modEstChecks=self.mod_est_checks,
+                                gamma=self.gamma,
+                                Ncritic=self.n_critic,
+                                criticPeriod=self.critic_period,
+                                criticStruct=self.critic_struct,
+                                rcostStruct=self.r_cost_struct,
+                                rcostPars=[self.R1, self.R2])
 
         # simulator
         if self.is_dyn_ctrl:
@@ -1754,13 +1752,13 @@ class Simulation:
             self.ksi0 = np.concatenate([self.x0, self.q0])
 
         self.simulator = sp.integrate.RK45(self.sys.closedLoop,
-                                      self.t0, 
-                                      self.ksi0, 
-                                      self.t1,
-                                      max_step=self.dt / 2,
-                                      first_step=1e-6,
-                                      atol=self.a_tol,
-                                      rtol=self.r_tol)
+                                           self.t0,
+                                           self.ksi0,
+                                           self.t1,
+                                           max_step=self.dt / 2,
+                                           first_step=1e-6,
+                                           atol=self.a_tol,
+                                           rtol=self.r_tol)
 
         # extras
         self.dataFiles = logdata(self.n_runs, save=self.is_log_data)
@@ -1791,4 +1789,3 @@ class Simulation:
                 'key_press_event', lambda event: onKeyPress(event, anm))
             self.simFig.tight_layout()
             plt.show()
-
