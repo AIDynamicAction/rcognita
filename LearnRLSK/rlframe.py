@@ -1451,8 +1451,8 @@ class Simulation:
             Should not greater than bufferSize. The critic optimizes the temporal error which is a measure of critic's ability to capture the optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer. The principle here is pretty much the same as with the model estimation: accuracy against performance
 
         """
-        if critic > buffer_size:
-            critic = buffer_size
+        if n_critic > buffer_size:
+            n_critic = buffer_size
 
         self.n_critic = n_critic
 
