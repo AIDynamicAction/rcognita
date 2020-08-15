@@ -38,6 +38,9 @@ def main(args=None):
         parser.add_argument('-dt', type=float,
                             default=0.05, help="Controller sampling time")
 
+        # controller
+        parser.add_argument('-gamma', type=int, default=1, help="Discounting factor gamma.")
+
         parser.add_argument('-mod_est_phase', type=int,
                             default=2, help="In seconds, an initial phase to fill the estimator's buffer before applying optimal control.")
 
@@ -67,6 +70,7 @@ def main(args=None):
         parser.add_argument('-is_dyn_ctrl', type=int,
                             default=0, help="Is dynamical controller.")
 
+        # system
         parser.add_argument('-dim_state', type=int,
                             default=5, help="Dimension of the state (x)")
         
@@ -84,8 +88,7 @@ def main(args=None):
         parser.add_argument('-I', dest="I", type=int,
                             default=1, help="description")
 
-        parser.add_argument('-gamma', type=int, default=1, help="Discounting factor gamma.")
-
+        # other
         parser.add_argument('-is_log_data', type=int,
                             default=0, help="Log data?")
 

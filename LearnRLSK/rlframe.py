@@ -1495,6 +1495,9 @@ class Simulation:
         self.m_min = m_min
         self.m_max = m_max
 
+        self.ctrlBnds = np.array(
+            [[self.f_min, self.f_max], [self.m_min, self.m_max]])
+
         """Other"""
         # Discounting factor
         self.gamma = gamma
@@ -1507,6 +1510,17 @@ class Simulation:
 
         # Static or dynamic controller
         self.is_dyn_ctrl = is_dyn_ctrl
+
+        if self.is_dyn_ctrl:
+            self.ksi0 = np.concatenate([self.x0, self.q0, self.u0])
+        else:
+            self.ksi0 = np.concatenate([self.x0, self.q0])
+
+        # extras
+        self.dataFiles = logdata(self.n_runs, save=self.is_log_data)
+
+        if self.is_print_sim_step:
+            warnings.filterwarnings('ignore')
 
     def _create_figure(self):
         y0 = self.sys.out(self.x0)
@@ -1734,8 +1748,6 @@ class Simulation:
 
     def run_sim(self):
         """run sim."""
-        ctrlBnds = np.array(
-            [[self.f_min, self.f_max], [self.m_min, self.m_max]])
 
         # environment
         self.sys = system(self.dim_state,
@@ -1743,19 +1755,21 @@ class Simulation:
                           self.dim_output,
                           self.dimDisturb,
                           pars=[self.m, self.I],
-                          ctrlBnds=ctrlBnds)
+                          ctrlBnds=self.ctrlBnds)
 
-        # agent
-        self.nominalCtrl = nominalController(self.m, self.I,
+        
+        self.nominalCtrl = nominalController(self.m, 
+                                             self.I,
                                              ctrlGain=0.5,
-                                             ctrlBnds=ctrlBnds,
+                                             ctrlBnds=self.ctrlBnds,
                                              t0=self.t0,
                                              samplTime=self.dt)
 
+        # agent
         self.agent = controller(self.dim_input,
                                 self.dim_output,
                                 self.ctrl_mode,
-                                ctrlBnds=ctrlBnds,
+                                ctrlBnds=self.ctrlBnds,
                                 t0=self.t0,
                                 samplTime=self.dt,
                                 Nactor=self.nactor,
@@ -1776,12 +1790,6 @@ class Simulation:
                                 rcostStruct=self.r_cost_struct,
                                 rcostPars=[self.R1, self.R2])
 
-        # simulator
-        if self.is_dyn_ctrl:
-            self.ksi0 = np.concatenate([self.x0, self.q0, self.u0])
-        else:
-            self.ksi0 = np.concatenate([self.x0, self.q0])
-
         self.simulator = sp.integrate.RK45(self.sys.closedLoop,
                                            self.t0,
                                            self.ksi0,
@@ -1791,11 +1799,6 @@ class Simulation:
                                            atol=self.a_tol,
                                            rtol=self.r_tol)
 
-        # extras
-        self.dataFiles = logdata(self.n_runs, save=self.is_log_data)
-
-        if self.is_print_sim_step:
-            warnings.filterwarnings('ignore')
 
         # main loop
         if self.is_visualization == 0:
