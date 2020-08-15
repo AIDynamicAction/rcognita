@@ -67,15 +67,14 @@ def main(args=None):
         parser.add_argument('-is_dyn_ctrl', type=int,
                             default=0, help="Is dynamical controller.")
 
-        # below need descriptions
         parser.add_argument('-dim_state', type=int,
-                            default=5, help="description")
+                            default=5, help="Dimension of the state (x)")
         
         parser.add_argument('-dim_input', type=int,
-                            default=2, help="description")
+                            default=2, help="Dimension of control input (u)")
 
         parser.add_argument('-dim_output', type=int,
-                            default=5, help="description")
+                            default=5, help="Dimension of output (y)")
 
         parser.add_argument('-dim_disturb', type=int,
                             default=2, help="description")
@@ -85,21 +84,21 @@ def main(args=None):
         parser.add_argument('-I', dest="I", type=int,
                             default=1, help="description")
 
-        parser.add_argument('-gamma', type=int, default=1, help="description")
+        parser.add_argument('-gamma', type=int, default=1, help="Discounting factor gamma.")
 
         parser.add_argument('-is_log_data', type=int,
-                            default=0, help="description")
+                            default=0, help="Log data?")
 
         parser.add_argument('-is_visualization', type=int,
-                            default=1, help="description")
+                            default=1, help="Visualize data?")
 
         parser.add_argument('-is_print_sim_step', type=int,
-                            default=1, help="description")
+                            default=1, help="Print simulation steps?")
 
         parser.add_argument('-is_disturb', type=int,
                             default=0, help="description")
 
-
+        # tbd
         parser.add_argument('-f_man', type=int, default=-3, help="description")
         parser.add_argument('-n_man', type=int, default=-1, help="description")
         parser.add_argument('-f_min', type=int, default=5, help="description")
