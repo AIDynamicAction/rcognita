@@ -2,48 +2,113 @@ from LearnRLSK import Simulation
 import argparse
 import sys
 
+
 def main(args=None):
     """main"""
     if args is not None:
         parser = argparse.ArgumentParser()
-        parser.add_argument('-dim_state', type=int, default=5, help="description")
-        parser.add_argument('-dim_input', type=int, default=2, help="description")
-        parser.add_argument('-dim_output', type=int, default=5, help="description")
-        parser.add_argument('-dim_disturb', type=int, default=2, help="description")
+
+        parser.add_argument('-t0', type=int, default=0,
+                            help="Start time of an episode")
+
+        parser.add_argument('-t1', type=int, default=100,
+                            help="Stop time of an episode")
+
+        parser.add_argument('-n_runs', type=int, default=1,
+                            help="Number of episodes. After an episode, the system is reset to the initial state, whereas all the learned parameters continue to get updated. This emulates multi-trial RL")
+
+        parser.add_argument('-a_tol', type=float,
+                            default=1e-5, help="Sensitivity of solver. The lower the values, the more accurate the simulation results are.")
+
+        parser.add_argument('-r_tol', type=float,
+                            default=1e-3, help="Sensitivity of solver. The lower the values, the more accurate the simulation results are.")
+
+        parser.add_argument('-x_min', type=int, default=-
+                            10, help="Min x bound for scatter plot")
+
+        parser.add_argument('-x_max', type=int, default=10, 
+                            help="Max x bound for scatter plot")
+
+        parser.add_argument('-y_min', type=int, default=-
+                            10, help="Min y bound for scatter plot")
+
+        parser.add_argument('-y_max', type=int, default=10, 
+                            help="Max y bound for scatter plot")
+
+        parser.add_argument('-dt', type=float,
+                            default=0.05, help="Controller sampling time")
+
+        parser.add_argument('-mod_est_phase', type=int,
+                            default=2, help="In seconds, an initial phase to fill the estimator's buffer before applying optimal control.")
+
+        parser.add_argument('-model_order', type=int,
+                            default=5, help="The order of the state-space estimation model.")
+
+        parser.add_argument('-mod_est_checks', type=int,
+                            default=0, help=" estimated model parameters can be stored in stacks and the best among the modEstchecks last ones is picked")
+
+        parser.add_argument('-buffer_size', type=int,
+                            default=200, help="The size of the buffer to store data for model estimation. Is measured in numbers of periods of length dt.")
+
+        parser.add_argument('-nactor', type=int, default=6, help="Number of prediction steps. Nactor=1 means the controller is purely data-driven and doesn't use prediction.")
+
+        parser.add_argument('-r_cost_struct', type=int,
+                            default=1, help="Choice of the running cost structure.")
+
+        parser.add_argument('-n_critic', type=int,
+                            default=50, help="critic stack size.")
+
+        parser.add_argument('-critic_struct', type=int,
+                            default=3, help="choice of the structure of critic's feature vector. Options: 1, 2, 3, or 4. See code.")
+
+        parser.add_argument('-ctrl_mode', type=int,
+                            default=5, help="Control modes. 0, -1, 1, 2, 3, 4, 5 or 6")
+
+        parser.add_argument('-is_dyn_ctrl', type=int,
+                            default=0, help="Is dynamical controller.")
+
+        # below need descriptions
+        parser.add_argument('-dim_state', type=int,
+                            default=5, help="description")
+        
+        parser.add_argument('-dim_input', type=int,
+                            default=2, help="description")
+
+        parser.add_argument('-dim_output', type=int,
+                            default=5, help="description")
+
+        parser.add_argument('-dim_disturb', type=int,
+                            default=2, help="description")
+
         parser.add_argument('-m', type=int, default=10, help="description")
-        parser.add_argument('-I', dest="I", type=int, default=1, help="description")
-        parser.add_argument('-t0', type=int, default=0, help="description")
-        parser.add_argument('-t1', type=int, default=100, help="description")
-        parser.add_argument('-n_runs', type=int, default=1, help="description")
-        parser.add_argument('-a_tol', type=float, default=1e-5, help="description")
-        parser.add_argument('-r_tol', type=float, default=1e-3, help="description")
-        parser.add_argument('-x_min', type=int, default=-10, help="description")
-        parser.add_argument('-x_max', type=int, default=10, help="description")
-        parser.add_argument('-y_min', type=int, default=-10, help="description")
-        parser.add_argument('-y_max', type=int, default=10, help="description")
-        parser.add_argument('-dt', type=float, default=0.05, help="description")
-        parser.add_argument('-mod_est_phase', type=int, default=2, help="description")
-        parser.add_argument('-model_order', type=int, default=5, help="description")
-        parser.add_argument('-prob_noise_pow', type=int, default=8, help="description")
-        parser.add_argument('-mod_est_checks', type=int, default=0, help="description")
+
+        parser.add_argument('-I', dest="I", type=int,
+                            default=1, help="description")
+
+        parser.add_argument('-gamma', type=int, default=1, help="description")
+
+        parser.add_argument('-is_log_data', type=int,
+                            default=0, help="description")
+
+        parser.add_argument('-is_visualization', type=int,
+                            default=1, help="description")
+
+        parser.add_argument('-is_print_sim_step', type=int,
+                            default=1, help="description")
+
+        parser.add_argument('-is_disturb', type=int,
+                            default=0, help="description")
+
+
         parser.add_argument('-f_man', type=int, default=-3, help="description")
         parser.add_argument('-n_man', type=int, default=-1, help="description")
         parser.add_argument('-f_min', type=int, default=5, help="description")
         parser.add_argument('-f_max', type=int, default=5, help="description")
         parser.add_argument('-m_min', type=int, default=-1, help="description")
         parser.add_argument('-m_max', type=int, default=1, help="description")
-        parser.add_argument('-nactor', type=int, default=6, help="description")
-        parser.add_argument('-buffer_size', type=int, default=200, help="description")
-        parser.add_argument('-r_cost_struct', type=int, default=1, help="description")
-        parser.add_argument('-n_critic', type=int, default=50, help="description")
-        parser.add_argument('-gamma', type=int, default=1, help="description")
-        parser.add_argument('-critic_struct', type=int, default=3, help="description")
-        parser.add_argument('-is_log_data', type=int, default=0, help="description")
-        parser.add_argument('-is_visualization', type=int, default=1, help="description")
-        parser.add_argument('-is_print_sim_step', type=int, default=1, help="description")
-        parser.add_argument('-is_disturb', type=int, default=0, help="description")
-        parser.add_argument('-is_dyn_ctrl', type=int, default=0, help="description")
-        parser.add_argument('-ctrl_mode', type=int, default=5, help="description")
+        parser.add_argument('-prob_noise_pow', type=int,
+                            default=8, help="description")
+
         args = parser.parse_args()
 
         dim_state = args.dim_state,
@@ -85,7 +150,8 @@ def main(args=None):
         is_dyn_ctrl = args.is_dyn_ctrl,
         ctrl_mode = args.ctrl_mode
 
-        sim = Simulation(dim_state, dim_input, dim_output, dim_disturb, m, I, t0, t1, n_runs, a_tol, r_tol, x_min, x_max, y_min, y_max, dt, mod_est_phase, model_order, prob_noise_pow, mod_est_checks, f_man, n_man, f_min, f_max, m_min, m_max, nactor, buffer_size, r_cost_struct, n_critic, gamma, critic_struct, is_log_data, is_visualization, is_print_sim_step, is_disturb, is_dyn_ctrl, ctrl_mode)
+        sim = Simulation(dim_state, dim_input, dim_output, dim_disturb, m, I, t0, t1, n_runs, a_tol, r_tol, x_min, x_max, y_min, y_max, dt, mod_est_phase, model_order, prob_noise_pow, mod_est_checks, f_man,
+                         n_man, f_min, f_max, m_min, m_max, nactor, buffer_size, r_cost_struct, n_critic, gamma, critic_struct, is_log_data, is_visualization, is_print_sim_step, is_disturb, is_dyn_ctrl, ctrl_mode)
 
     else:
         sim = Simulation()
