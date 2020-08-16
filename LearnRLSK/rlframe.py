@@ -276,7 +276,7 @@ class System:
         y = x  # <-- Position, force and torque sensors on
         return y
 
-    def receiveAction(self, u):
+    def receive_action(self, u):
         """
         Receive exogeneous control action to be fed into the system.
         This action is commonly computed by your controller (agent) using the system output :func:`~RLframe.system.sysOut` 
@@ -299,7 +299,7 @@ class System:
                 x = ksi[0:sys.dim_state]
                 y = sys.out(x)
                 u = myController(y)
-                sys.receiveAction(u)
+                sys.receive_action(u)
 
         """
         self.u = u
@@ -323,7 +323,7 @@ class System:
                 x = ksi[0:sys.dim_state]
                 y = sys.out(x)
                 u = myController(y)
-                sys.receiveAction(u)
+                sys.receive_action(u)
 
         """
 
@@ -499,7 +499,7 @@ class Controller:
             x = ksi[0:sys.dim_state]
             y = sys.out(x)
             u = agent.compute_action(t, y)
-            sys.receiveAction(u)
+            sys.receive_action(u)
             agent.update_icost(y, u)
 
     References
@@ -1762,7 +1762,7 @@ class Simulation:
         u = ctrlSelector(
             t, y, self.uMan, nominalCtrl, agent, self.ctrl_mode)
 
-        sys.receiveAction(u)
+        sys.receive_action(u)
         agent.receive_sys_state(sys._x)
         agent.update_icost(y, u)
 
