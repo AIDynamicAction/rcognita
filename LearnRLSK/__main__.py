@@ -152,8 +152,16 @@ def main(args=None):
         is_dyn_ctrl = args.is_dyn_ctrl,
         ctrl_mode = args.ctrl_mode
 
-        sim = Simulation(dim_state, dim_input, dim_output, dim_disturb, m, I, t0, t1, n_runs, a_tol, r_tol, x_min, x_max, y_min, y_max, dt, mod_est_phase, model_order, prob_noise_pow, mod_est_checks, f_man,
-                         n_man, f_min, f_max, m_min, m_max, nactor, buffer_size, r_cost_struct, n_critic, gamma, critic_struct, is_log_data, is_visualization, is_print_sim_step, is_disturb, is_dyn_ctrl, ctrl_mode)
+        # environment
+        sys = System(dim_state, dim_input, dim_output, dim_disturb, m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
+
+        nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
+
+        agent = Controller(dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, nactor, prob_noise_pow, mod_est_phase, buffer_size, model_order, mod_est_checks, gamma, n_critic, critic_struct, r_cost_struct)
+
+        sim = Simulation()
+
+        simulator = sim.create_simulator(sys.closedLoop)
 
     else:
         # environment
@@ -162,10 +170,9 @@ def main(args=None):
         agent = Controller()
         sim = Simulation()
         simulator = sim.create_simulator(sys.closedLoop)
-        sim.run_simulation(sys, agent, nominalCtrl, simulator)
 
+    sim.run_simulation(sys, agent, nominalCtrl, simulator)
 
-    sim.run_sim()
 
 if __name__ == "__main__":
     command_line_args = sys.argv[1:]

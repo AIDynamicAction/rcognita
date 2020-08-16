@@ -1128,11 +1128,12 @@ class NominalController:
 
     """
 
-    def __init__(self, m=10, I=1, ctrlGain=10, ctrlBnds=[], t0=0, samplTime=0.1):
+    def __init__(self, m=10, I=1, ctrlGain=10, f_min=-5, f_max=5, m_min=-1, m_max=1, t0=0, samplTime=0.1):
         self.m = m
         self.I = I
         self.ctrlGain = ctrlGain
-        self.ctrlBnds = ctrlBnds
+        self.ctrlBnds = np.array(
+            [[f_min, f_max], [m_min, m_max]])
         self.ctrlClock = t0
         self.samplTime = samplTime
         self.uCurr = np.zeros(2)
