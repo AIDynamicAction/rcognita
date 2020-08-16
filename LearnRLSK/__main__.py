@@ -166,8 +166,8 @@ def main(args=None):
     else:
         # environment
         sys = System()
-        nominalCtrl = NominalController()
-        agent = Controller()
+        nominalCtrl = NominalController(ctrlGain=0.5, samplTime=0.05)
+        agent = Controller(ctrlMode=5, Nactor=6, bufferSize=200, criticStruct=3, Ncritic=50, probNoisePow=8, modEstPhase=2)
         sim = Simulation()
         simulator = sim.create_simulator(sys.closedLoop)
 
