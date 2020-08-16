@@ -909,7 +909,7 @@ class Controller:
                     # Drop probing noise
                 self.is_prob_noise = 0
 
-    def _Phi(self, y, u):
+    def _phi(self, y, u):
         """
         Feature vector of critic
 
@@ -919,7 +919,7 @@ class Controller:
         -------------
 
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
-        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``W @ self._Phi( y, u )`` 
+        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``W @ self._phi( y, u )`` 
         within :func:`~RLframe.controller._critic_cost`
 
         """
@@ -958,7 +958,7 @@ class Controller:
             u_next = U[k, :]
 
             # Temporal difference
-            e = W @ self._Phi(y_prev, u_prev) - self.gamma * self.Wprev @ self._Phi(y_next, u_next) - self.rcost(y_prev, u_prev)
+            e = W @ self._phi(y_prev, u_prev) - self.gamma * self.Wprev @ self._phi(y_next, u_next) - self.rcost(y_prev, u_prev)
 
             Jc += 1 / 2 * e**2
 
@@ -1039,10 +1039,10 @@ class Controller:
         elif (ctrl_mode == 3) or (ctrl_mode == 4):
             for k in range(N - 1):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
-            J += W @ self._Phi(Y[-1, :], myU[-1, :])
+            J += W @ self._phi(Y[-1, :], myU[-1, :])
         elif (ctrl_mode == 5) or (ctrl_mode == 6):     # RL: (normalized) stacked Q-learning
             for k in range(N):
-                Q = W @ self._Phi(Y[k, :], myU[k, :])
+                Q = W @ self._phi(Y[k, :], myU[k, :])
                 J += 1 / N * Q
 
         return J
@@ -1062,12 +1062,12 @@ class Controller:
         # Optimization method of actor
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP,
         # trust-constr, Powell
-        actorOptMethod = 'SLSQP'
-        if actorOptMethod == 'trust-constr':
+        actor_opt_method = 'SLSQP'
+        if actor_opt_method == 'trust-constr':
             # 'disp': True, 'verbose': 2}
-            actorOptOptions = {'maxiter': 300, 'disp': False}
+            actor_opt_options = {'maxiter': 300, 'disp': False}
         else:
-            actorOptOptions = {'maxiter': 300, 'maxfev': 5000, 'disp': False,
+            actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False,
                                'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}  # 'disp': True, 'verbose': 2}
 
         isGlobOpt = 0
@@ -1079,12 +1079,12 @@ class Controller:
         try:
             if isGlobOpt:
                 minimizer_kwargs = {
-                    'method': actorOptMethod, 'bounds': bnds, 'tol': 1e-7, 'options': actorOptOptions}
+                    'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
                 U = basinhopping(lambda U: self._actor_cost(
                     U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
             else:
                 U = minimize(lambda U: self._actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
-                             method=actorOptMethod, tol=1e-7, bounds=bnds, options=actorOptOptions).x
+                             method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
             U = myu_init
