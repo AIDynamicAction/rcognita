@@ -54,7 +54,7 @@ class System:
     """
     Class of continuous-time dynamical systems with exogenous input and dynamical disturbance for use with ODE solvers.
     In RL, this is considered the *environment*.
-    Normally, you should pass ``closedLoop``, which represents the right-hand side, to your solver.
+    Normally, you should pass ``closed_loop``, which represents the right-hand side, to your solver.
 
     Attributes
     ----------
@@ -146,7 +146,7 @@ class System:
         Parameters of the system are contained in ``pars`` attribute.
         Make a proper use of them here
 
-        Normally, you should not call this method directly, but rather :func:`~RLframe.system.closedLoop` from your ODE solver and, respectively,
+        Normally, you should not call this method directly, but rather :func:`~RLframe.system.closed_loop` from your ODE solver and, respectively,
         :func:`~RLframe.system.sysOut` from your controller
 
         System description
@@ -204,7 +204,7 @@ class System:
 
         return Dx
 
-    def _disturbDyn(self, t, q):
+    def _disturb_dyn(self, t, q):
         """
         Dynamical disturbance model:
 
@@ -234,7 +234,7 @@ class System:
 
         return Dq
 
-    def _ctrlDyn(t, u, y):
+    def _ctrl_dyn(t, u, y):
         """
         Dynamical controller. When ``is_dyn_ctrl=0``, the controller is considered static, which is to say that the control actions are
         computed immediately from the system's output.
@@ -291,7 +291,7 @@ class System:
         Assuming ``sys`` is a ``system``-object, ``t0, t1`` - start and stop times, and ``ksi0`` - a properly defined initial condition:
 
         >>> import scipy as sp
-        >>> simulator = sp.integrate.RK45(sys.closedLoop, t0, ksi0, t1)
+        >>> simulator = sp.integrate.RK45(sys.closed_loop, t0, ksi0, t1)
         >>> while t < t1:
                 simulator.step()
                 t = simulator.t
@@ -304,7 +304,7 @@ class System:
         """
         self.u = u
 
-    def closedLoop(self, t, ksi):
+    def closed_loop(self, t, ksi):
         """
         Closed loop of the system.
         This function is designed for use with ODE solvers.
@@ -315,7 +315,7 @@ class System:
         Assuming ``sys`` is a ``system``-object, ``t0, t1`` - start and stop times, and ``ksi0`` - a properly defined initial condition:
 
         >>> import scipy as sp
-        >>> simulator = sp.integrate.RK45(sys.closedLoop, t0, ksi0, t1)
+        >>> simulator = sp.integrate.RK45(sys.closed_loop, t0, ksi0, t1)
         >>> while t < t1:
                 simulator.step()
                 t = simulator.t
@@ -338,7 +338,7 @@ class System:
 
         if self.is_dyn_ctrl:
             u = ksi[-self.dim_input:]
-            DfullState[-self.dim_input:] = self._ctrlDyn(t, u, y)
+            DfullState[-self.dim_input:] = self._ctrl_dyn(t, u, y)
         else:
             # Fetch the control action stored in the system
             u = self.u
@@ -351,7 +351,7 @@ class System:
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.is_disturb:
-            DfullState[self.dim_state:] = self._disturbDyn(t, q)
+            DfullState[self.dim_state:] = self._disturb_dyn(t, q)
 
         # Track system's state
         self._x = x
@@ -395,12 +395,12 @@ class Controller:
         If empty, control is unconstrained (default)
     t0 : : number
         Initial value of the controller's internal clock
-    sampl_time : : number
+    sample_time : : number
         Controller's sampling time (in seconds)
     n_actor : : natural number
         Size of prediction horizon :math:`N_a` 
     pred_step_size : : number
-        Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sampl_time``. Commonly, equals it, but here left adjustable for
+        Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sample_time``. Commonly, equals it, but here left adjustable for
         convenience. Larger prediction step size leads to longer factual horizon
     sys_rhs, sys_out : : functions        
         Functions that represents the right-hand side, resp., the output of the exogenously passed model.
@@ -424,8 +424,8 @@ class Controller:
                 y^+  & = C \\hat x + D u,
             \\end{array}             
 
-        **See** :func:`~RLframe.controller._estimateModel` . **This is just a particular model estimator.
-        When customizing,** :func:`~RLframe.controller._estimateModel`
+        **See** :func:`~RLframe.controller._estimate_model` . **This is just a particular model estimator.
+        When customizing,** :func:`~RLframe.controller._estimate_model`
         **may be changed and in turn the parameter** ``model_order`` **also. For instance, you might want to use an artifial
         neural net and specify its layers and numbers
         of neurons, in which case** ``model_order`` **could be substituted for, say,** ``Nlayers``, ``Nneurons`` 
@@ -489,7 +489,7 @@ class Controller:
     Assuming ``sys`` is a ``system``-object, ``t0, t1`` - start and stop times, and ``ksi0`` - a properly defined initial condition:
 
     >>> import scipy as sp
-    >>> simulator = sp.integrate.RK45(sys.closedLoop, t0, ksi0, t1)
+    >>> simulator = sp.integrate.RK45(sys.closed_loop, t0, ksi0, t1)
     >>> agent = controller(sys.dim_input, sys.dim_output)
 
     >>> while t < t1:
@@ -498,7 +498,7 @@ class Controller:
             ksi = simulator.y
             x = ksi[0:sys.dim_state]
             y = sys.out(x)
-            u = agent.computeAction(t, y)
+            u = agent.compute_action(t, y)
             sys.receiveAction(u)
             agent.update_icost(y, u)
 
@@ -526,7 +526,7 @@ class Controller:
                  critic_period=0.1,
                  critic_struct=1,
                  r_cost_struct=1,
-                 sampl_time=0.1,
+                 sample_time=0.1,
                  mod_est_phase=1,
                  mod_est_period=0.1,
                  mod_est_checks=0,
@@ -656,7 +656,7 @@ class Controller:
 
         """
         self.n_critic = n_critic
-        
+
         # Clip critic buffer size
         self.n_critic = np.min([self.n_critic, self.buffer_size - 1])
 
@@ -675,7 +675,7 @@ class Controller:
         """
         self.ctrl_mode = ctrl_mode
         self.ctrl_clock = t0
-        self.sampl_time = sampl_time
+        self.sample_time = sample_time
 
         # manual control
         self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
@@ -685,10 +685,9 @@ class Controller:
         self.u_max = repMat(self.max_bounds, 1, n_actor)
         self.u_curr = self.min_bounds / 10
         self.u_init = repMat(self.min_bounds / 10, 1, self.n_actor)
-        
+
         self.u_buffer = np.zeros([buffer_size, dim_input])
         self.y_buffer = np.zeros([buffer_size, dim_output])
-
 
         """ other """
         self.sys_rhs = System.stateDyn
@@ -735,14 +734,14 @@ class Controller:
         self.ctrl_clock = t0
         self.u_curr = self.min_bounds / 10
 
-    def receiveSysState(self, x):
+    def receive_sys_state(self, x):
         """
         Fetch exogenous model state. Used in some controller modes. See class documentation
 
         """
         self.xSys = x
 
-    def _dssSim(self, A, B, C, D, uSqn, x0, y0):
+    def _dss_sim(self, A, B, C, D, uSqn, x0, y0):
         """
         Simulate output response of a discrete-time state-space model
         """
@@ -774,7 +773,7 @@ class Controller:
         if self.r_cost_struct == 1:
             R1 = self.r_cost_pars[0]
             r = chi @ R1 @ chi
-        
+
         elif self.r_cost_struct == 2:
             R1 = self.r_cost_pars[0]
             R2 = self.r_cost_pars[1]
@@ -790,9 +789,9 @@ class Controller:
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
 
         """
-        self.i_cost_val += self.rcost(y, u) * self.sampl_time
+        self.i_cost_val += self.rcost(y, u) * self.sample_time
 
-    def _estimateModel(self, t, y):
+    def _estimate_model(self, t, y):
         """
         Estimate model parameters by accumulating data buffers ``u_buffer`` and ``y_buffer``
 
@@ -800,7 +799,7 @@ class Controller:
 
         time_in_sample = t - self.ctrl_clock
 
-        if time_in_sample >= self.sampl_time:  # New sample
+        if time_in_sample >= self.sample_time:  # New sample
             # Update buffers when using RL or requiring estimated model
             if self.ctrl_mode in (2, 3, 4, 5, 6):
                 time_in_est_period = t - self.est_clock
@@ -822,7 +821,7 @@ class Controller:
                         # Using Github:CPCLAB-UNIPI/SIPPY
                         # method: N4SID, MOESP, CVA, PARSIM-P, PARSIM-S,
                         # PARSIM-K
-                        SSest = sippy.system_identification(self.y_buffer, 
+                        SSest = sippy.system_identification(self.y_buffer,
                                                             self.u_buffer,
                                                             id_method='N4SID',
                                                             SS_fixed_order=self.model_order,
@@ -831,7 +830,7 @@ class Controller:
                                                             # SS_f=int(self.buffer_size/12),
                                                             # SS_p=int(self.buffer_size/10),
                                                             SS_PK_B_reval=False,
-                                                            tsample=self.sampl_time)
+                                                            tsample=self.sample_time)
 
                         self.my_model.updatePars(
                             SSest.A, SSest.B, SSest.C, SSest.D)
@@ -847,11 +846,11 @@ class Controller:
                     except:
                         print('Model estimation problem')
                         self.my_model.updatePars(np.zeros([self.model_order, self.model_order]),
-                                                np.zeros(
-                                                    [self.model_order, self.dim_input]),
-                                                np.zeros(
-                                                    [self.dim_output, self.model_order]),
-                                                np.zeros([self.dim_output, self.dim_input]))
+                                                 np.zeros(
+                            [self.model_order, self.dim_input]),
+                            np.zeros(
+                            [self.dim_output, self.model_order]),
+                            np.zeros([self.dim_output, self.dim_input]))
 
                     # Model checks
                     if self.mod_est_checks > 0:
@@ -865,7 +864,7 @@ class Controller:
                             A, B, C, D = self.model_stack[k].A, self.model_stack[
                                 k].B, self.model_stack[k].C, self.model_stack[k].D
                             x0_est, _, _, _ = np.linalg.lstsq(C, y)
-                            y_est, _ = self._dssSim(
+                            y_est, _ = self._dss_sim(
                                 A, B, C, D, self.u_buffer, x0_est, y)
                             meanErr = np.mean(y_est - self.y_buffer, axis=0)
 
@@ -921,24 +920,24 @@ class Controller:
 
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
         If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``W @ self._Phi( y, u )`` 
-        within :func:`~RLframe.controller._criticCost`
+        within :func:`~RLframe.controller._critic_cost`
 
         """
         chi = np.concatenate([y, u])
 
         if self.critic_struct == 1:
             return np.concatenate([uptria2vec(np.kron(chi, chi)), chi])
-        
+
         elif self.critic_struct == 2:
             return np.concatenate([uptria2vec(np.kron(chi, chi))])
-        
+
         elif self.critic_struct == 3:
             return chi * chi
-        
+
         elif self.critic_struct == 4:
             return np.concatenate([y**2, np.kron(y, u), u**2])
 
-    def _criticCost(self, W, U, Y):
+    def _critic_cost(self, W, U, Y):
         """
         Cost function of the critic
 
@@ -972,7 +971,7 @@ class Controller:
         Customization
         -------------
 
-        This method normally should not be altered, adjust :func:`~RLframe.controller._criticCost` instead.
+        This method normally should not be altered, adjust :func:`~RLframe.controller._critic_cost` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -986,11 +985,11 @@ class Controller:
             critic_opt_options = {'maxiter': 200, 'disp': False}
         else:
             critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False,
-                                'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}  # 'disp': True, 'verbose': 2}
+                                  'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}  # 'disp': True, 'verbose': 2}
 
         bnds = sp.optimize.Bounds(self.w_min, self.w_max, keep_feasible=True)
 
-        W = minimize(lambda W: self._criticCost(W, U, Y), Winit,
+        W = minimize(lambda W: self._critic_cost(W, U, Y), Winit,
                      method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
 
         # DEBUG ===============================================================
@@ -1000,7 +999,7 @@ class Controller:
 
         return W
 
-    def _actorCost(self, U, y, N, W, delta, ctrl_mode):
+    def _actor_cost(self, U, y, N, W, delta, ctrl_mode):
         """
         See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
 
@@ -1023,14 +1022,14 @@ class Controller:
                 # Euler scheme
                 x = x + delta * \
                     self.sys_rhs([], x, myU[k - 1, :], [], self.m,
-                                self.I, self.dim_state, self.is_disturb)
+                                 self.I, self.dim_state, self.is_disturb)
                 Y[k, :] = self.sys_out(x)
 
         elif (ctrl_mode == 2) or (ctrl_mode == 4) or (ctrl_mode == 6):    # Via estimated model
-            myU_upsampled = myU.repeat(int(delta / self.sampl_time), axis=0)
-            Yupsampled, _ = self._dssSim(
+            myU_upsampled = myU.repeat(int(delta / self.sample_time), axis=0)
+            Yupsampled, _ = self._dss_sim(
                 self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0_est, y)
-            Y = Yupsampled[::int(delta / self.sampl_time)]
+            Y = Yupsampled[::int(delta / self.sample_time)]
 
         J = 0
         if (ctrl_mode == 1) or (ctrl_mode == 2):     # MPC
@@ -1055,7 +1054,7 @@ class Controller:
         Customization
         -------------         
 
-        This method normally should not be altered, adjust :func:`~RLframe.controller._actorCost`, :func:`~RLframe.controller._actor` instead.
+        This method normally should not be altered, adjust :func:`~RLframe.controller._actor_cost`, :func:`~RLframe.controller._actor` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -1081,10 +1080,10 @@ class Controller:
             if isGlobOpt:
                 minimizer_kwargs = {
                     'method': actorOptMethod, 'bounds': bnds, 'tol': 1e-7, 'options': actorOptOptions}
-                U = basinhopping(lambda U: self._actorCost(
+                U = basinhopping(lambda U: self._actor_cost(
                     U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
             else:
-                U = minimize(lambda U: self._actorCost(U, y, N, W, delta, ctrl_mode), myu_init,
+                U = minimize(lambda U: self._actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
                              method=actorOptMethod, tol=1e-7, bounds=bnds, options=actorOptOptions).x
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
@@ -1095,9 +1094,9 @@ class Controller:
         # R  = '\033[31m'
         # Bl  = '\033[30m'
         # myU = np.reshape(U, [N, self.dim_input])
-        # myU_upsampled = myU.repeat(int(delta/self.sampl_time), axis=0)
-        # Yupsampled, _ = self._dssSim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0_est, y)
-        # Y = Yupsampled[::int(delta/self.sampl_time)]
+        # myU_upsampled = myU.repeat(int(delta/self.sample_time), axis=0)
+        # Yupsampled, _ = self._dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0_est, y)
+        # Y = Yupsampled[::int(delta/self.sample_time)]
         # Yt = np.zeros([N, self.dim_output])
         # Yt[0, :] = y
         # x = self.xSys
@@ -1115,20 +1114,20 @@ class Controller:
 
         return U[:self.dim_input]    # Return first action
 
-    def computeAction(self, t, y):
+    def compute_action(self, t, y):
         """
         Main method. See class documentation
 
         Customization
         -------------         
 
-        Add your modes, that you introduced in :func:`~RLframe.controller._actorCost`, here
+        Add your modes, that you introduced in :func:`~RLframe.controller._actor_cost`, here
 
         """
 
         time_in_sample = t - self.ctrl_clock
 
-        if time_in_sample >= self.sampl_time:  # New sample
+        if time_in_sample >= self.sample_time:  # New sample
             # Update controller's internal clock
             self.ctrl_clock = t
 
@@ -1204,7 +1203,6 @@ class Controller:
             return self.u_curr
 
 
-
 class NominalController:
     """
     This is a class of nominal controllers used for benchmarking of optimal controllers.
@@ -1219,11 +1217,11 @@ class NominalController:
     ----------
     m, I : : numbers
         Mass and moment of inertia around vertical axis of the robot
-    ctrlGain : : number
+    ctrl_gain : : number
         Controller gain       
     t0 : : number
         Initial value of the controller's internal clock
-    samplTime : : number
+    sample_time : : number
         Controller's sampling time (in seconds)        
 
     References
@@ -1238,24 +1236,24 @@ class NominalController:
 
     """
 
-    def __init__(self, m=10, I=1, ctrlGain=10, f_min=-5, f_max=5, m_min=-1, m_max=1, t0=0, samplTime=0.1):
+    def __init__(self, m=10, I=1, ctrl_gain=10, f_min=-5, f_max=5, m_min=-1, m_max=1, t0=0, sample_time=0.1):
+        self.ctrl_gain = ctrl_gain
+        self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
+        self.ctrl_clock = t0
+        self.sample_time = sample_time
+        self.u_curr = np.zeros(2)
         self.m = m
         self.I = I
-        self.ctrlGain = ctrlGain
-        self.ctrlBnds = np.array([[f_min, f_max], [m_min, m_max]])
-        self.ctrlClock = t0
-        self.samplTime = samplTime
-        self.uCurr = np.zeros(2)
 
     def reset(self, t0):
         """
         Resets controller for use in multi-episode simulation
 
         """
-        self.ctrlClock = t0
-        self.uCurr = np.zeros(2)
+        self.ctrl_clock = t0
+        self.u_curr = np.zeros(2)
 
-    def _zeta(self, xNI, theta):
+    def _zeta(self, xni, theta):
         """
         Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators)
 
@@ -1284,70 +1282,70 @@ class NominalController:
         #                                            \/
         #                                            sigma~
 
-        sigmaTilde = xNI[0] * np.cos(theta) + xNI[1] * \
-            np.sin(theta) + np.sqrt(np.abs(xNI[2]))
+        sigma_tilde = xni[0] * np.cos(theta) + xni[1] * \
+            np.sin(theta) + np.sqrt(np.abs(xni[2]))
 
         nablaF = np.zeros(3)
 
-        nablaF[0] = 4 * xNI[0]**3 - 2 * \
-            np.abs(xNI[2])**3 * np.cos(theta) / sigmaTilde**3
+        nablaF[0] = 4 * xni[0]**3 - 2 * \
+            np.abs(xni[2])**3 * np.cos(theta) / sigma_tilde**3
 
-        nablaF[1] = 4 * xNI[1]**3 - 2 * \
-            np.abs(xNI[2])**3 * np.sin(theta) / sigmaTilde**3
+        nablaF[1] = 4 * xni[1]**3 - 2 * \
+            np.abs(xni[2])**3 * np.sin(theta) / sigma_tilde**3
 
-        nablaF[2] = (3 * xNI[0] * np.cos(theta) + 3 * xNI[1] * np.sin(theta) + 2 *
-                     np.sqrt(np.abs(xNI[2]))) * xNI[2]**2 * np.sign(xNI[2]) / sigmaTilde**3
+        nablaF[2] = (3 * xni[0] * np.cos(theta) + 3 * xni[1] * np.sin(theta) + 2 *
+                     np.sqrt(np.abs(xni[2]))) * xni[2]**2 * np.sign(xni[2]) / sigma_tilde**3
 
         return nablaF
 
-    def _kappa(self, xNI, theta):
+    def _kappa(self, xni, theta):
         """
         Stabilizing controller for NI-part
 
         """
-        kappaVal = np.zeros(2)
+        kappa_val = np.zeros(2)
 
         G = np.zeros([3, 2])
-        G[:, 0] = np.array([1, 0, xNI[1]])
-        G[:, 1] = np.array([0, 1, -xNI[0]])
+        G[:, 0] = np.array([1, 0, xni[1]])
+        G[:, 1] = np.array([0, 1, -xni[0]])
 
-        zetaVal = self._zeta(xNI, theta)
+        zeta_val = self._zeta(xni, theta)
 
-        kappaVal[0] = - np.abs(np.dot(zetaVal, G[:, 0])
-                               )**(1 / 3) * np.sign(np.dot(zetaVal, G[:, 0]))
-        kappaVal[1] = - np.abs(np.dot(zetaVal, G[:, 1])
-                               )**(1 / 3) * np.sign(np.dot(zetaVal, G[:, 1]))
+        kappa_val[0] = - np.abs(np.dot(zeta_val, G[:, 0])
+                                )**(1 / 3) * np.sign(np.dot(zeta_val, G[:, 0]))
+        kappa_val[1] = - np.abs(np.dot(zeta_val, G[:, 1])
+                                )**(1 / 3) * np.sign(np.dot(zeta_val, G[:, 1]))
 
-        return kappaVal
+        return kappa_val
 
-    def _Fc(self, xNI, eta, theta):
+    def _Fc(self, xni, eta, theta):
         """
         Marginal function for ENDI constructed by nonsmooth backstepping. See details in the literature mentioned in the class documentation
 
         """
 
-        sigmaTilde = xNI[0] * np.cos(theta) + xNI[1] * \
-            np.sin(theta) + np.sqrt(np.abs(xNI[2]))
+        sigma_tilde = xni[0] * np.cos(theta) + xni[1] * \
+            np.sin(theta) + np.sqrt(np.abs(xni[2]))
 
-        F = xNI[0]**4 + xNI[1]**4 + np.abs(xNI[2])**3 / sigmaTilde
+        F = xni[0]**4 + xni[1]**4 + np.abs(xni[2])**3 / sigma_tilde
 
-        z = eta - self._kappa(xNI, theta)
+        z = eta - self._kappa(xni, theta)
 
         return F + 1 / 2 * np.dot(z, z)
 
-    def _thetaMinimizer(self, xNI, eta):
-        thetaInit = 0
+    def _theta_minimizer(self, xni, eta):
+        theta_init = 0
 
         bnds = sp.optimize.Bounds(-np.pi, np.pi, keep_feasible=False)
 
         options = {'maxiter': 50, 'disp': False}
 
-        thetaVal = minimize(lambda theta: self._Fc(xNI, eta, theta), thetaInit,
-                            method='trust-constr', tol=1e-6, bounds=bnds, options=options).x
+        theta_val = minimize(lambda theta: self._Fc(xni, eta, theta), theta_init,
+                             method='trust-constr', tol=1e-6, bounds=bnds, options=options).x
 
-        return thetaVal
+        return theta_val
 
-    def _Cart2NH(self, CartCoords):
+    def _cart_to_nh(self, cart_coords):
         """
         Transformation from Cartesian coordinates to non-holonomic (NH) coordinates
         See Section VIII.A in [[1]_]
@@ -1361,26 +1359,26 @@ class NominalController:
 
         """
 
-        xNI = np.zeros(3)
+        xni = np.zeros(3)
         eta = np.zeros(2)
 
-        xc = CartCoords[0]
-        yc = CartCoords[1]
-        alpha = CartCoords[2]
-        v = CartCoords[3]
-        omega = CartCoords[4]
+        xc = cart_coords[0]
+        yc = cart_coords[1]
+        alpha = cart_coords[2]
+        v = cart_coords[3]
+        omega = cart_coords[4]
 
-        xNI[0] = alpha
-        xNI[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
-        xNI[2] = - 2 * (yc * np.cos(alpha) - xc * np.sin(alpha)) - \
+        xni[0] = alpha
+        xni[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
+        xni[2] = - 2 * (yc * np.cos(alpha) - xc * np.sin(alpha)) - \
             alpha * (xc * np.cos(alpha) + yc * np.sin(alpha))
 
         eta[0] = omega
         eta[1] = (yc * np.cos(alpha) - xc * np.sin(alpha)) * omega + v
 
-        return [xNI, eta]
+        return [xni, eta]
 
-    def _NH2CartCtrl(self, xNI, eta, uNI):
+    def _nh_to_cartctrl(self, xni, eta, uNI):
         """
         Get control for Cartesian NI from NH coordinates
         See Section VIII.A in [[1]_]
@@ -1397,13 +1395,13 @@ class NominalController:
 
         uCart = np.zeros(2)
 
-        uCart[0] = self.m * (uNI[1] + xNI[1] * eta[0]**2 +
-                             1 / 2 * (xNI[0] * xNI[1] * uNI[0] + uNI[0] * xNI[2]))
+        uCart[0] = self.m * (uNI[1] + xni[1] * eta[0]**2 +
+                             1 / 2 * (xni[0] * xni[1] * uNI[0] + uNI[0] * xni[2]))
         uCart[1] = self.I * uNI[0]
 
         return uCart
 
-    def computeAction(self, t, y):
+    def compute_action(self, t, y):
         """
         See algorithm description in [[1]_], [[2]_]
 
@@ -1418,29 +1416,29 @@ class NominalController:
 
         """
 
-        timeInSample = t - self.ctrlClock
+        time_in_sample = t - self.ctrl_clock
 
-        if timeInSample >= self.samplTime:  # New sample
+        if time_in_sample >= self.sample_time:  # New sample
 
             # This controller needs full-state measurement
-            xNI, eta = self._Cart2NH(y)
-            thetaStar = self._thetaMinimizer(xNI, eta)
-            kappaVal = self._kappa(xNI, thetaStar)
-            z = eta - kappaVal
-            uNI = - self.ctrlGain * z
-            u = self._NH2CartCtrl(xNI, eta, uNI)
+            xni, eta = self._cart_to_nh(y)
+            theta_star = self._theta_minimizer(xni, eta)
+            kappa_val = self._kappa(xni, theta_star)
+            z = eta - kappa_val
+            uNI = - self.ctrl_gain * z
+            u = self._nh_to_cartctrl(xni, eta, uNI)
 
-            if self.ctrlBnds.any():
+            if self.ctrl_bnds.any():
                 for k in range(2):
-                    u[k] = np.clip(u[k], self.ctrlBnds[k, 0],
-                                   self.ctrlBnds[k, 1])
+                    u[k] = np.clip(u[k], self.ctrl_bnds[k, 0],
+                                   self.ctrl_bnds[k, 1])
 
-            self.uCurr = u
+            self.u_curr = u
 
             return u
 
         else:
-            return self.uCurr
+            return self.u_curr
 
 
 class Simulation:
@@ -1569,8 +1567,8 @@ class Simulation:
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
 
-    def create_simulator(self, closedLoop):
-        simulator = sp.integrate.RK45(closedLoop,
+    def create_simulator(self, closed_loop):
+        simulator = sp.integrate.RK45(closed_loop,
                                       self.t0,
                                       self.ksi0,
                                       self.t1,
@@ -1687,24 +1685,24 @@ class Simulation:
 
         return self.solScatter
 
-    def _updateLine(self, line, newX, newY):
+    def _update_line(self, line, newX, newY):
         line.set_xdata(np.append(line.get_xdata(), newX))
         line.set_ydata(np.append(line.get_ydata(), newY))
 
-    def _resetLine(self, line):
+    def _reset_line(self, line):
         line.set_data([], [])
 
-    # def _updateScatter(self, scatter, newX, newY):
+    # def _update_scatter(self, scatter, newX, newY):
     #     scatter.set_offsets(
     #         np.vstack([scatter.get_offsets().data, np.c_[newX, newY]]))
 
-    def _updateText(self, textHandle, newText):
+    def _update_text(self, textHandle, newText):
         textHandle.set_text(newText)
 
-    def _updateScatter(self, textTime, ksi, alphaDeg, xCoord, yCoord, t, alpha, r, icost, u):
-        self._updateText(self.textTimeHandle, textTime)
+    def _update_scatter(self, textTime, ksi, alphaDeg, xCoord, yCoord, t, alpha, r, icost, u):
+        self._update_text(self.textTimeHandle, textTime)
         # Update the robot's track on the plot
-        self._updateLine(self.trajLine, *ksi[:2])
+        self._update_line(self.trajLine, *ksi[:2])
 
         self.robotMarker.rotate(alphaDeg)    # Rotate the robot on the plot
         self.solScatter.remove()
@@ -1712,17 +1710,17 @@ class Simulation:
             xCoord, yCoord, marker=self.robotMarker.marker, s=400, c='b')
 
         # Solution
-        self._updateLine(self.normLine, t, la.norm([xCoord, yCoord]))
-        self._updateLine(self.alphaLine, t, alpha)
+        self._update_line(self.normLine, t, la.norm([xCoord, yCoord]))
+        self._update_line(self.alphaLine, t, alpha)
 
         # Cost
-        self._updateLine(self.rcostLine, t, r)
-        self._updateLine(self.icostLine, t, icost)
+        self._update_line(self.rcostLine, t, r)
+        self._update_line(self.icostLine, t, icost)
         textIcost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
-        self._updateText(self.textIcostHandle, textIcost)
+        self._update_text(self.textIcostHandle, textIcost)
         # Control
         for (line, uSingle) in zip(self.ctrlLines, u):
-            self._updateLine(line, t, uSingle)
+            self._update_line(line, t, uSingle)
 
     def _reset_sim(self, agent, nominalCtrl, simulator):
         if self.is_print_sim_step:
@@ -1765,7 +1763,7 @@ class Simulation:
             t, y, self.uMan, nominalCtrl, agent, self.ctrl_mode)
 
         sys.receiveAction(u)
-        agent.receiveSysState(sys._x)
+        agent.receive_sys_state(sys._x)
         agent.update_icost(y, u)
 
         xCoord = ksi[0]
@@ -1786,8 +1784,8 @@ class Simulation:
             alphaDeg = alpha / np.pi * 180
             r = agent.rcost(y, u)
             textTime = 't = {time:2.3f}'.format(time=t)
-            self._updateScatter(textTime, ksi, alphaDeg,
-                                xCoord, yCoord, t, alpha, r, icost, u)
+            self._update_scatter(textTime, ksi, alphaDeg,
+                                 xCoord, yCoord, t, alpha, r, icost, u)
 
         # Run done
         if t >= self.t1:
@@ -1798,11 +1796,11 @@ class Simulation:
             #     if item != self.trajLine:
             #         if isinstance(item, list):
             #             for subitem in item:
-            #                 self._resetLine(subitem)
+            #                 self._reset_line(subitem)
             #         else:
-            #             self._resetLine(item)
+            #             self._reset_line(item)
 
-            # self._updateLine(self.trajLine, np.nan, np.nan)
+            # self._update_line(self.trajLine, np.nan, np.nan)
 
         if animate == True:
             return self.solScatter

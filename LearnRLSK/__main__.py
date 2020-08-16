@@ -161,15 +161,15 @@ def main(args=None):
 
         sim = Simulation()
 
-        simulator = sim.create_simulator(sys.closedLoop)
+        simulator = sim.create_simulator(sys.closed_loop)
 
     else:
         # environment
         sys = System()
-        nominalCtrl = NominalController(ctrlGain=0.5, samplTime=0.05)
+        nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
         agent = Controller(ctrl_mode=5, n_actor=6, buffer_size=200, critic_struct=3, n_critic=50, prob_noise_pow=8, mod_est_phase=2)
         sim = Simulation()
-        simulator = sim.create_simulator(sys.closedLoop)
+        simulator = sim.create_simulator(sys.closed_loop)
 
     sim.run_simulation(sys, agent, nominalCtrl, simulator)
 

@@ -129,9 +129,9 @@ def ctrlSelector(t, y, uMan, nominalCtrl, agent, mode):
     if mode==0: # Manual control
         u = uMan
     elif mode==-1: # Nominal controller
-        u = nominalCtrl.computeAction(t, y)
+        u = nominalCtrl.compute_action(t, y)
     elif mode > 0: # Optimal controller
-        u = agent.computeAction(t, y)
+        u = agent.compute_action(t, y)
         
     return u
 
