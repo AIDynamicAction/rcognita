@@ -139,7 +139,7 @@ def main(args=None):
         f_max = args.f_max,
         m_min = args.m_min,
         m_max = args.m_max,
-        nactor = args.nactor,
+        n_actor = args.nactor,
         buffer_size = args.buffer_size,
         r_cost_struct = args.r_cost_struct,
         n_critic = args.n_critic,
@@ -157,7 +157,7 @@ def main(args=None):
 
         nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
 
-        agent = Controller(dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, nactor, prob_noise_pow, mod_est_phase, buffer_size, model_order, mod_est_checks, gamma, n_critic, critic_struct, r_cost_struct)
+        agent = Controller(dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, prob_noise_pow, mod_est_phase, buffer_size, model_order, mod_est_checks, gamma, n_critic, critic_struct, r_cost_struct)
 
         sim = Simulation()
 
