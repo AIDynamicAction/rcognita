@@ -1,4 +1,4 @@
-from LearnRLSK import Simulation
+from LearnRLSK import System, NominalController, Controller,Simulation
 import argparse
 import sys
 
@@ -156,7 +156,14 @@ def main(args=None):
                          n_man, f_min, f_max, m_min, m_max, nactor, buffer_size, r_cost_struct, n_critic, gamma, critic_struct, is_log_data, is_visualization, is_print_sim_step, is_disturb, is_dyn_ctrl, ctrl_mode)
 
     else:
+        # environment
+        sys = System()
+        nominalCtrl = NominalController(ctrlGain=0.5, samplTime=0.5)
+        agent = Controller()
         sim = Simulation()
+        simulator = sim.create_simulator(sys.closedLoop)
+        sim.run_simulation(sys, agent, nominalCtrl, simulator)
+
 
     sim.run_sim()
 
