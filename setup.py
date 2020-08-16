@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="LearnRLSK", # Replace with your own username
-    version="1.1.0",
+    version="1.5.0",
     author="Pavel Osinenko",
     author_email="p.osinenko@skoltech.ru",
     description="Learning Reinforcement Learning - Skoltech",
