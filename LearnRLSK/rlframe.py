@@ -58,19 +58,19 @@ class System:
 
     Attributes
     ----------
-    dimState, dimInput, dimOutput, dimDisturb : : integer
+    dim_state, dim_input, dim_output, dim_disturb : : integer
         System dimensions 
     pars : : list
         List of fixed parameters of the system
-    ctrlBnds : : array of shape ``[dimInput, 2]``
+    ctrlBnds : : array of shape ``[dim_input, 2]``
         Box control constraints.
         First element in each row is the lower bound, the second - the upper bound.
         If empty, control is unconstrained (default)
-    isDynCtrl : : 0 or 1
+    is_dyn_ctrl : : 0 or 1
         If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
-    isDisturb : : 0 or 1
+    is_disturb : : 0 or 1
         If 0, no disturbance is fed into the system
-    parsDisturb : : list
+    sigma_q, mu_q, tau_q : : list
         Parameters of the disturbance model
 
     Customization
@@ -81,31 +81,53 @@ class System:
 
     """
 
-    def __init__(self, dimState=5, dimInput=2, dimOutput=5, dimDisturb=2, m=10, I=1, f_min=-5, f_max=5, m_min=-1, m_max=1, isDynCtrl=0, isDisturb=0, parsDisturb=[]):
-        self.dimState = dimState
-        self.dimInput = dimInput
-        self.dimOutput = dimOutput
-        self.dimDisturb = dimDisturb
+    def __init__(self,
+                 dim_state=5,
+                 dim_input=2,
+                 dim_output=5,
+                 dim_disturb=2,
+                 m=10,
+                 I=1,
+                 f_min=-5,
+                 f_max=5,
+                 m_min=-1,
+                 m_max=1,
+                 is_dyn_ctrl=0,
+                 is_disturb=0,
+                 sigma_q=None,
+                 mu_q=None,
+                 tau_q=None):
+        """system - needs description"""
+        self.dim_state = dim_state
+        self.dim_input = dim_input
+        self.dim_output = dim_output
+        self.dim_disturb = dim_disturb
         self.m = m
         self.I = I
         self.ctrlBnds = np.array([[f_min, f_max], [m_min, m_max]])
-        self.isDynCtrl = isDynCtrl
-        self.isDisturb = isDisturb
-        self.parsDisturb = parsDisturb
+
+        """disturbance - needs description"""
+        self.is_disturb = is_disturb
+        self.sigma_q = sigma_q
+        self.mu_q = mu_q
+        self.tau_q = tau_q
 
         # Track system's state
-        self._x = np.zeros(dimState)
+        self._x = np.zeros(dim_state)
 
         # Current input (a.k.a. action)
-        self.u = np.zeros(dimInput)
+        self.u = np.zeros(dim_input)
 
-        if isDynCtrl:
-            self._dimFullState = self.dimState + self.dimDisturb + self.dimInput
+        # Static or dynamic controller
+        self.is_dyn_ctrl = is_dyn_ctrl
+
+        if is_dyn_ctrl:
+            self._dim_full_state = self.dim_state + self.dim_disturb + self.dim_input
         else:
-            self._dimFullState = self.dimState + self.dimDisturb
+            self._dim_full_state = self.dim_state + self.dim_disturb
 
     @staticmethod
-    def stateDyn(t, x, u, q, m, I, dimState, isDisturb):
+    def stateDyn(t, x, u, q, m, I, dim_state, is_disturb):
         """
         Right-hand side of the system internal dynamics
 
@@ -153,7 +175,7 @@ class System:
         | :math:`M` : steering torque [Nm]
         | :math:`m` : robot mass [kg]
         | :math:`I` : robot moment of inertia around vertical axis [kg m\ :sup:`2`]
-        | :math:`q` : actuator disturbance (see :func:`~RLframe.system.disturbDyn`). Is zero if ``isDisturb = 0``
+        | :math:`q` : actuator disturbance (see :func:`~RLframe.system.disturbDyn`). Is zero if ``is_disturb = 0``
 
         :math:`x = [x_c, y_c, \\alpha, v, \\omega]`
 
@@ -168,12 +190,12 @@ class System:
 
         """
 
-        Dx = np.zeros(dimState)
+        Dx = np.zeros(dim_state)
         Dx[0] = x[3] * np.cos(x[2])
         Dx[1] = x[3] * np.sin(x[2])
         Dx[2] = x[4]
 
-        if isDisturb:
+        if is_disturb:
             Dx[3] = 1 / m * (u[0] + q[0])
             Dx[4] = 1 / I * (u[1] + q[1])
         else:
@@ -200,25 +222,21 @@ class System:
         where :math:`B` is the standard Brownian motion, :math:`Q` is the stochastic process whose realization is :math:`q`, and
         :math:`\\tau_q, \\sigma_q, \\mu_q` are the time constant, standard deviation and mean, resp.
 
-        ``parsDisturb = [sigma_q, mu_q, tau_q]``, with each being an array of shape ``[dimDisturb, ]``
+        ``sigma_q, mu_q, tau_q``, with each being an array of shape ``[dim_disturb, ]``
 
         """
 
-        Dq = np.zeros(self.dimDisturb)
+        Dq = np.zeros(self.dim_disturb)
 
-        if self.isDisturb:
-            sigma_q = self.parsDisturb[0]
-            mu_q = self.parsDisturb[1]
-            tau_q = self.parsDisturb[2]
-
-            for k in range(0, self.dimDisturb):
+        if self.is_disturb:
+            for k in range(0, self.dim_disturb):
                 Dq[k] = - tau_q[k] * (q[k] + sigma_q[k] * (randn() + mu_q[k]))
 
         return Dq
 
     def _ctrlDyn(t, u, y):
         """
-        Dynamical controller. When ``isDynCtrl=0``, the controller is considered static, which is to say that the control actions are
+        Dynamical controller. When ``is_dyn_ctrl=0``, the controller is considered static, which is to say that the control actions are
         computed immediately from the system's output.
         In case of a dynamical controller, the system's state vector effectively gets extended.
         Dynamical controllers have some advantages compared to the static ones.
@@ -231,7 +249,7 @@ class System:
 
         """
 
-        Du = np.zeros(self.dimInput)
+        Du = np.zeros(self.dim_input)
 
         return Du
 
@@ -265,7 +283,7 @@ class System:
 
         Parameters
         ----------
-        u : : array of shape ``[dimInput, ]``
+        u : : array of shape ``[dim_input, ]``
             Action
 
         Examples
@@ -278,7 +296,7 @@ class System:
                 simulator.step()
                 t = simulator.t
                 ksi = simulator.y
-                x = ksi[0:sys.dimState]
+                x = ksi[0:sys.dim_state]
                 y = sys.out(x)
                 u = myController(y)
                 sys.receiveAction(u)
@@ -302,7 +320,7 @@ class System:
                 simulator.step()
                 t = simulator.t
                 ksi = simulator.y
-                x = ksi[0:sys.dimState]
+                x = ksi[0:sys.dim_state]
                 y = sys.out(x)
                 u = myController(y)
                 sys.receiveAction(u)
@@ -313,26 +331,27 @@ class System:
         # print('INTERNAL t = {time:2.3f}'.format(time=t))
         # /DEBUG ==============================================================
 
-        DfullState = np.zeros(self._dimFullState)
+        DfullState = np.zeros(self._dim_full_state)
 
-        x = ksi[0:self.dimState]
-        q = ksi[self.dimState:]
+        x = ksi[0:self.dim_state]
+        q = ksi[self.dim_state:]
 
-        if self.isDynCtrl:
-            u = ksi[-self.dimInput:]
-            DfullState[-self.dimInput:] = self._ctrlDyn(t, u, y)
+        if self.is_dyn_ctrl:
+            u = ksi[-self.dim_input:]
+            DfullState[-self.dim_input:] = self._ctrlDyn(t, u, y)
         else:
             # Fetch the control action stored in the system
             u = self.u
 
         if self.ctrlBnds.any():
-            for k in range(self.dimInput):
+            for k in range(self.dim_input):
                 u[k] = np.clip(u[k], self.ctrlBnds[k, 0], self.ctrlBnds[k, 1])
 
-        DfullState[0:self.dimState] = System.stateDyn(t, x, u, q, self.m, self.I, self.dimState, self.isDisturb)
+        DfullState[0:self.dim_state] = System.stateDyn(
+            t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
-        if self.isDisturb:
-            DfullState[self.dimState:] = self._disturbDyn(t, q)
+        if self.is_disturb:
+            DfullState[self.dim_state:] = self._disturbDyn(t, q)
 
         # Track system's state
         self._x = x
@@ -346,7 +365,7 @@ class Controller:
 
     Attributes
     ----------
-    dimInput, dimOutput : : integer
+    dim_input, dim_output : : integer
         Dimension of input and output which should comply with the system-to-be-controlled
     mode : : natural number
         Controller mode. Currently available (:math:`r` is the running cost, :math:`\\gamma` is the discounting factor):
@@ -370,33 +389,33 @@ class Controller:
 
         **Add your specification into the table when customizing the agent**    
 
-    ctrlBnds : : array of shape ``[dimInput, 2]``
+    ctrl_bnds : : array of shape ``[dim_input, 2]``
         Box control constraints.
         First element in each row is the lower bound, the second - the upper bound.
         If empty, control is unconstrained (default)
     t0 : : number
         Initial value of the controller's internal clock
-    samplTime : : number
+    sampl_time : : number
         Controller's sampling time (in seconds)
-    Nactor : : natural number
+    n_actor : : natural number
         Size of prediction horizon :math:`N_a` 
-    predStepSize : : number
-        Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``samplTime``. Commonly, equals it, but here left adjustable for
+    pred_step_size : : number
+        Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sampl_time``. Commonly, equals it, but here left adjustable for
         convenience. Larger prediction step size leads to longer factual horizon
-    sysRHS, sysOut : : functions        
+    sys_rhs, sys_out : : functions        
         Functions that represents the right-hand side, resp., the output of the exogenously passed model.
         The latter could be, for instance, the true model of the system.
         In turn, ``xSys`` represents the (true) current state of the system and should be updated accordingly.
-        Parameters ``sysRHS, sysOut, xSys`` are used in controller modes which rely on them.
-    probNoisePow : : number
+        Parameters ``sys_rhs, sys_out, xSys`` are used in controller modes which rely on them.
+    prob_noise_pow : : number
         Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
-    modEstPhase : : number
+    mod_est_phase : : number
         Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
-    modEstPeriod : : number
+    mod_est_period : : number
         Time between model estimate updates (in seconds)
-    bufferSize : : natural number
+    buffer_size : : natural number
         Size of the buffer to store data
-    modelOrder : : natural number
+    model_order : : natural number
         Order of the state-space estimation model
 
         .. math::
@@ -407,21 +426,21 @@ class Controller:
 
         **See** :func:`~RLframe.controller._estimateModel` . **This is just a particular model estimator.
         When customizing,** :func:`~RLframe.controller._estimateModel`
-        **may be changed and in turn the parameter** ``modelOrder`` **also. For instance, you might want to use an artifial
+        **may be changed and in turn the parameter** ``model_order`` **also. For instance, you might want to use an artifial
         neural net and specify its layers and numbers
-        of neurons, in which case** ``modelOrder`` **could be substituted for, say,** ``Nlayers``, ``Nneurons`` 
-    modEstChecks : : natural number
-        Estimated model parameters can be stored in stacks and the best among the ``modEstChecks`` last ones is picked.
+        of neurons, in which case** ``model_order`` **could be substituted for, say,** ``Nlayers``, ``Nneurons`` 
+    mod_est_checks : : natural number
+        Estimated model parameters can be stored in stacks and the best among the ``mod_est_checks`` last ones is picked.
         May improve the prediction quality somewhat
     gamma : : number in (0, 1]
         Discounting factor.
         Characterizes fading of running costs along horizon
-    Ncritic : : natural number
+    n_critic : : natural number
         Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
         optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
-    criticPeriod : : number
-        The same meaning as ``modEstPeriod`` 
-    criticStruct : : natural number
+    critic_period : : number
+        The same meaning as ``mod_est_period`` 
+    critic_struct : : natural number
         Choice of the structure of the critic's feature vector
 
         Currently available:
@@ -443,7 +462,7 @@ class Controller:
                where :math:`w` is the critic's weight vector
 
         **Add your specification into the table when customizing the critic** 
-    rcostStruct : : natural number
+    r_cost_struct : : natural number
         Choice of the running cost structure.
 
         Currently available:
@@ -455,12 +474,12 @@ class Controller:
            * - Mode
              - Structure
            * - 1
-             - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcostPars`` should be ``[R1]``
+             - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``r_cost_pars`` should be ``[R1]``
            * - 2
-             - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcostPars``
+             - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``r_cost_pars``
                should be ``[R1, R2]``           
 
-        **Pass correct running cost parameters in** ``rcostPars`` **(as a list)**
+        **Pass correct running cost parameters in** ``r_cost_pars`` **(as a list)**
 
         **When customizing the running cost, add your specification into the table above**
 
@@ -471,13 +490,13 @@ class Controller:
 
     >>> import scipy as sp
     >>> simulator = sp.integrate.RK45(sys.closedLoop, t0, ksi0, t1)
-    >>> agent = controller(sys.dimInput, sys.dimOutput)
+    >>> agent = controller(sys.dim_input, sys.dim_output)
 
     >>> while t < t1:
             simulator.step()
             t = simulator.t
             ksi = simulator.y
-            x = ksi[0:sys.dimState]
+            x = ksi[0:sys.dim_state]
             y = sys.out(x)
             u = agent.computeAction(t, y)
             sys.receiveAction(u)
@@ -490,94 +509,119 @@ class Controller:
     """
 
     def __init__(self,
-                 dimInput=2,
-                 dimOutput=5,
-                 dimState=5,
-                 ctrlMode=1,
-                 m=10, 
+                 dim_state=5,
+                 dim_input=2,
+                 dim_output=5,
+                 ctrl_mode=1,
+                 m=10,
                  I=1,
-                 isDisturb=0,
+                 t0=0,
                  f_min=-5,
                  f_max=5,
                  m_min=-1,
                  m_max=1,
-                 t0=0,
-                 samplTime=0.1,
-                 Nactor=1,
-                 predStepSize=0.1,
-                 probNoisePow=1,
-                 modEstPhase=1,
-                 modEstPeriod=0.1,
-                 bufferSize=20,
-                 modelOrder=3,
-                 modEstChecks=0,
+                 n_actor=1,
+                 n_critic=4,
+                 buffer_size=20,
+                 critic_period=0.1,
+                 critic_struct=1,
+                 r_cost_struct=1,
+                 sampl_time=0.1,
+                 mod_est_phase=1,
+                 mod_est_period=0.1,
+                 mod_est_checks=0,
+                 model_order=3,
+                 prob_noise_pow=1,
+                 pred_step_size=0.1,
                  gamma=1,
-                 Ncritic=4,
-                 criticPeriod=0.1,
-                 criticStruct=1,
-                 rcostStruct=1):
-
-        self.dimInput = dimInput
-        self.dimOutput = dimOutput
-        self.dimState = dimState
-        self.isDisturb = isDisturb
-        self.ctrlMode = ctrlMode
-        self.ctrlBnds = np.array([[f_min, f_max], [m_min, m_max]])
-        self.ctrlClock = t0
-        self.samplTime = samplTime
+                 is_disturb=0):
+        """ system vars """
+        self.dim_input = dim_input
+        self.dim_output = dim_output
+        self.dim_state = dim_state
         self.m = m
         self.I = I
 
-        # Controller: common
-        self.Nactor = Nactor
-        self.predStepSize = predStepSize
-        self.uMin = np.array(self.ctrlBnds[:, 0])
-        self.uMax = np.array(self.ctrlBnds[:, 1])
-        self.Umin = repMat(self.uMin, 1, Nactor)
-        self.Umax = repMat(self.uMax, 1, Nactor)
-        self.uCurr = self.uMin / 10
-        self.Uinit = repMat(self.uMin / 10, 1, self.Nactor)
-        self.ubuffer = np.zeros([bufferSize, dimInput])
-        self.ybuffer = np.zeros([bufferSize, dimOutput])
+        """ disturbance """
+        self.is_disturb = is_disturb
 
-        # Exogeneous model's things
-        self.sysRHS = System.stateDyn
-        self.sysOut = System.out
-        self.x0 = np.zeros(dimState)
+        # initial values of state
+        self.x0 = np.zeros(dim_state)
         self.x0[0] = 5
         self.x0[1] = 5
         self.x0[2] = np.pi / 2
         self.xSys = self.x0
 
-        # Model estimator's things
-        self.estClock = t0
-        self.isProbNoise = 1
-        self.probNoisePow = probNoisePow
-        self.modEstPhase = modEstPhase
-        self.modEstPeriod = modEstPeriod
-        self.bufferSize = bufferSize
-        self.modelOrder = modelOrder
-        self.modEstChecks = modEstChecks
-        A = np.zeros([self.modelOrder, self.modelOrder])
-        B = np.zeros([self.modelOrder, self.dimInput])
-        C = np.zeros([self.dimOutput, self.modelOrder])
-        D = np.zeros([self.dimOutput, self.dimInput])
-        x0est = np.zeros(self.modelOrder)
-        self.myModel = model(A, B, C, D, x0est)
-        self.modelStack = []
-        
-        for k in range(self.modEstChecks):
-            self.modelStack.append(self.myModel)
+        """ model estimator """
+        self.est_clock = t0
+        self.is_prob_noise = 1
+        self.prob_noise_pow = prob_noise_pow
 
-        # RL elements
-        self.criticClock = t0
-        self.gamma = gamma
-        self.Ncritic = Ncritic
-        # Clip critic buffer size
-        self.Ncritic = np.min([self.Ncritic, self.bufferSize - 1])
-        self.criticPeriod = criticPeriod
-        self.criticStruct = criticStruct
-        self.rcostStruct = rcostStruct
+        # In seconds, an initial phase to fill the estimator's buffer before
+        # applying optimal control
+        self.mod_est_phase = mod_est_phase
+
+        # In seconds, the time between model estimate updates. This constant
+        # determines how often the estimated parameters are updated. The more
+        # often the model is updated, the higher the computational burden is.
+        # On the other hand, more frequent updates help keep the model actual.
+        self.mod_est_period = mod_est_period
+
+        # The size of the buffer to store data for model estimation. The bigger
+        # the buffer, the more accurate the estimation may be achieved. For
+        # successful model estimation, the system must be sufficiently excited.
+        # Using bigger buffers is a way to achieve this.
+        self.buffer_size = buffer_size
+
+        # The order of the state-space estimation model. We are interested in
+        # adequate predictions of y under given u's. The higher the model
+        # order, the better estimation results may be achieved, but be aware of
+        # overfitting
+        self.model_order = model_order
+
+        # Estimated model parameters can be stored in stacks and the best among
+        # the mod_est_checks last ones is picked
+        self.mod_est_checks = mod_est_checks
+
+        A = np.zeros([self.model_order, self.model_order])
+        B = np.zeros([self.model_order, self.dim_input])
+        C = np.zeros([self.dim_output, self.model_order])
+        D = np.zeros([self.dim_output, self.dim_input])
+        x0_est = np.zeros(self.model_order)
+        self.my_model = model(A, B, C, D, x0_est)
+        self.model_stack = []
+
+        for k in range(self.mod_est_checks):
+            self.model_stack.append(self.my_model)
+
+        """ Controller 
+
+            # u[0]: Pushing force F [N]
+            # u[1]: Steering torque M [N m]
+        """
+
+        # Number of prediction steps. n_actor=1 means the controller is purely
+        # data-driven and doesn't use prediction.
+        self.n_actor = n_actor
+
+        # Time between critic updates
+        self.critic_period = critic_period
+
+        # In seconds. Should be a multiple of dt
+        self.pred_step_size = pred_step_size
+
+        """ RL elements
+
+            Running cost. 
+
+            Choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
+
+            Notation: chi = [y, u]
+            1 - quadratic chi.T R1 chi
+            2 - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
+            R1, R2 must be positive-definite
+        """
+        self.r_cost_struct = r_cost_struct
         self.R1 = np.diag([10, 10, 1, 0, 0, 0, 0])
         # R1 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
         # R1 = np.array([[10, 2, 1, 0, 0], [0, 10, 2, 0, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in y
@@ -592,35 +636,92 @@ class Controller:
         # R2 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
         # R2 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 10, 1, 1],
         # [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
-        self.rcostPars = [self.R1, self.R2]
+        self.r_cost_pars = [self.R1, self.R2]
+        self.i_cost_val = 0
 
-        self.icostVal = 0
+        """critic structure
 
-        if self.criticStruct == 1:
-            self.dimCrit = ((self.dimOutput + self.dimInput) + 1) * \
-                (self.dimOutput + self.dimInput) / \
-                2 + (self.dimOutput + self.dimInput)
+            1 - quadratic-linear
+            2 - quadratic
+            3 - quadratic, no mixed terms
+            4 - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...]
+            # u[0]^2 + ...
+        """
+        self.critic_struct = critic_struct
+        self.critic_clock = t0
 
-            self.Wmin = -1e3 * np.ones(int(self.dimCrit))
-            self.Wmax = 1e3 * np.ones(int(self.dimCrit))
+        """Critic stack size.
+
+            Should not greater than buffer_size. The critic optimizes the temporal error which is a measure of critic's ability to capture the optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer. The principle here is pretty much the same as with the model estimation: accuracy against performance
+
+        """
+        self.n_critic = n_critic
         
-        elif self.criticStruct == 2:
-            self.dimCrit = ((self.dimOutput + self.dimInput) + 1) * \
-                (self.dimOutput + self.dimInput) / 2
-            self.Wmin = np.zeros(self.dimCrit)
-            self.Wmax = 1e3 * np.ones(int(self.dimCrit))
-        
-        elif self.criticStruct == 3:
-            self.dimCrit = self.dimOutput + self.dimInput
-            self.Wmin = np.zeros(self.dimCrit)
-            self.Wmax = 1e3 * np.ones(int(self.dimCrit))
-        
-        elif self.criticStruct == 4:
-            self.dimCrit = self.dimOutput + self.dimOutput * self.dimInput + self.dimInput
-            self.Wmin = -1e3 * np.ones(int(self.dimCrit))
-            self.Wmax = 1e3 * np.ones(int(self.dimCrit))
+        # Clip critic buffer size
+        self.n_critic = np.min([self.n_critic, self.buffer_size - 1])
 
-        self.Wprev = np.ones(int(self.dimCrit))
+        """control mode
+        
+            Modes with online model estimation are experimental
+            
+            0     - manual constant control (only for basic testing)
+            -1    - nominal parking controller (for benchmarking optimal controllers)
+            1     - model-predictive control (MPC). Prediction via discretized true model
+            2     - adaptive MPC. Prediction via estimated model
+            3     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via discretized true model
+            4     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via estimated model
+            5     - RL: stacked Q-learning. Prediction via discretized true model
+            6     - RL: stacked Q-learning. Prediction via estimated model
+        """
+        self.ctrl_mode = ctrl_mode
+        self.ctrl_clock = t0
+        self.sampl_time = sampl_time
+
+        # manual control
+        self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
+        self.min_bounds = np.array(self.ctrl_bnds[:, 0])
+        self.max_bounds = np.array(self.ctrl_bnds[:, 1])
+        self.u_min = repMat(self.min_bounds, 1, n_actor)
+        self.u_max = repMat(self.max_bounds, 1, n_actor)
+        self.u_curr = self.min_bounds / 10
+        self.u_init = repMat(self.min_bounds / 10, 1, self.n_actor)
+        
+        self.u_buffer = np.zeros([buffer_size, dim_input])
+        self.y_buffer = np.zeros([buffer_size, dim_output])
+
+
+        """ other """
+        self.sys_rhs = System.stateDyn
+        self.sys_out = System.out
+
+        # discount factor
+        self.gamma = gamma
+
+        if self.critic_struct == 1:
+            self.dim_crit = ((self.dim_output + self.dim_input) + 1) * \
+                (self.dim_output + self.dim_input) / \
+                2 + (self.dim_output + self.dim_input)
+
+            self.w_min = -1e3 * np.ones(int(self.dim_crit))
+            self.w_max = 1e3 * np.ones(int(self.dim_crit))
+
+        elif self.critic_struct == 2:
+            self.dim_crit = ((self.dim_output + self.dim_input) + 1) * \
+                (self.dim_output + self.dim_input) / 2
+            self.w_min = np.zeros(self.dim_crit)
+            self.w_max = 1e3 * np.ones(int(self.dim_crit))
+
+        elif self.critic_struct == 3:
+            self.dim_crit = self.dim_output + self.dim_input
+            self.w_min = np.zeros(self.dim_crit)
+            self.w_max = 1e3 * np.ones(int(self.dim_crit))
+
+        elif self.critic_struct == 4:
+            self.dim_crit = self.dim_output + self.dim_output * self.dim_input + self.dim_input
+            self.w_min = -1e3 * np.ones(int(self.dim_crit))
+            self.w_max = 1e3 * np.ones(int(self.dim_crit))
+
+        self.Wprev = np.ones(int(self.dim_crit))
 
         self.Winit = self.Wprev
 
@@ -631,8 +732,8 @@ class Controller:
         All the learned parameters are retained
 
         """
-        self.ctrlClock = t0
-        self.uCurr = self.uMin / 10
+        self.ctrl_clock = t0
+        self.u_curr = self.min_bounds / 10
 
     def receiveSysState(self, x):
         """
@@ -670,12 +771,13 @@ class Controller:
 
         r = 0
 
-        if self.rcostStruct == 1:
-            R1 = self.rcostPars[0]
+        if self.r_cost_struct == 1:
+            R1 = self.r_cost_pars[0]
             r = chi @ R1 @ chi
-        elif self.rcostStruct == 2:
-            R1 = self.rcostPars[0]
-            R2 = self.rcostPars[1]
+        
+        elif self.r_cost_struct == 2:
+            R1 = self.r_cost_pars[0]
+            R2 = self.r_cost_pars[1]
 
             r = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
 
@@ -688,89 +790,90 @@ class Controller:
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
 
         """
-        self.icostVal += self.rcost(y, u) * self.samplTime
+        self.i_cost_val += self.rcost(y, u) * self.sampl_time
 
     def _estimateModel(self, t, y):
         """
-        Estimate model parameters by accumulating data buffers ``ubuffer`` and ``ybuffer``
+        Estimate model parameters by accumulating data buffers ``u_buffer`` and ``y_buffer``
 
         """
 
-        timeInSample = t - self.ctrlClock
+        time_in_sample = t - self.ctrl_clock
 
-        if timeInSample >= self.samplTime:  # New sample
+        if time_in_sample >= self.sampl_time:  # New sample
             # Update buffers when using RL or requiring estimated model
-            if self.ctrlMode in (2, 3, 4, 5, 6):
-                timeInEstPeriod = t - self.estClock
+            if self.ctrl_mode in (2, 3, 4, 5, 6):
+                time_in_est_period = t - self.est_clock
 
                 # Estimate model if required by ctrlStatMode
-                if (timeInEstPeriod >= modEstPeriod) and (self.ctrlMode in (2, 4, 6)):
+                if (time_in_est_period >= mod_est_period) and (self.ctrl_mode in (2, 4, 6)):
                     # Update model estimator's internal clock
-                    self.estClock = t
+                    self.est_clock = t
 
                     try:
                         # Using ssid from Githug:AndyLamperski/pyN4SID
-                        # Aid, Bid, Cid, Did, _ ,_ = ssid.N4SID(serf.ubuffer.T,  self.ybuffer.T,
-                        #                                       NumRows = self.dimInput + self.modelOrder,
-                        #                                       NumCols = self.bufferSize - (self.dimInput + self.modelOrder)*2,
-                        #                                       NSig = self.modelOrder,
+                        # Aid, Bid, Cid, Did, _ ,_ = ssid.N4SID(serf.u_buffer.T,  self.y_buffer.T,
+                        #                                       NumRows = self.dim_input + self.model_order,
+                        #                                       NumCols = self.buffer_size - (self.dim_input + self.model_order)*2,
+                        #                                       NSig = self.model_order,
                         #                                       require_stable=False)
-                        # self.myModel.updatePars(Aid, Bid, Cid, Did)
+                        # self.my_model.updatePars(Aid, Bid, Cid, Did)
 
                         # Using Github:CPCLAB-UNIPI/SIPPY
                         # method: N4SID, MOESP, CVA, PARSIM-P, PARSIM-S,
                         # PARSIM-K
-                        SSest = sippy.system_identification(self.ybuffer, self.ubuffer,
+                        SSest = sippy.system_identification(self.y_buffer, 
+                                                            self.u_buffer,
                                                             id_method='N4SID',
-                                                            SS_fixed_order=self.modelOrder,
+                                                            SS_fixed_order=self.model_order,
                                                             SS_D_required=False,
                                                             SS_A_stability=False,
-                                                            # SS_f=int(self.bufferSize/12),
-                                                            # SS_p=int(self.bufferSize/10),
+                                                            # SS_f=int(self.buffer_size/12),
+                                                            # SS_p=int(self.buffer_size/10),
                                                             SS_PK_B_reval=False,
-                                                            tsample=self.samplTime)
+                                                            tsample=self.sampl_time)
 
-                        self.myModel.updatePars(
+                        self.my_model.updatePars(
                             SSest.A, SSest.B, SSest.C, SSest.D)
 
                         # [EXPERIMENTAL] Using MATLAB's system identification toolbox
-                        # us_ml = eng.transpose(matlab.double(self.ubuffer.tolist()))
-                        # ys_ml = eng.transpose(matlab.double(self.ybuffer.tolist()))
+                        # us_ml = eng.transpose(matlab.double(self.u_buffer.tolist()))
+                        # ys_ml = eng.transpose(matlab.double(self.y_buffer.tolist()))
 
-                        # Aml, Bml, Cml, Dml = eng.mySSest_simple(ys_ml, us_ml, dt, modelOrder, nargout=4)
+                        # Aml, Bml, Cml, Dml = eng.mySSest_simple(ys_ml, us_ml, dt, model_order, nargout=4)
 
-                        # self.myModel.updatePars(np.asarray(Aml), np.asarray(Bml), np.asarray(Cml), np.asarray(Dml) )
+                        # self.my_model.updatePars(np.asarray(Aml), np.asarray(Bml), np.asarray(Cml), np.asarray(Dml) )
 
                     except:
                         print('Model estimation problem')
-                        self.myModel.updatePars(np.zeros([self.modelOrder, self.modelOrder]),
+                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]),
                                                 np.zeros(
-                                                    [self.modelOrder, self.dimInput]),
+                                                    [self.model_order, self.dim_input]),
                                                 np.zeros(
-                                                    [self.dimOutput, self.modelOrder]),
-                                                np.zeros([self.dimOutput, self.dimInput]))
+                                                    [self.dim_output, self.model_order]),
+                                                np.zeros([self.dim_output, self.dim_input]))
 
                     # Model checks
-                    if self.modEstChecks > 0:
+                    if self.mod_est_checks > 0:
                         # Update estimated model parameter stacks
-                        self.modelStack.pop(0)
-                        self.modelStack.append(self.model)
+                        self.model_stack.pop(0)
+                        self.model_stack.append(self.model)
 
                         # Perform check of stack of models and pick the best
                         totAbsErrCurr = 1e8
-                        for k in range(self.modEstChecks):
-                            A, B, C, D = self.modelStack[k].A, self.modelStack[
-                                k].B, self.modelStack[k].C, self.modelStack[k].D
-                            x0est, _, _, _ = np.linalg.lstsq(C, y)
-                            Yest, _ = self._dssSim(
-                                A, B, C, D, self.ubuffer, x0est, y)
-                            meanErr = np.mean(Yest - self.ybuffer, axis=0)
+                        for k in range(self.mod_est_checks):
+                            A, B, C, D = self.model_stack[k].A, self.model_stack[
+                                k].B, self.model_stack[k].C, self.model_stack[k].D
+                            x0_est, _, _, _ = np.linalg.lstsq(C, y)
+                            y_est, _ = self._dssSim(
+                                A, B, C, D, self.u_buffer, x0_est, y)
+                            meanErr = np.mean(y_est - self.y_buffer, axis=0)
 
                             # DEBUG ===========================================
                             # ================================Interm output of model prediction quality
                             # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
                             # dataRow = []
-                            # for k in range(dimOutput):
+                            # for k in range(dim_output):
                             #     dataRow.append( meanErr[k] )
                             # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
                             # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
@@ -780,19 +883,19 @@ class Controller:
                             totAbsErr = np.sum(np.abs(meanErr))
                             if totAbsErr <= totAbsErrCurr:
                                 totAbsErrCurr = totAbsErr
-                                self.myModel.updatePars(
+                                self.my_model.updatePars(
                                     SSest.A, SSest.B, SSest.C, SSest.D)
 
                         # DEBUG ===============================================
                         # ==========================================Print quality of the best model
                         # R  = '\033[31m'
                         # Bl  = '\033[30m'
-                        # x0est,_,_,_ = np.linalg.lstsq(ctrlStat.C, y)
-                        # Yest,_ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, ctrlStat.ubuffer, x0est, y)
-                        # meanErr = np.mean(Yest - ctrlStat.ybuffer, axis=0)
+                        # x0_est,_,_,_ = np.linalg.lstsq(ctrlStat.C, y)
+                        # Yest,_ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, ctrlStat.u_buffer, x0_est, y)
+                        # meanErr = np.mean(Yest - ctrlStat.y_buffer, axis=0)
                         # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
                         # dataRow = []
-                        # for k in range(dimOutput):
+                        # for k in range(dim_output):
                         #     dataRow.append( meanErr[k] )
                         # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
                         # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
@@ -800,12 +903,12 @@ class Controller:
                         # /DEBUG ==============================================
 
             # Update initial state estimate
-            x0est, _, _, _ = np.linalg.lstsq(self.myModel.C, y)
-            self.myModel.updateIC(x0est)
+            x0_est, _, _, _ = np.linalg.lstsq(self.my_model.C, y)
+            self.my_model.updateIC(x0_est)
 
-            if t >= self.modEstPhase:
+            if t >= self.mod_est_phase:
                     # Drop probing noise
-                self.isProbNoise = 0
+                self.is_prob_noise = 0
 
     def _Phi(self, y, u):
         """
@@ -823,13 +926,16 @@ class Controller:
         """
         chi = np.concatenate([y, u])
 
-        if self.criticStruct == 1:
+        if self.critic_struct == 1:
             return np.concatenate([uptria2vec(np.kron(chi, chi)), chi])
-        elif self.criticStruct == 2:
+        
+        elif self.critic_struct == 2:
             return np.concatenate([uptria2vec(np.kron(chi, chi))])
-        elif self.criticStruct == 3:
+        
+        elif self.critic_struct == 3:
             return chi * chi
-        elif self.criticStruct == 4:
+        
+        elif self.critic_struct == 4:
             return np.concatenate([y**2, np.kron(y, u), u**2])
 
     def _criticCost(self, W, U, Y):
@@ -846,14 +952,14 @@ class Controller:
         """
         Jc = 0
 
-        for k in range(self.dimCrit, 0, -1):
-            yPrev = Y[k - 1, :]
-            yNext = Y[k, :]
-            uPrev = U[k - 1, :]
-            uNext = U[k, :]
+        for k in range(self.dim_crit, 0, -1):
+            y_prev = Y[k - 1, :]
+            y_next = Y[k, :]
+            u_prev = U[k - 1, :]
+            u_next = U[k, :]
 
             # Temporal difference
-            e = W @ self._Phi(yPrev, uPrev) - self.gamma * self.Wprev @ self._Phi(yNext, uNext) - self.rcost(yPrev, uPrev)
+            e = W @ self._Phi(y_prev, u_prev) - self.gamma * self.Wprev @ self._Phi(y_next, u_next) - self.rcost(y_prev, u_prev)
 
             Jc += 1 / 2 * e**2
 
@@ -861,7 +967,7 @@ class Controller:
 
     def _critic(self, Wprev, Winit, U, Y):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``predStepSize``
+        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
 
         Customization
         -------------
@@ -874,18 +980,18 @@ class Controller:
         # Optimization method of critic
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP,
         # trust-constr, Powell
-        criticOptMethod = 'SLSQP'
-        if criticOptMethod == 'trust-constr':
+        critic_opt_method = 'SLSQP'
+        if critic_opt_method == 'trust-constr':
             # 'disp': True, 'verbose': 2}
-            criticOptOptions = {'maxiter': 200, 'disp': False}
+            critic_opt_options = {'maxiter': 200, 'disp': False}
         else:
-            criticOptOptions = {'maxiter': 200, 'maxfev': 1500, 'disp': False,
+            critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False,
                                 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}  # 'disp': True, 'verbose': 2}
 
-        bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
+        bnds = sp.optimize.Bounds(self.w_min, self.w_max, keep_feasible=True)
 
         W = minimize(lambda W: self._criticCost(W, U, Y), Winit,
-                     method=criticOptMethod, tol=1e-7, bounds=bnds, options=criticOptOptions).x
+                     method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
 
         # DEBUG ===============================================================
         # print('-----------------------Critic parameters--------------------------')
@@ -894,9 +1000,9 @@ class Controller:
 
         return W
 
-    def _actorCost(self, U, y, N, W, delta, ctrlMode):
+    def _actorCost(self, U, y, N, W, delta, ctrl_mode):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``predStepSize``
+        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
 
         Customization
         -------------        
@@ -905,43 +1011,46 @@ class Controller:
 
         """
 
-        myU = np.reshape(U, [N, self.dimInput])
+        myU = np.reshape(U, [N, self.dim_input])
 
-        Y = np.zeros([N, self.dimOutput])
+        Y = np.zeros([N, self.dim_output])
 
         # System output prediction
-        if (ctrlMode == 1) or (ctrlMode == 3) or (ctrlMode == 5):    # Via exogenously passed model
+        if (ctrl_mode == 1) or (ctrl_mode == 3) or (ctrl_mode == 5):    # Via exogenously passed model
             Y[0, :] = y
             x = self.xSys
-            for k in range(1, self.Nactor):
+            for k in range(1, self.n_actor):
                 # Euler scheme
-                x = x + delta * self.sysRHS([], x, myU[k - 1, :], [], self.m, self.I, self.dimState, self.isDisturb)
-                Y[k, :] = self.sysOut(x)
+                x = x + delta * \
+                    self.sys_rhs([], x, myU[k - 1, :], [], self.m,
+                                self.I, self.dim_state, self.is_disturb)
+                Y[k, :] = self.sys_out(x)
 
-        elif (ctrlMode == 2) or (ctrlMode == 4) or (ctrlMode == 6):    # Via estimated model
-            myU_upsampled = myU.repeat(int(delta / self.samplTime), axis=0)
+        elif (ctrl_mode == 2) or (ctrl_mode == 4) or (ctrl_mode == 6):    # Via estimated model
+            myU_upsampled = myU.repeat(int(delta / self.sampl_time), axis=0)
             Yupsampled, _ = self._dssSim(
-                self.myModel.A, self.myModel.B, self.myModel.C, self.myModel.D, myU_upsampled, self.myModel.x0est, y)
-            Y = Yupsampled[::int(delta / self.samplTime)]
+                self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0_est, y)
+            Y = Yupsampled[::int(delta / self.sampl_time)]
 
         J = 0
-        if (ctrlMode == 1) or (ctrlMode == 2):     # MPC
+        if (ctrl_mode == 1) or (ctrl_mode == 2):     # MPC
             for k in range(N):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
-        elif (ctrlMode == 3) or (ctrlMode == 4):     # RL: Q-learning with Ncritic-1 roll-outs of running cost
+        # RL: Q-learning with n_critic-1 roll-outs of running cost
+        elif (ctrl_mode == 3) or (ctrl_mode == 4):
             for k in range(N - 1):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
             J += W @ self._Phi(Y[-1, :], myU[-1, :])
-        elif (ctrlMode == 5) or (ctrlMode == 6):     # RL: (normalized) stacked Q-learning
+        elif (ctrl_mode == 5) or (ctrl_mode == 6):     # RL: (normalized) stacked Q-learning
             for k in range(N):
                 Q = W @ self._Phi(Y[k, :], myU[k, :])
                 J += 1 / N * Q
 
         return J
 
-    def _actor(self, y, Uinit, N, W, delta, ctrlMode):
+    def _actor(self, y, u_init, N, W, delta, ctrl_mode):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``predStepSize``
+        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
 
         Customization
         -------------         
@@ -964,47 +1073,47 @@ class Controller:
 
         isGlobOpt = 0
 
-        myUinit = np.reshape(Uinit, [N * self.dimInput, ])
+        myu_init = np.reshape(u_init, [N * self.dim_input, ])
 
-        bnds = sp.optimize.Bounds(self.Umin, self.Umax, keep_feasible=True)
+        bnds = sp.optimize.Bounds(self.u_min, self.u_max, keep_feasible=True)
 
         try:
             if isGlobOpt:
                 minimizer_kwargs = {
                     'method': actorOptMethod, 'bounds': bnds, 'tol': 1e-7, 'options': actorOptOptions}
                 U = basinhopping(lambda U: self._actorCost(
-                    U, y, N, W, delta, ctrlMode), myUinit, minimizer_kwargs=minimizer_kwargs, niter=10).x
+                    U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
             else:
-                U = minimize(lambda U: self._actorCost(U, y, N, W, delta, ctrlMode), myUinit,
+                U = minimize(lambda U: self._actorCost(U, y, N, W, delta, ctrl_mode), myu_init,
                              method=actorOptMethod, tol=1e-7, bounds=bnds, options=actorOptOptions).x
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
-            U = myUinit
+            U = myu_init
 
         # DEBUG ===============================================================
         # ================================Interm output of model prediction quality
         # R  = '\033[31m'
         # Bl  = '\033[30m'
-        # myU = np.reshape(U, [N, self.dimInput])
-        # myU_upsampled = myU.repeat(int(delta/self.samplTime), axis=0)
-        # Yupsampled, _ = self._dssSim(self.myModel.A, self.myModel.B, self.myModel.C, self.myModel.D, myU_upsampled, self.myModel.x0est, y)
-        # Y = Yupsampled[::int(delta/self.samplTime)]
-        # Yt = np.zeros([N, self.dimOutput])
+        # myU = np.reshape(U, [N, self.dim_input])
+        # myU_upsampled = myU.repeat(int(delta/self.sampl_time), axis=0)
+        # Yupsampled, _ = self._dssSim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0_est, y)
+        # Y = Yupsampled[::int(delta/self.sampl_time)]
+        # Yt = np.zeros([N, self.dim_output])
         # Yt[0, :] = y
         # x = self.xSys
-        # for k in range(1, Nactor):
-        #     x = x + delta * self.sysRHS([], x, myU[k-1, :], [])  # Euler scheme
-        #     Yt[k, :] = self.sysOut(x)
+        # for k in range(1, n_actor):
+        #     x = x + delta * self.sys_rhs([], x, myU[k-1, :], [])  # Euler scheme
+        #     Yt[k, :] = self.sys_out(x)
         # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
         # dataRow = []
-        # for k in range(dimOutput):
+        # for k in range(dim_output):
         #     dataRow.append( np.mean(Y[:,k] - Yt[:,k]) )
         # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
         # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
         # print(R+table+Bl)
         # /DEBUG ==============================================================
 
-        return U[:self.dimInput]    # Return first action
+        return U[:self.dim_input]    # Return first action
 
     def computeAction(self, t, y):
         """
@@ -1017,40 +1126,40 @@ class Controller:
 
         """
 
-        timeInSample = t - self.ctrlClock
+        time_in_sample = t - self.ctrl_clock
 
-        if timeInSample >= self.samplTime:  # New sample
+        if time_in_sample >= self.sampl_time:  # New sample
             # Update controller's internal clock
-            self.ctrlClock = t
+            self.ctrl_clock = t
 
-            if self.ctrlMode in (1, 2):
+            if self.ctrl_mode in (1, 2):
 
                 # Apply control when model estimation phase is over
-                if self.isProbNoise and (self.ctrlMode == 2):
-                    return self.probNoisePow * (rand(self.dimInput) - 0.5)
+                if self.is_prob_noise and (self.ctrl_mode == 2):
+                    return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
 
-                elif not self.isProbNoise and (self.ctrlMode == 2):
-                    u = self._actor(y, self.Uinit, self.Nactor,
-                                    [], self.predStepSize, self.ctrlMode)
+                elif not self.is_prob_noise and (self.ctrl_mode == 2):
+                    u = self._actor(y, self.u_init, self.n_actor,
+                                    [], self.pred_step_size, self.ctrl_mode)
 
-                elif (self.ctrlMode == 1):
-                    u = self._actor(y, self.Uinit, self.Nactor,
-                                    [], self.predStepSize, self.ctrlMode)
+                elif (self.ctrl_mode == 1):
+                    u = self._actor(y, self.u_init, self.n_actor,
+                                    [], self.pred_step_size, self.ctrl_mode)
 
-            elif self.ctrlMode in (3, 4, 5, 6):
+            elif self.ctrl_mode in (3, 4, 5, 6):
                 # Critic
-                timeInCriticPeriod = t - self.criticClock
+                time_in_critic_period = t - self.critic_clock
 
                 # Update data buffers
-                self.ubuffer = pushVec(self.ubuffer, self.uCurr)
-                self.ybuffer = pushVec(self.ybuffer, y)
+                self.u_buffer = pushVec(self.u_buffer, self.u_curr)
+                self.y_buffer = pushVec(self.y_buffer, y)
 
-                if timeInCriticPeriod >= self.criticPeriod:
+                if time_in_critic_period >= self.critic_period:
                     # Update critic's internal clock
-                    self.criticClock = t
+                    self.critic_clock = t
 
                     W = self._critic(
-                        self.Wprev, self.Winit, self.ubuffer[-self.Ncritic:, :], self.ybuffer[-self.Ncritic:, :])
+                        self.Wprev, self.Winit, self.u_buffer[-self.n_critic:, :], self.y_buffer[-self.n_critic:, :])
                     self.Wprev = W
 
                     # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
@@ -1060,39 +1169,40 @@ class Controller:
                     W = self.Wprev
 
                 # Actor. Apply control when model estimation phase is over
-                if self.isProbNoise and (self.ctrlMode in (4, 6)):
-                    u = self.probNoisePow * (rand(self.dimInput) - 0.5)
-                elif not self.isProbNoise and (self.ctrlMode in (4, 6)):
-                    u = self._actor(y, self.Uinit, self.Nactor,
-                                    W, self.predStepSize, self.mode)
+                if self.is_prob_noise and (self.ctrl_mode in (4, 6)):
+                    u = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
+                elif not self.is_prob_noise and (self.ctrl_mode in (4, 6)):
+                    u = self._actor(y, self.u_init, self.n_actor,
+                                    W, self.pred_step_size, self.mode)
 
                     # [EXPERIMENTAL] Call MATLAB's actor
-                    # R1 = self.rcostPars[0]
-                    # u = eng.optCtrl(eng.transpose(matlab.double(y.tolist())), eng.transpose(matlab.double(self.Uinit.tolist())),
-                    #                                   matlab.double(R1[:dimOutput,:dimOutput].tolist()), matlab.double(R1[dimOutput:,dimOutput:].tolist()), self.gamma,
-                    #                                   self.Nactor,
+                    # R1 = self.r_cost_pars[0]
+                    # u = eng.optCtrl(eng.transpose(matlab.double(y.tolist())), eng.transpose(matlab.double(self.u_init.tolist())),
+                    #                                   matlab.double(R1[:dim_output,:dim_output].tolist()), matlab.double(R1[dim_output:,dim_output:].tolist()), self.gamma,
+                    #                                   self.n_actor,
                     #                                   eng.transpose(matlab.double(W.tolist())),
-                    #                                   matlab.double(self.myModel.A.tolist()),
-                    #                                   matlab.double(self.myModel.B.tolist()),
-                    #                                   matlab.double(self.myModel.C.tolist()),
-                    #                                   matlab.double(self.myModel.D.tolist()),
-                    #                                   eng.transpose(matlab.double(self.myModel.x0est.tolist())),
+                    #                                   matlab.double(self.my_model.A.tolist()),
+                    #                                   matlab.double(self.my_model.B.tolist()),
+                    #                                   matlab.double(self.my_model.C.tolist()),
+                    #                                   matlab.double(self.my_model.D.tolist()),
+                    #                                   eng.transpose(matlab.double(self.my_model.x0_est.tolist())),
                     #                                   self.mode,
-                    #                                   eng.transpose(matlab.double(self.uMin.tolist())),
-                    #                                   eng.transpose(matlab.double(self.uMax.tolist())),
-                    #                                   dt, matlab.double(self.trueModelPars), self.criticStruct, nargout=1)
+                    #                                   eng.transpose(matlab.double(self.u_min.tolist())),
+                    #                                   eng.transpose(matlab.double(self.u_max.tolist())),
+                    #                                   dt, matlab.double(self.trueModelPars), self.critic_struct, nargout=1)
                     # u = np.squeeze(np.asarray(u)
 
-                elif self.ctrlMode in (3, 5):
-                    u = self._actor(y, self.Uinit, self.Nactor,
-                                    W, self.predStepSize, self.ctrlMode)
+                elif self.ctrl_mode in (3, 5):
+                    u = self._actor(y, self.u_init, self.n_actor,
+                                    W, self.pred_step_size, self.ctrl_mode)
 
-            self.uCurr = u
+            self.u_curr = u
 
             return u
 
         else:
-            return self.uCurr
+            return self.u_curr
+
 
 
 class NominalController:
@@ -1339,10 +1449,7 @@ class Simulation:
     def __init__(self,
                  dim_state=5,
                  dim_input=2,
-                 dim_output=5,
                  dimDisturb=2,
-                 m=10,
-                 I=1,
                  t0=0,
                  t1=100,
                  n_runs=1,
@@ -1353,43 +1460,23 @@ class Simulation:
                  y_min=-10,
                  y_max=10,
                  dt=0.05,
-                 mod_est_phase=2,
-                 model_order=5,
-                 prob_noise_pow=8,
-                 mod_est_checks=0,
                  f_man=-3,
                  n_man=-1,
                  f_min=-5,
                  f_max=5,
                  m_min=-1,
                  m_max=1,
-                 nactor=6,
-                 buffer_size=200,
-                 r_cost_struct=1,
-                 n_critic=50,
-                 gamma=1,
-                 critic_struct=3,
                  is_log_data=0,
                  is_visualization=1,
                  is_print_sim_step=1,
-                 is_disturb=0,
                  is_dyn_ctrl=0,
                  ctrl_mode=5):
         """system - needs description"""
         self.dim_state = dim_state
         self.dim_input = dim_input
-        self.dim_output = dim_output
         self.dimDisturb = dimDisturb
-        self.m = m
-        self.I = I
-
-        """disturbance - needs description"""
-        self.sigma_q = 1e-3 * np.ones(dimDisturb)
-        self.mu_q = np.zeros(dimDisturb)
-        self.tau_q = np.ones(dimDisturb)
 
         """simulation"""
-
         # start time of episode
         self.t0 = t0
 
@@ -1411,7 +1498,8 @@ class Simulation:
         # initial value of disturbance
         self.q0 = np.zeros(dimDisturb)
 
-        # sensitivity of the solver. The lower the values, the more accurate the simulation results are
+        # sensitivity of the solver. The lower the values, the more accurate
+        # the simulation results are
         self.a_tol = a_tol
         self.r_tol = r_tol
 
@@ -1425,104 +1513,12 @@ class Simulation:
         """ controller sampling time.
         The system itself is continuous as a physical process while the controller is digital.
 
-        Things to note:
-            * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
-            * smaller sampling times lead to higher computation times
-            * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with dt and try achieve a trade-off between stability and computational performance
+            Things to note:
+                * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
+                * smaller sampling times lead to higher computation times
+                * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with dt and try achieve a trade-off between stability and computational performance
         """
         self.dt = dt
-
-        """ model estimator """
-
-        # In seconds, an initial phase to fill the estimator's buffer before
-        # applying optimal control
-        self.mod_est_phase = mod_est_phase
-
-        # In seconds, the time between model estimate updates. This constant
-        # determines how often the estimated parameters are updated. The more
-        # often the model is updated, the higher the computational burden is.
-        # On the other hand, more frequent updates help keep the model actual.
-        self.modEstPeriod = 1 * dt
-
-        # The order of the state-space estimation model. We are interested in
-        # adequate predictions of y under given u's. The higher the model
-        # order, the better estimation results may be achieved, but be aware of
-        # overfitting
-        self.model_order = model_order
-        self.prob_noise_pow = prob_noise_pow
-
-        # Estimated model parameters can be stored in stacks and the best among
-        # the modEstchecks last ones is picked
-        self.mod_est_checks = mod_est_checks
-
-        # The size of the buffer to store data for model estimation. The bigger
-        # the buffer, the more accurate the estimation may be achieved. For
-        # successful model estimation, the system must be sufficiently excited.
-        # Using bigger buffers is a way to achieve this.
-        self.buffer_size = buffer_size
-
-        """ Controller 
-
-            # u[0]: Pushing force F [N]
-            # u[1]: Steering torque M [N m]
-        """
-
-        # Number of prediction steps. Nactor=1 means the controller is purely
-        # data-driven and doesn't use prediction.
-        self.nactor = nactor
-
-        # In seconds. Should be a multiple of dt
-        self.predStepSize = 5 * dt
-
-        """ RL elements
-
-            Running cost. 
-
-            Choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
-
-            Notation: chi = [y, u]
-            1 - quadratic chi.T R1 chi
-            2 - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
-            R1, R2 must be positive-definite
-        """
-        self.r_cost_struct = r_cost_struct
-        self.R1 = np.diag([10, 10, 1, 0, 0, 0, 0])
-        # R1 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
-        # R1 = np.array([[10, 2, 1, 0, 0], [0, 10, 2, 0, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in y
-        # R1 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 1, 1, 1],
-        # [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
-
-        self.R2 = np.array([[10, 2, 1, 0, 0],
-                            [0, 10, 2, 0, 0],
-                            [0, 0, 10, 0, 0],
-                            [0, 0, 0, 0, 0],
-                            [0, 0, 0, 0, 0]])
-        # R2 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
-        # R2 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 10, 1, 1],
-        # [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
-
-        """Critic stack size.
-
-            Should not greater than bufferSize. The critic optimizes the temporal error which is a measure of critic's ability to capture the optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer. The principle here is pretty much the same as with the model estimation: accuracy against performance
-
-        """
-        if n_critic > buffer_size:
-            n_critic = buffer_size
-
-        self.n_critic = n_critic
-
-        # Time between critic updates
-        self.critic_period = 5 * dt
-
-        """critic structure
-
-            1 - quadratic-linear
-            2 - quadratic
-            3 - quadratic, no mixed terms
-            4 - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...]
-            # u[0]^2 + ...
-        """
-        self.critic_struct = critic_struct
 
         """control mode
         
@@ -1554,14 +1550,10 @@ class Simulation:
             [[self.f_min, self.f_max], [self.m_min, self.m_max]])
 
         """Other"""
-        # Discounting factor
-        self.gamma = gamma
-
         #%% User settings: main switches
         self.is_log_data = is_log_data
         self.is_visualization = is_visualization
         self.is_print_sim_step = is_print_sim_step
-        self.is_disturb = is_disturb
 
         # Static or dynamic controller
         self.is_dyn_ctrl = is_dyn_ctrl
@@ -1579,13 +1571,13 @@ class Simulation:
 
     def create_simulator(self, closedLoop):
         simulator = sp.integrate.RK45(closedLoop,
-                                       self.t0,
-                                       self.ksi0,
-                                       self.t1,
-                                       max_step=self.dt / 2,
-                                       first_step=1e-6,
-                                       atol=self.a_tol,
-                                       rtol=self.r_tol)
+                                      self.t0,
+                                      self.ksi0,
+                                      self.t1,
+                                      max_step=self.dt / 2,
+                                      first_step=1e-6,
+                                      atol=self.a_tol,
+                                      rtol=self.r_tol)
         return simulator
 
     def _create_figure(self, agent):
@@ -1781,7 +1773,7 @@ class Simulation:
         alpha = ksi[2]
         v = ksi[3]
         omega = ksi[4]
-        icost = agent.icostVal
+        icost = agent.i_cost_val
 
         if self.is_print_sim_step:
             printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u)
