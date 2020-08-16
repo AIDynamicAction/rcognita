@@ -166,7 +166,7 @@ def main(args=None):
     else:
         # environment
         sys = System()
-        nominalCtrl = NominalController(ctrlGain=0.5, samplTime=0.5)
+        nominalCtrl = NominalController()
         agent = Controller()
         sim = Simulation()
         simulator = sim.create_simulator(sys.closedLoop)

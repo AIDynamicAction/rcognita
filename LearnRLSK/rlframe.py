@@ -88,8 +88,7 @@ class System:
         self.dimDisturb = dimDisturb
         self.m = m
         self.I = I
-        self.ctrlBnds = np.array(
-            [[f_min, f_max], [m_min, m_max]])
+        self.ctrlBnds = np.array([[f_min, f_max], [m_min, m_max]])
         self.isDynCtrl = isDynCtrl
         self.isDisturb = isDisturb
         self.parsDisturb = parsDisturb
@@ -520,20 +519,20 @@ class Controller:
 
         self.dimInput = dimInput
         self.dimOutput = dimOutput
+        self.dimState = dimState
+        self.isDisturb = isDisturb
         self.ctrlMode = ctrlMode
         self.ctrlBnds = np.array([[f_min, f_max], [m_min, m_max]])
         self.ctrlClock = t0
         self.samplTime = samplTime
         self.m = m
         self.I = I
-        self.dimState = dimState
-        self.isDisturb = isDisturb
 
         # Controller: common
         self.Nactor = Nactor
         self.predStepSize = predStepSize
-        self.uMin = np.array([f_min, m_min])
-        self.uMax = np.array([f_max, m_max])
+        self.uMin = np.array(self.ctrlBnds[:, 0])
+        self.uMax = np.array(self.ctrlBnds[:, 1])
         self.Umin = repMat(self.uMin, 1, Nactor)
         self.Umax = repMat(self.uMax, 1, Nactor)
         self.uCurr = self.uMin / 10
@@ -566,6 +565,7 @@ class Controller:
         x0est = np.zeros(self.modelOrder)
         self.myModel = model(A, B, C, D, x0est)
         self.modelStack = []
+        
         for k in range(self.modEstChecks):
             self.modelStack.append(self.myModel)
 
@@ -1132,8 +1132,7 @@ class NominalController:
         self.m = m
         self.I = I
         self.ctrlGain = ctrlGain
-        self.ctrlBnds = np.array(
-            [[f_min, f_max], [m_min, m_max]])
+        self.ctrlBnds = np.array([[f_min, f_max], [m_min, m_max]])
         self.ctrlClock = t0
         self.samplTime = samplTime
         self.uCurr = np.zeros(2)
