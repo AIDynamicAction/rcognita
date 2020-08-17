@@ -1068,7 +1068,7 @@ class Controller:
             actor_opt_options = {'maxiter': 300, 'disp': False}
         else:
             actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False,
-                               'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}  # 'disp': True, 'verbose': 2}
+                                 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}  # 'disp': True, 'verbose': 2}
 
         isGlobOpt = 0
 
@@ -1536,7 +1536,7 @@ class Simulation:
         # manual control
         self.f_man = f_man
         self.n_man = n_man
-        self.uMan = np.array([f_man, n_man])
+        self.u_man = np.array([f_man, n_man])
 
         # control constraints
         self.f_min = f_min
@@ -1562,7 +1562,7 @@ class Simulation:
             self.ksi0 = np.concatenate([self.x0, self.q0])
 
         # extras
-        self.dataFiles = logdata(self.n_runs, save=self.is_log_data)
+        self.data_files = logdata(self.n_runs, save=self.is_log_data)
 
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
@@ -1580,90 +1580,91 @@ class Simulation:
 
     def _create_figure(self, agent):
         y0 = System.out(self.x0)
-        xCoord0 = self.x0[0]
-        yCoord0 = self.x0[1]
+        x_coord0 = self.x0[0]
+        y_coord0 = self.x0[1]
         alpha0 = self.x0[2]
-        alphaDeg0 = alpha0 / 2 / np.pi
+        alpha_deg0 = alpha0 / 2 / np.pi
 
         plt.close('all')
 
-        self.simFig = plt.figure(figsize=(10, 10))
+        self.sim_fig = plt.figure(figsize=(10, 10))
 
         # xy plane
-        self.xyPlaneAxs = self.simFig.add_subplot(221,
-                                                  autoscale_on=False,
-                                                  xlim=(self.x_min,
-                                                        self.x_max),
-                                                  ylim=(self.y_min,
-                                                        self.y_max),
-                                                  xlabel='x [m]',
-                                                  ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+        self.xy_plane_axes = self.sim_fig.add_subplot(221,
+                                                      autoscale_on=False,
+                                                      xlim=(self.x_min,
+                                                            self.x_max),
+                                                      ylim=(self.y_min,
+                                                            self.y_max),
+                                                      xlabel='x [m]',
+                                                      ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
 
-        self.xyPlaneAxs.set_aspect('equal', adjustable='box')
-        self.xyPlaneAxs.plot([self.x_min, self.x_max], [
-                             0, 0], 'k--', lw=0.75)   # Help line
-        self.xyPlaneAxs.plot([0, 0], [self.y_min, self.y_max],
-                             'k--', lw=0.75)   # Help line
-        self.trajLine, = self.xyPlaneAxs.plot(xCoord0, yCoord0, 'b--', lw=0.5)
-        self.robotMarker = pltMarker(angle=alphaDeg0)
+        self.xy_plane_axes.set_aspect('equal', adjustable='box')
+        self.xy_plane_axes.plot([self.x_min, self.x_max], [
+            0, 0], 'k--', lw=0.75)   # Help line
+        self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],
+                                'k--', lw=0.75)   # Help line
+        self.traj_line, = self.xy_plane_axes.plot(
+            x_coord0, y_coord0, 'b--', lw=0.5)
+        self.robot_marker = pltMarker(angle=alpha_deg0)
 
-        textTime = 't = {time:2.3f}'.format(time=self.t0)
+        text_time = 't = {time:2.3f}'.format(time=self.t0)
 
-        self.textTimeHandle = self.xyPlaneAxs.text(0.05, 0.95,
-                                                   textTime,
-                                                   horizontalalignment='left',
-                                                   verticalalignment='center',
-                                                   transform=self.xyPlaneAxs.transAxes)
+        self.text_time_handle = self.xy_plane_axes.text(0.05, 0.95,
+                                                        text_time,
+                                                        horizontalalignment='left',
+                                                        verticalalignment='center',
+                                                        transform=self.xy_plane_axes.transAxes)
 
-        self.xyPlaneAxs.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
+        self.xy_plane_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
         # Solution
-        self.solAxs = self.simFig.add_subplot(222, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+        self.sol_axes = self.sim_fig.add_subplot(222, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             2 * np.min([self.x_min, self.y_min]), 2 * np.max([self.x_max, self.y_max])), xlabel='t [s]')
-        self.solAxs.plot([self.t0, self.t1], [0, 0],
-                         'k--', lw=0.75)   # Help line
-        self.normLine, = self.solAxs.plot(self.t0, la.norm(
-            [xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
-        self.alphaLine, = self.solAxs.plot(
+        self.sol_axes.plot([self.t0, self.t1], [0, 0],
+                           'k--', lw=0.75)   # Help line
+        self.norm_line, = self.sol_axes.plot(self.t0, la.norm(
+            [x_coord0, y_coord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+        self.alpha_line, = self.sol_axes.plot(
             self.t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
-        self.solAxs.legend(fancybox=True, loc='upper right')
-        self.solAxs.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
+        self.sol_axes.legend(fancybox=True, loc='upper right')
+        self.sol_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
         # Cost
-        self.costAxs = self.simFig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+        self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             0, 1e4 * agent.rcost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
 
         r = agent.rcost(y0, self.u0)
-        textIcost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
-        self.textIcostHandle = self.simFig.text(
-            0.05, 0.5, textIcost, horizontalalignment='left', verticalalignment='center')
-        self.rcostLine, = self.costAxs.plot(
+        text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
+        self.text_icost_handle = self.sim_fig.text(
+            0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
+        self.r_cost_line, = self.cost_axes.plot(
             self.t0, r, 'r-', lw=0.5, label='r')
-        self.icostLine, = self.costAxs.plot(
+        self.i_cost_line, = self.cost_axes.plot(
             self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
-        self.costAxs.legend(fancybox=True, loc='upper right')
+        self.cost_axes.legend(fancybox=True, loc='upper right')
 
         # Control
-        self.ctrlAxs = self.simFig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+        self.ctrlAxs = self.sim_fig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             1.1 * np.min([self.f_min, self.m_min]), 1.1 * np.max([self.f_max, self.m_max])), xlabel='t [s]')
         self.ctrlAxs.plot([self.t0, self.t1], [0, 0],
                           'k--', lw=0.75)   # Help line
-        self.ctrlLines = self.ctrlAxs.plot(
+        self.ctrl_lines = self.ctrlAxs.plot(
             self.t0, toColVec(self.u0).T, lw=0.5)
         self.ctrlAxs.legend(
-            iter(self.ctrlLines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
+            iter(self.ctrl_lines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
 
         # Pack all lines together
         cLines = namedtuple('lines', [
-                            'trajLine', 'normLine', 'alphaLine', 'rcostLine', 'icostLine', 'ctrlLines'])
-        self.lines = cLines(trajLine=self.trajLine,
-                            normLine=self.normLine,
-                            alphaLine=self.alphaLine,
-                            rcostLine=self.rcostLine,
-                            icostLine=self.icostLine,
-                            ctrlLines=self.ctrlLines)
+                            'traj_line', 'norm_line', 'alpha_line', 'r_cost_line', 'i_cost_line', 'ctrl_lines'])
+        self.lines = cLines(traj_line=self.traj_line,
+                            norm_line=self.norm_line,
+                            alpha_line=self.alpha_line,
+                            r_cost_line=self.r_cost_line,
+                            i_cost_line=self.i_cost_line,
+                            ctrl_lines=self.ctrl_lines)
 
-        self.currDataFile = self.dataFiles[0]
+        self.current_data_file = self.data_files[0]
 
         # Enable data cursor
         for item in self.lines:
@@ -1673,17 +1674,17 @@ class Simulation:
             else:
                 datacursor(item)
 
-        return self.simFig
+        return self.sim_fig
 
     def _initialize_figure(self):
-        xCoord0 = self.x0[0]
-        yCoord0 = self.x0[1]
+        x_coord0 = self.x0[0]
+        y_coord0 = self.x0[1]
 
-        self.solScatter = self.xyPlaneAxs.scatter(
-            xCoord0, yCoord0, marker=self.robotMarker.marker, s=400, c='b')
-        self.currRun = 1
+        self.sol_scatter = self.xy_plane_axes.scatter(
+            x_coord0, y_coord0, marker=self.robot_marker.marker, s=400, c='b')
+        self.current_run = 1
 
-        return self.solScatter
+        return self.sol_scatter
 
     def _update_line(self, line, newX, newY):
         line.set_xdata(np.append(line.get_xdata(), newX))
@@ -1696,44 +1697,44 @@ class Simulation:
     #     scatter.set_offsets(
     #         np.vstack([scatter.get_offsets().data, np.c_[newX, newY]]))
 
-    def _update_text(self, textHandle, newText):
-        textHandle.set_text(newText)
+    def _update_text(self, text_handle, newText):
+        text_handle.set_text(newText)
 
-    def _update_scatter(self, textTime, ksi, alphaDeg, xCoord, yCoord, t, alpha, r, icost, u):
-        self._update_text(self.textTimeHandle, textTime)
+    def _update_scatter(self, text_time, ksi, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
+        self._update_text(self.text_time_handle, text_time)
         # Update the robot's track on the plot
-        self._update_line(self.trajLine, *ksi[:2])
+        self._update_line(self.traj_line, *ksi[:2])
 
-        self.robotMarker.rotate(alphaDeg)    # Rotate the robot on the plot
-        self.solScatter.remove()
-        self.solScatter = self.xyPlaneAxs.scatter(
-            xCoord, yCoord, marker=self.robotMarker.marker, s=400, c='b')
+        self.robot_marker.rotate(alpha_deg)    # Rotate the robot on the plot
+        self.sol_scatter.remove()
+        self.sol_scatter = self.xy_plane_axes.scatter(
+            x_coord, y_coord, marker=self.robot_marker.marker, s=400, c='b')
 
         # Solution
-        self._update_line(self.normLine, t, la.norm([xCoord, yCoord]))
-        self._update_line(self.alphaLine, t, alpha)
+        self._update_line(self.norm_line, t, la.norm([x_coord, y_coord]))
+        self._update_line(self.alpha_line, t, alpha)
 
         # Cost
-        self._update_line(self.rcostLine, t, r)
-        self._update_line(self.icostLine, t, icost)
-        textIcost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
-        self._update_text(self.textIcostHandle, textIcost)
+        self._update_line(self.r_cost_line, t, r)
+        self._update_line(self.i_cost_line, t, icost)
+        text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
+        self._update_text(self.text_icost_handle, text_icost)
         # Control
-        for (line, uSingle) in zip(self.ctrlLines, u):
+        for (line, uSingle) in zip(self.ctrl_lines, u):
             self._update_line(line, t, uSingle)
 
-    def _reset_sim(self, agent, nominalCtrl, simulator):
+    def _reset_sim(self, agent, nominal_ctrl, simulator):
         if self.is_print_sim_step:
             print('.....................................Run {run:2d} done.....................................'.format(
-                run=self.currRun))
+                run=self.current_run))
 
-        self.currRun += 1
+        self.current_run += 1
 
-        if self.currRun > self.Nruns:
+        if self.current_run > self.Nruns:
             return
 
-        if self.isLogData:
-            self.currDataFile = self.dataFiles[self.currRun - 1]
+        if self.is_log_data:
+            self.current_data_file = self.data_files[self.current_run - 1]
 
         # Reset simulator
         simulator.status = 'running'
@@ -1744,12 +1745,12 @@ class Simulation:
         if self.ctrl_mode > 0:
             agent.reset(self.t0)
         else:
-            nominalCtrl.reset(self.t0)
+            nominal_ctrl.reset(self.t0)
 
     def _wrapper_take_steps(self, k, *args):
         return self._take_step(*args)
 
-    def _take_step(self, sys, agent, nominalCtrl, simulator, animate=False):
+    def _take_step(self, sys, agent, nominal_ctrl, simulator, animate=False):
         # take step
         simulator.step()
 
@@ -1760,72 +1761,72 @@ class Simulation:
         y = sys.out(x)
 
         u = ctrlSelector(
-            t, y, self.uMan, nominalCtrl, agent, self.ctrl_mode)
+            t, y, self.u_man, nominal_ctrl, agent, self.ctrl_mode)
 
         sys.receive_action(u)
         agent.receive_sys_state(sys._x)
         agent.update_icost(y, u)
 
-        xCoord = ksi[0]
-        yCoord = ksi[1]
+        x_coord = ksi[0]
+        y_coord = ksi[1]
         alpha = ksi[2]
         v = ksi[3]
         omega = ksi[4]
         icost = agent.i_cost_val
 
         if self.is_print_sim_step:
-            printSimStep(t, xCoord, yCoord, alpha, v, omega, icost, u)
+            printSimStep(t, x_coord, y_coord, alpha, v, omega, icost, u)
 
         if self.is_log_data:
-            logDataRow(self.currDataFile, t, xCoord,
-                       yCoord, alpha, v, omega, icost.val, u)
+            logDataRow(self.current_data_file, t, x_coord,
+                       y_coord, alpha, v, omega, icost.val, u)
 
         if animate == True:
-            alphaDeg = alpha / np.pi * 180
+            alpha_deg = alpha / np.pi * 180
             r = agent.rcost(y, u)
-            textTime = 't = {time:2.3f}'.format(time=t)
-            self._update_scatter(textTime, ksi, alphaDeg,
-                                 xCoord, yCoord, t, alpha, r, icost, u)
+            text_time = 't = {time:2.3f}'.format(time=t)
+            self._update_scatter(text_time, ksi, alpha_deg,
+                                 x_coord, y_coord, t, alpha, r, icost, u)
 
         # Run done
         if t >= self.t1:
-            self._reset_sim(agent, nominalCtrl, simulator)
-            # icost = 0
+            self._reset_sim(agent, nominal_ctrl, simulator)
+            icost = 0
 
-            # for item in self.lines:
-            #     if item != self.trajLine:
-            #         if isinstance(item, list):
-            #             for subitem in item:
-            #                 self._reset_line(subitem)
-            #         else:
-            #             self._reset_line(item)
+            for item in self.lines:
+                if item != self.traj_line:
+                    if isinstance(item, list):
+                        for subitem in item:
+                            self._reset_line(subitem)
+                    else:
+                        self._reset_line(item)
 
-            # self._update_line(self.trajLine, np.nan, np.nan)
+            self._update_line(self.traj_line, np.nan, np.nan)
 
         if animate == True:
-            return self.solScatter
+            return self.sol_scatter
 
-    def run_simulation(self, sys, agent, nominalCtrl, simulator):
+    def run_simulation(self, sys, agent, nominal_ctrl, simulator):
         if self.is_visualization == 0:
-            self.currRun = 1
-            self.currDataFile = dataFiles[0]
+            self.current_run = 1
+            self.current_data_file = data_files[0]
 
             while True:
-                self._take_step(sys, agent, nominalCtrl, simulator)
+                self._take_step(sys, agent, nominal_ctrl, simulator)
 
         else:
-            self.simFig = self._create_figure(agent)
+            self.sim_fig = self._create_figure(agent)
 
             animate = True
-            fargs = (sys, agent, nominalCtrl, simulator, animate)
-            anm = animation.FuncAnimation(self.simFig,
+            fargs = (sys, agent, nominal_ctrl, simulator, animate)
+            anm = animation.FuncAnimation(self.sim_fig,
                                           self._wrapper_take_steps,
                                           fargs=fargs,
                                           init_func=self._initialize_figure,
                                           interval=1)
 
             anm.running = True
-            self.simFig.canvas.mpl_connect(
+            self.sim_fig.canvas.mpl_connect(
                 'key_press_event', lambda event: onKeyPress(event, anm))
-            self.simFig.tight_layout()
+            self.sim_fig.tight_layout()
             plt.show()
