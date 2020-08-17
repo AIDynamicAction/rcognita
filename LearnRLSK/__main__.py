@@ -1,4 +1,4 @@
-from LearnRLSK import System, NominalController, Controller,Simulation
+from LearnRLSK import System, NominalController, Controller, Simulation
 import argparse
 import sys
 
@@ -26,20 +26,21 @@ def main(args=None):
         parser.add_argument('-x_min', type=int, default=-
                             10, help="Min x bound for scatter plot")
 
-        parser.add_argument('-x_max', type=int, default=10, 
+        parser.add_argument('-x_max', type=int, default=10,
                             help="Max x bound for scatter plot")
 
         parser.add_argument('-y_min', type=int, default=-
                             10, help="Min y bound for scatter plot")
 
-        parser.add_argument('-y_max', type=int, default=10, 
+        parser.add_argument('-y_max', type=int, default=10,
                             help="Max y bound for scatter plot")
 
         parser.add_argument('-dt', type=float,
                             default=0.05, help="Controller sampling time")
 
         # controller
-        parser.add_argument('-gamma', type=int, default=1, help="Discounting factor gamma.")
+        parser.add_argument('-gamma', type=int, default=1,
+                            help="Discounting factor gamma.")
 
         parser.add_argument('-mod_est_phase', type=int,
                             default=2, help="In seconds, an initial phase to fill the estimator's buffer before applying optimal control.")
@@ -53,7 +54,8 @@ def main(args=None):
         parser.add_argument('-buffer_size', type=int,
                             default=200, help="The size of the buffer to store data for model estimation. Is measured in numbers of periods of length dt.")
 
-        parser.add_argument('-nactor', type=int, default=6, help="Number of prediction steps. Nactor=1 means the controller is purely data-driven and doesn't use prediction.")
+        parser.add_argument('-nactor', type=int, default=6,
+                            help="Number of prediction steps. Nactor=1 means the controller is purely data-driven and doesn't use prediction.")
 
         parser.add_argument('-r_cost_struct', type=int,
                             default=1, help="Choice of the running cost structure.")
@@ -73,7 +75,7 @@ def main(args=None):
         # system
         parser.add_argument('-dim_state', type=int,
                             default=5, help="Dimension of the state (x)")
-        
+
         parser.add_argument('-dim_input', type=int,
                             default=2, help="Dimension of control input (u)")
 
@@ -153,21 +155,20 @@ def main(args=None):
         ctrl_mode = args.ctrl_mode
 
         # environment
-        sys = System(dim_state, dim_input, dim_output, dim_disturb, m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
-
+        sys = System(dim_state, dim_input, dim_output, dim_disturb,
+                     m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
         nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
-
-        agent = Controller(dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, prob_noise_pow, mod_est_phase, buffer_size, model_order, mod_est_checks, gamma, n_critic, critic_struct, r_cost_struct)
-
+        agent = Controller(dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor,
+                           prob_noise_pow, mod_est_phase, buffer_size, model_order, mod_est_checks, gamma, n_critic, critic_struct, r_cost_struct)
         sim = Simulation()
-
         simulator = sim.create_simulator(sys.closed_loop)
 
     else:
         # environment
         sys = System()
         nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
-        agent = Controller(ctrl_mode=5, n_actor=6, buffer_size=200, critic_struct=3, n_critic=50, prob_noise_pow=8, mod_est_phase=2)
+        agent = Controller(ctrl_mode=5, n_actor=6, buffer_size=200,
+                           critic_struct=3, n_critic=50, prob_noise_pow=8, mod_est_phase=2)
         sim = Simulation()
         simulator = sim.create_simulator(sys.closed_loop)
 
