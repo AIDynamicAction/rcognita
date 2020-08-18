@@ -157,21 +157,17 @@ def main(args=None):
         # environment
         sys = System(dim_state, dim_input, dim_output, dim_disturb,
                      m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
+        agent = Controller(dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, prob_noise_pow, mod_est_phase, buffer_size, model_order, mod_est_checks, gamma, n_critic, critic_struct, r_cost_struct)
         nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
-        agent = Controller(dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor,
-                           prob_noise_pow, mod_est_phase, buffer_size, model_order, mod_est_checks, gamma, n_critic, critic_struct, r_cost_struct)
-        sim = Simulation()
-        simulator = sim.create_simulator(sys.closed_loop)
 
     else:
         # environment
         sys = System()
+        agent = Controller(ctrl_mode=5, n_actor=6, buffer_size=200, critic_struct=3, n_critic=50, prob_noise_pow=8, mod_est_phase=2)
         nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
-        agent = Controller(ctrl_mode=5, n_actor=6, buffer_size=200,
-                           critic_struct=3, n_critic=50, prob_noise_pow=8, mod_est_phase=2)
-        sim = Simulation()
-        simulator = sim.create_simulator(sys.closed_loop)
 
+    sim = Simulation()
+    simulator = sim.create_simulator(sys.closed_loop)
     sim.run_simulation(sys, agent, nominalCtrl, simulator)
 
 
