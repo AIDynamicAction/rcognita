@@ -145,24 +145,23 @@ class System:
 
         Three-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [[1]_]
 
-        **Variables**
+        Variables:
+            `x_с` : x-coordinate [m]
+            `y_с` : y-coordinate [m]
+            `\\alpha` : turning angle [rad]
+            `v` : speed [m/s]
+            `\\omega` : revolution speed [rad/s]
+            `F` : pushing force [N]          
+            `M` : steering torque [Nm]
+            `m` : robot mass [kg]
+            `I` : robot moment of inertia around vertical axis [kg m\ :sup:`2`]
+            `q` : actuator disturbance (see `System._add_disturbance`). Is zero if `is_disturb = 0`
 
-        `x_с` : x-coordinate [m]
-        `y_с` : y-coordinate [m]
-        `\\alpha` : turning angle [rad]
-        `v` : speed [m/s]
-        `\\omega` : revolution speed [rad/s]
-        `F` : pushing force [N]          
-        `M` : steering torque [Nm]
-        `m` : robot mass [kg]
-        `I` : robot moment of inertia around vertical axis [kg m\ :sup:`2`]
-        `q` : actuator disturbance (see `System._add_disturbance`). Is zero if ``is_disturb = 0``
+            `x = [x_c, y_c, \\alpha, v, \\omega]`
 
-        `x = [x_c, y_c, \\alpha, v, \\omega]`
+            `u = [F, M]`
 
-        `u = [F, M]`
-
-        ``pars`` = `[m, I]`
+            `pars` = `[m, I]`
 
         References
         ----------
@@ -212,7 +211,7 @@ class System:
         System description
         ------------------ 
 
-        ``sigma_q, mu_q, tau_q``, with each being an array of shape ``[dim_disturb, ]``
+        `sigma_q, mu_q, tau_q`, with each being an array of shape `[dim_disturb, ]`
 
         """
 
@@ -228,14 +227,10 @@ class System:
         """
         Dynamical controller. 
 
-        When ``is_dyn_ctrl=0``, the controller is considered static, which is to say that the control actions are computed immediately from the system's output.
+        When `is_dyn_ctrl=0`, the controller is considered static, which is to say that the control actions are computed immediately from the system's output.
         
         In case of a dynamical controller, the system's state vector effectively gets extended.
         Dynamical controllers have some advantages compared to the static ones.
-
-        Controller description
-        ---------------------- 
-        **Provide your specification of a dynamical controller here**
 
         Currently, left for future implementation    
 
@@ -246,52 +241,29 @@ class System:
         return Du
 
     @staticmethod
-    def out(x, u=[]):
+    def return_curr_state(x, u=[]):
         """
-        System output.
+        Return current state of system
+
         This is commonly associated with signals that are measured in the system.
-        Normally, output depends only on state ``x`` since no physical processes transmit input to output instantly
+        Normally, output depends only on state `x` since no physical processes transmit input to output instantly
 
         System description
         ------------------ 
-        **Describe your system specification here**
 
-        In a three-wheel robot specified here, we measure the full state vector, which means the system be equipped with position sensors along with
-        force and torque sensors
-
-        See also
-        --------
-        `System.get_next_state`
+        In a three-wheel robot specified here, we measure the full state vector, which means the system be equipped with position sensors along with force and torque sensors
 
         """
-        # y = x[:3] + measNoise # <-- Measure only position and orientation
         y = x  # <-- Position, force and torque sensors on
         return y
 
     def receive_action(self, u):
         """
-        Receive exogeneous control action to be fed into the system.
-        This action is commonly computed by your controller (agent) using the system output :func:`~RLframe.system.sys_out` 
+        Receive control action from agent. 
 
         Parameters
         ----------
-        u : : array of shape ``[dim_input, ]``
-            Action
-
-        Examples
-        --------
-        Assuming ``sys`` is a ``system``-object, ``t0, t1`` - start and stop times, and ``ksi0`` - a properly defined initial condition:
-
-        >>> import scipy as sp
-        >>> simulator = sp.integrate.RK45(sys.closed_loop, t0, ksi0, t1)
-        >>> while t < t1:
-                simulator.step()
-                t = simulator.t
-                ksi = simulator.y
-                x = ksi[0:sys.dim_state]
-                y = sys.out(x)
-                u = myController(y)
-                sys.receive_action(u)
+        u : array of shape `[dim_input, ]`
 
         """
         self.u = u
@@ -304,7 +276,7 @@ class System:
 
         Examples
         --------
-        Assuming ``sys`` is a ``system``-object, ``t0, t1`` - start and stop times, and ``ksi0`` - a properly defined initial condition:
+        Assuming `sys` is a `system`-object, `t0, t1` - start and stop times, and `ksi0` - a properly defined initial condition:
 
         >>> import scipy as sp
         >>> simulator = sp.integrate.RK45(sys.closed_loop, t0, ksi0, t1)
@@ -313,24 +285,20 @@ class System:
                 t = simulator.t
                 ksi = simulator.y
                 x = ksi[0:sys.dim_state]
-                y = sys.out(x)
+                y = sys.return_curr_state(x)
                 u = myController(y)
                 sys.receive_action(u)
 
         """
 
-        # DEBUG ===============================================================
-        # print('INTERNAL t = {time:2.3f}'.format(time=t))
-        # /DEBUG ==============================================================
-
-        DfullState = np.zeros(self._dim_full_state)
+        full_state = np.zeros(self._dim_full_state)
 
         x = ksi[0:self.dim_state]
         q = ksi[self.dim_state:]
 
         if self.is_dyn_ctrl:
             u = ksi[-self.dim_input:]
-            DfullState[-self.dim_input:] = self._create_dyn_controller(t, u, y)
+            full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
         else:
             # Fetch the control action stored in the system
             u = self.u
@@ -339,16 +307,16 @@ class System:
             for k in range(self.dim_input):
                 u[k] = np.clip(u[k], self.control_bounds[k, 0], self.control_bounds[k, 1])
 
-        DfullState[0:self.dim_state] = System.get_next_state(
+        full_state[0:self.dim_state] = System.get_next_state(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.is_disturb:
-            DfullState[self.dim_state:] = self._add_disturbance(t, q)
+            full_state[self.dim_state:] = self._add_disturbance(t, q)
 
         # Track system's state
         self._x = x
 
-        return DfullState
+        return full_state
 
 
 class Controller:
@@ -367,7 +335,7 @@ class Controller:
         * 3, 4 - RL/ADP via `N_a-1` roll-outs of `r`
         * 5, 6 - RL/ADP via normalized stacked Q-learning [[1]_]
         * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
-        * Modes 2, 4, 6 use am estimated online, see :func:`~RLframe.controller.estimateModel` 
+        * Modes 2, 4, 6 use am estimated online, see `controller.estimateModel` 
 
     f_min, f_max, m_min, m_max -- 
         * control bounds
@@ -384,14 +352,14 @@ class Controller:
         * Size of prediction horizon `N_a` 
     
     pred_step_size --
-        * Prediction step size in `J` as defined above (in seconds). Should be a multiple of ``sample_time``. Commonly, equals it, but here left adjustable for
+        * Prediction step size in `J` as defined above (in seconds). Should be a multiple of `sample_time`. Commonly, equals it, but here left adjustable for
         * convenience. Larger prediction step size leads to longer factual horizon
     
     sys_rhs, sys_out --      
         * Functions that represents the right-hand side, resp., the output of the exogenously passed model.
         * The latter could be, for instance, the true model of the system.
-        * In turn, ``xSys`` represents the (true) current state of the system and should be updated accordingly.
-        * Parameters ``sys_rhs, sys_out, xSys`` are used in controller modes which rely on them.
+        * In turn, `xSys` represents the (true) current state of the system and should be updated accordingly.
+        * Parameters `sys_rhs, sys_out, xSys` are used in controller modes which rely on them.
     
     prob_noise_pow -- 
         Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
@@ -408,14 +376,14 @@ class Controller:
     model_order --
         * Order of the state-space estimation model           
 
-        **See** :func:`~RLframe.controller._estimate_model` . **This is just a particular model estimator.
-        When customizing,** :func:`~RLframe.controller._estimate_model`
-        **may be changed and in turn the parameter** ``model_order`` **also. For instance, you might want to use an artifial
+        **See** `controller._estimate_model` . **This is just a particular model estimator.
+        When customizing,** `controller._estimate_model`
+        **may be changed and in turn the parameter** `model_order` **also. For instance, you might want to use an artifial
         neural net and specify its layers and numbers
-        of neurons, in which case** ``model_order`` **could be substituted for, say,** ``Nlayers``, ``Nneurons`` 
+        of neurons, in which case** `model_order` **could be substituted for, say,** `Nlayers`, `Nneurons` 
     
     mod_est_checks --
-        * Estimated model parameters can be stored in stacks and the best among the ``mod_est_checks`` last ones is picked.
+        * Estimated model parameters can be stored in stacks and the best among the `mod_est_checks` last ones is picked.
         * May improve the prediction quality somewhat
     
     gamma --
@@ -428,7 +396,7 @@ class Controller:
         optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
     
     critic_period --
-        * The same meaning as ``mod_est_period`` 
+        * The same meaning as `mod_est_period` 
     
     critic_struct -- 
         * Choice of the structure of the critic's feature vector
@@ -631,7 +599,7 @@ class Controller:
 
         """ other """
         self.sys_rhs = System.get_next_state
-        self.sys_out = System.out
+        self.sys_out = System.return_curr_state
 
         # discount factor
         self.gamma = gamma
@@ -725,7 +693,7 @@ class Controller:
     def update_icost(self, y, u):
         """
         Sample-to-sample integrated running cost. This can be handy to evaluate the performance of the agent.
-        If the agent succeeded to stabilize the system, ``icost`` would converge to a finite value which is the performance mark.
+        If the agent succeeded to stabilize the system, `icost` would converge to a finite value which is the performance mark.
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
 
         """
@@ -733,7 +701,7 @@ class Controller:
 
     def _estimate_model(self, t, y):
         """
-        Estimate model parameters by accumulating data buffers ``u_buffer`` and ``y_buffer``
+        Estimate model parameters by accumulating data buffers `u_buffer` and `y_buffer`
 
         """
 
@@ -827,14 +795,14 @@ class Controller:
         """
         Feature vector of critic
 
-        In Q-learning mode, it uses both ``y`` and ``u``. In value function approximation mode, it should use just ``y``
+        In Q-learning mode, it uses both `y` and `u`. In value function approximation mode, it should use just `y`
 
         Customization
         -------------
 
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
-        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``W @ self._phi( y, u )`` 
-        within :func:`~RLframe.controller._critic_cost`
+        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like `W @ self._phi( y, u )` 
+        within `controller._critic_cost`
 
         """
         chi = np.concatenate([y, u])
@@ -880,12 +848,12 @@ class Controller:
 
     def _critic(self, Wprev, Winit, U, Y):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
+        See class documentation. Parameter `delta` here is a shorthand for `pred_step_size`
 
         Customization
         -------------
 
-        This method normally should not be altered, adjust :func:`~RLframe.controller._critic_cost` instead.
+        This method normally should not be altered, adjust `controller._critic_cost` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -911,7 +879,7 @@ class Controller:
 
     def _actor_cost(self, U, y, N, W, delta, ctrl_mode):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
+        See class documentation. Parameter `delta` here is a shorthand for `pred_step_size`
 
         Customization
         -------------        
@@ -959,12 +927,12 @@ class Controller:
 
     def _actor(self, y, u_init, N, W, delta, ctrl_mode):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
+        See class documentation. Parameter `delta` here is a shorthand for `pred_step_size`
 
         Customization
         -------------         
 
-        This method normally should not be altered, adjust :func:`~RLframe.controller._actor_cost`, :func:`~RLframe.controller._actor` instead.
+        This method normally should not be altered, adjust `controller._actor_cost`, `controller._actor` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -1009,7 +977,7 @@ class Controller:
         Customization
         -------------         
 
-        Add your modes, that you introduced in :func:`~RLframe.controller._actor_cost`, here
+        Add your modes, that you introduced in `controller._actor_cost`, here
 
         """
 
@@ -1425,7 +1393,7 @@ class Simulation:
         return simulator
 
     def _create_figure(self, agent):
-        y0 = System.out(self.x0)
+        y0 = System.return_curr_state(self.x0)
         x_coord0 = self.x0[0]
         y_coord0 = self.x0[1]
         alpha0 = self.x0[2]
@@ -1604,7 +1572,7 @@ class Simulation:
         ksi = simulator.y
 
         x = ksi[0:self.dim_state]
-        y = sys.out(x)
+        y = sys.return_curr_state(x)
 
         u = ctrlSelector(
             t, y, self.u_man, nominal_ctrl, agent, self.ctrl_mode)
