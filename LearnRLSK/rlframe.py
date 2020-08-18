@@ -67,7 +67,6 @@ class System:
 
     f_min, f_max, m_min, m_max -- 
         * control bounds
-        * Box control constraints. First element in each row is the lower bound, the second - the upper bound. If empty, control is unconstrained (default)
     
     is_dyn_ctrl -- 
         * 0 or 1
@@ -128,55 +127,42 @@ class System:
             self._dim_full_state = self.dim_state + self.dim_disturb
 
     @staticmethod
-    def state_dyn(t, x, u, q, m, I, dim_state, is_disturb):
+    def get_next_state(t, x, u, q, m, I, dim_state, is_disturb):
         """
         Right-hand side of the system internal dynamics
 
-        .. math:: \mathcal D x = f(x, u, q),
+            x_t+1 = f(x_t, u_t, q_t)
 
         where:
 
-        | :math:`x` : state
-        | :math:`u` : input
-        | :math:`q` : disturbance
+            `x` : state
+            `u` : input
+            `q` : disturbance
 
-        The time variable ``t`` is commonly used by ODE solvers, and you shouldn't have it explicitly referenced in the definition, unless your system is non-autonomous.
-        For the latter case, however, you already have the input and disturbance at your disposal
-
-        Normally, you should not call this method directly, but rather :func:`System.closed_loop` from your ODE solver and, respectively, `System.sys_out` from your controller
 
         System description
         ------------------
 
         Three-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [[1]_]
 
-        .. math::
-            \\begin{array}{ll}
-                        \dot x_с & = v \cos \\alpha \\newline
-                        \dot y_с & = v \sin \\alpha \\newline
-                        \dot \\alpha & = \\omega \\newline
-                        \dot v & = \\left( \\frac 1 m F + q_1 \\right) \\newline
-                        \dot \\omega & = \\left( \\frac 1 I M + q_2 \\right)
-            \\end{array}
-
         **Variables**
 
-        | :math:`x_с` : x-coordinate [m]
-        | :math:`y_с` : y-coordinate [m]
-        | :math:`\\alpha` : turning angle [rad]
-        | :math:`v` : speed [m/s]
-        | :math:`\\omega` : revolution speed [rad/s]
-        | :math:`F` : pushing force [N]          
-        | :math:`M` : steering torque [Nm]
-        | :math:`m` : robot mass [kg]
-        | :math:`I` : robot moment of inertia around vertical axis [kg m\ :sup:`2`]
-        | :math:`q` : actuator disturbance (see :func:`~RLframe.system.disturbDyn`). Is zero if ``is_disturb = 0``
+        `x_с` : x-coordinate [m]
+        `y_с` : y-coordinate [m]
+        `\\alpha` : turning angle [rad]
+        `v` : speed [m/s]
+        `\\omega` : revolution speed [rad/s]
+        `F` : pushing force [N]          
+        `M` : steering torque [Nm]
+        `m` : robot mass [kg]
+        `I` : robot moment of inertia around vertical axis [kg m\ :sup:`2`]
+        `q` : actuator disturbance (see `System._add_disturbance`). Is zero if ``is_disturb = 0``
 
-        :math:`x = [x_c, y_c, \\alpha, v, \\omega]`
+        `x = [x_c, y_c, \\alpha, v, \\omega]`
 
-        :math:`u = [F, M]`
+        `u = [F, M]`
 
-        ``pars`` = :math:`[m, I]`
+        ``pars`` = `[m, I]`
 
         References
         ----------
@@ -185,36 +171,46 @@ class System:
 
         """
 
-        Dx = np.zeros(dim_state)
-        Dx[0] = x[3] * np.cos(x[2])
-        Dx[1] = x[3] * np.sin(x[2])
-        Dx[2] = x[4]
+        # define vars
+        F = u[0]
+        M = u[1]
+        alpha = x[2]
+        v = x[3]
+        omega = x[4]
+
+        # create state
+        next_state = np.zeros(dim_state)
+
+        # compute new values
+        x = v * np.cos(alpha)
+        y = v * np.sin(alpha)
+        alpha = omega
 
         if is_disturb:
-            Dx[3] = 1 / m * (u[0] + q[0])
-            Dx[4] = 1 / I * (u[1] + q[1])
+            v = 1 / m * (F + q[0])
+            omega = 1 / I * (M + q[1])
         else:
-            Dx[3] = 1 / m * u[0]
-            Dx[4] = 1 / I * u[1]
+            v = 1 / m * F
+            omega = 1 / I * M
 
-        return Dx
+        # assign next state
+        next_state[0] = x
+        next_state[1] = y
+        next_state[2] = alpha
+        next_state[3] = v
+        next_state[4] = omega
 
-    def _disturb_dyn(self, t, q):
+        return next_state
+
+    def _add_disturbance(self, t, q):
         """
         Dynamical disturbance model:
 
-        .. math:: \mathcal D q = \\rho(q),    
+            q = \\rho(q)
 
 
         System description
         ------------------ 
-
-        We use here a 1st-order stochastic linear system of the type
-
-        .. math:: \mathrm d Q_t = - \\frac{1}{\\tau_q} \\left( Q_t \\mathrm d t + \\sigma_q ( \\mathrm d B_t + \\mu_q ) \\right) ,
-
-        where :math:`B` is the standard Brownian motion, :math:`Q` is the stochastic process whose realization is :math:`q`, and
-        :math:`\\tau_q, \\sigma_q, \\mu_q` are the time constant, standard deviation and mean, resp.
 
         ``sigma_q, mu_q, tau_q``, with each being an array of shape ``[dim_disturb, ]``
 
@@ -228,10 +224,12 @@ class System:
 
         return Dq
 
-    def _ctrl_dyn(t, u, y):
+    def _create_dyn_controller(t, u, y):
         """
-        Dynamical controller. When ``is_dyn_ctrl=0``, the controller is considered static, which is to say that the control actions are
-        computed immediately from the system's output.
+        Dynamical controller. 
+
+        When ``is_dyn_ctrl=0``, the controller is considered static, which is to say that the control actions are computed immediately from the system's output.
+        
         In case of a dynamical controller, the system's state vector effectively gets extended.
         Dynamical controllers have some advantages compared to the static ones.
 
@@ -263,7 +261,7 @@ class System:
 
         See also
         --------
-        :func:`~RLframe.system.state_dyn`
+        `System.get_next_state`
 
         """
         # y = x[:3] + measNoise # <-- Measure only position and orientation
@@ -332,7 +330,7 @@ class System:
 
         if self.is_dyn_ctrl:
             u = ksi[-self.dim_input:]
-            DfullState[-self.dim_input:] = self._ctrl_dyn(t, u, y)
+            DfullState[-self.dim_input:] = self._create_dyn_controller(t, u, y)
         else:
             # Fetch the control action stored in the system
             u = self.u
@@ -341,11 +339,11 @@ class System:
             for k in range(self.dim_input):
                 u[k] = np.clip(u[k], self.control_bounds[k, 0], self.control_bounds[k, 1])
 
-        DfullState[0:self.dim_state] = System.state_dyn(
+        DfullState[0:self.dim_state] = System.get_next_state(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.is_disturb:
-            DfullState[self.dim_state:] = self._disturb_dyn(t, q)
+            DfullState[self.dim_state:] = self._add_disturbance(t, q)
 
         # Track system's state
         self._x = x
@@ -363,10 +361,10 @@ class Controller:
         * Dimension of input and output which should comply with the system-to-be-controlled
 
     ctrl_mode --
-        * Controller mode. Currently available (:math:`r` is the running cost, :math:`\\gamma` is the discounting factor):
+        * Controller mode. Currently available (`r` is the running cost, `\\gamma` is the discounting factor):
         * Controller modes: 
         * 1, 2 - Model-predictive control (MPC)
-        * 3, 4 - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
+        * 3, 4 - RL/ADP via `N_a-1` roll-outs of `r`
         * 5, 6 - RL/ADP via normalized stacked Q-learning [[1]_]
         * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
         * Modes 2, 4, 6 use am estimated online, see :func:`~RLframe.controller.estimateModel` 
@@ -383,10 +381,10 @@ class Controller:
         * Controller's sampling time (in seconds)
     
     n_actor --
-        * Size of prediction horizon :math:`N_a` 
+        * Size of prediction horizon `N_a` 
     
     pred_step_size --
-        * Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sample_time``. Commonly, equals it, but here left adjustable for
+        * Prediction step size in `J` as defined above (in seconds). Should be a multiple of ``sample_time``. Commonly, equals it, but here left adjustable for
         * convenience. Larger prediction step size leads to longer factual horizon
     
     sys_rhs, sys_out --      
@@ -426,7 +424,7 @@ class Controller:
         * Characterizes fading of running costs along horizon
     
     n_critic --
-        * Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
+        * Critic stack size `N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
         optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
     
     critic_period --
@@ -632,7 +630,7 @@ class Controller:
         self.y_buffer = np.zeros([buffer_size, dim_output])
 
         """ other """
-        self.sys_rhs = System.state_dyn
+        self.sys_rhs = System.get_next_state
         self.sys_out = System.out
 
         # discount factor
@@ -1200,7 +1198,7 @@ class NominalController:
         Transformation from Cartesian coordinates to non-holonomic (NH) coordinates
         See Section VIII.A in [[1]_]
 
-        The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`
+        The transformation is a bit different since the 3rd NI eqn reads for our case as: `\\dot x_3 = x_2 u_1 - x_1 u_2`
 
         References
         ----------
@@ -1233,7 +1231,7 @@ class NominalController:
         Get control for Cartesian NI from NH coordinates
         See Section VIII.A in [[1]_]
 
-        The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`
+        The transformation is a bit different since the 3rd NI eqn reads for our case as: `\\dot x_3 = x_2 u_1 - x_1 u_2`
 
         References
         ----------
