@@ -408,13 +408,7 @@ class Controller:
         * Size of the buffer to store data
     
     model_order --
-        * Order of the state-space estimation model
-
-        .. math::
-            \\begin{array}{ll}
-                \\hat x^+ & = A \\hat x + B u \\newline
-                y^+  & = C \\hat x + D u,
-            \\end{array}             
+        * Order of the state-space estimation model           
 
         **See** :func:`~RLframe.controller._estimate_model` . **This is just a particular model estimator.
         When customizing,** :func:`~RLframe.controller._estimate_model`
@@ -443,34 +437,15 @@ class Controller:
            * 1 - Quadratic-linear
            * 2 - Quadratic
            * 3 - Quadratic, no mixed terms
-           * 4 - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, where :math:`w` is the critic's weight vector
+           * 4 - Quadratic, no mixed terms in input and output
 
-        **Add your specification into the table when customizing the critic** 
     
     r_cost_struct --
         * Choice of the running cost structure.
-           * - 1 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``r_cost_pars`` should be ``[R1]``
-           * - 2 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``r_cost_pars``
-               should be ``[R1, R2]``           
-
-    Examples
-    ----------
-
-    Assuming ``sys`` is a ``system``-object, ``t0, t1`` - start and stop times, and ``ksi0`` - a properly defined initial condition:
-
-    >>> import scipy as sp
-    >>> simulator = sp.integrate.RK45(sys.closed_loop, t0, ksi0, t1)
-    >>> agent = controller(sys.dim_input, sys.dim_output)
-
-    >>> while t < t1:
-            simulator.step()
-            t = simulator.t
-            ksi = simulator.y
-            x = ksi[0:sys.dim_state]
-            y = sys.out(x)
-            u = agent.compute_action(t, y)
-            sys.receive_action(u)
-            agent.update_icost(y, u)
+            Notation: chi = [y, u]
+            1 - quadratic chi.T @ R1 @ chi
+            2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
+            R1, R2 must be positive-definite          
 
     References
     ----------
@@ -584,8 +559,8 @@ class Controller:
             Choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
 
             Notation: chi = [y, u]
-            1 - quadratic chi.T R1 chi
-            2 - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
+            1 - quadratic chi.T @ R1 @ chi
+            2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
             R1, R2 must be positive-definite
         """
         self.r_cost_struct = r_cost_struct
@@ -1151,29 +1126,29 @@ class NominalController:
         self.ctrl_clock = t0
         self.u_curr = np.zeros(2)
 
-    def _zeta(self, xni, theta):
+    def _zeta(self, x_ni, theta):
         """
         Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators)
 
         """
 
-        sigma_tilde = xni[0] * np.cos(theta) + xni[1] * \
-            np.sin(theta) + np.sqrt(np.abs(xni[2]))
+        sigma_tilde = x_ni[0] * np.cos(theta) + x_ni[1] * \
+            np.sin(theta) + np.sqrt(np.abs(x_ni[2]))
 
         nablaF = np.zeros(3)
 
-        nablaF[0] = 4 * xni[0]**3 - 2 * \
-            np.abs(xni[2])**3 * np.cos(theta) / sigma_tilde**3
+        nablaF[0] = 4 * x_ni[0]**3 - 2 * \
+            np.abs(x_ni[2])**3 * np.cos(theta) / sigma_tilde**3
 
-        nablaF[1] = 4 * xni[1]**3 - 2 * \
-            np.abs(xni[2])**3 * np.sin(theta) / sigma_tilde**3
+        nablaF[1] = 4 * x_ni[1]**3 - 2 * \
+            np.abs(x_ni[2])**3 * np.sin(theta) / sigma_tilde**3
 
-        nablaF[2] = (3 * xni[0] * np.cos(theta) + 3 * xni[1] * np.sin(theta) + 2 *
-                     np.sqrt(np.abs(xni[2]))) * xni[2]**2 * np.sign(xni[2]) / sigma_tilde**3
+        nablaF[2] = (3 * x_ni[0] * np.cos(theta) + 3 * x_ni[1] * np.sin(theta) + 2 *
+                     np.sqrt(np.abs(x_ni[2]))) * x_ni[2]**2 * np.sign(x_ni[2]) / sigma_tilde**3
 
         return nablaF
 
-    def _kappa(self, xni, theta):
+    def _kappa(self, x_ni, theta):
         """
         Stabilizing controller for NI-part
 
@@ -1181,10 +1156,10 @@ class NominalController:
         kappa_val = np.zeros(2)
 
         G = np.zeros([3, 2])
-        G[:, 0] = np.array([1, 0, xni[1]])
-        G[:, 1] = np.array([0, 1, -xni[0]])
+        G[:, 0] = np.array([1, 0, x_ni[1]])
+        G[:, 1] = np.array([0, 1, -x_ni[0]])
 
-        zeta_val = self._zeta(xni, theta)
+        zeta_val = self._zeta(x_ni, theta)
 
         kappa_val[0] = - np.abs(np.dot(zeta_val, G[:, 0])
                                 )**(1 / 3) * np.sign(np.dot(zeta_val, G[:, 0]))
@@ -1193,29 +1168,29 @@ class NominalController:
 
         return kappa_val
 
-    def _Fc(self, xni, eta, theta):
+    def _Fc(self, x_ni, eta, theta):
         """
         Marginal function for ENDI constructed by nonsmooth backstepping. See details in the literature mentioned in the class documentation
 
         """
 
-        sigma_tilde = xni[0] * np.cos(theta) + xni[1] * \
-            np.sin(theta) + np.sqrt(np.abs(xni[2]))
+        sigma_tilde = x_ni[0] * np.cos(theta) + x_ni[1] * \
+            np.sin(theta) + np.sqrt(np.abs(x_ni[2]))
 
-        F = xni[0]**4 + xni[1]**4 + np.abs(xni[2])**3 / sigma_tilde
+        F = x_ni[0]**4 + x_ni[1]**4 + np.abs(x_ni[2])**3 / sigma_tilde
 
-        z = eta - self._kappa(xni, theta)
+        z = eta - self._kappa(x_ni, theta)
 
         return F + 1 / 2 * np.dot(z, z)
 
-    def _theta_minimizer(self, xni, eta):
+    def _theta_minimizer(self, x_ni, eta):
         theta_init = 0
 
         bnds = sp.optimize.Bounds(-np.pi, np.pi, keep_feasible=False)
 
         options = {'maxiter': 50, 'disp': False}
 
-        theta_val = minimize(lambda theta: self._Fc(xni, eta, theta), theta_init,
+        theta_val = minimize(lambda theta: self._Fc(x_ni, eta, theta), theta_init,
                              method='trust-constr', tol=1e-6, bounds=bnds, options=options).x
 
         return theta_val
@@ -1234,7 +1209,7 @@ class NominalController:
 
         """
 
-        xni = np.zeros(3)
+        x_ni = np.zeros(3)
         eta = np.zeros(2)
 
         xc = cart_coords[0]
@@ -1243,17 +1218,17 @@ class NominalController:
         v = cart_coords[3]
         omega = cart_coords[4]
 
-        xni[0] = alpha
-        xni[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
-        xni[2] = - 2 * (yc * np.cos(alpha) - xc * np.sin(alpha)) - \
+        x_ni[0] = alpha
+        x_ni[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
+        x_ni[2] = - 2 * (yc * np.cos(alpha) - xc * np.sin(alpha)) - \
             alpha * (xc * np.cos(alpha) + yc * np.sin(alpha))
 
         eta[0] = omega
         eta[1] = (yc * np.cos(alpha) - xc * np.sin(alpha)) * omega + v
 
-        return [xni, eta]
+        return [x_ni, eta]
 
-    def _nh_to_cartctrl(self, xni, eta, uNI):
+    def _nh_to_cartctrl(self, x_ni, eta, u_ni):
         """
         Get control for Cartesian NI from NH coordinates
         See Section VIII.A in [[1]_]
@@ -1270,9 +1245,9 @@ class NominalController:
 
         uCart = np.zeros(2)
 
-        uCart[0] = self.m * (uNI[1] + xni[1] * eta[0]**2 +
-                             1 / 2 * (xni[0] * xni[1] * uNI[0] + uNI[0] * xni[2]))
-        uCart[1] = self.I * uNI[0]
+        uCart[0] = self.m * (u_ni[1] + x_ni[1] * eta[0]**2 +
+                             1 / 2 * (x_ni[0] * x_ni[1] * u_ni[0] + u_ni[0] * x_ni[2]))
+        uCart[1] = self.I * u_ni[0]
 
         return uCart
 
@@ -1296,12 +1271,12 @@ class NominalController:
         if time_in_sample >= self.sample_time:  # New sample
 
             # This controller needs full-state measurement
-            xni, eta = self._cart_to_nh(y)
-            theta_star = self._theta_minimizer(xni, eta)
-            kappa_val = self._kappa(xni, theta_star)
+            x_ni, eta = self._cart_to_nh(y)
+            theta_star = self._theta_minimizer(x_ni, eta)
+            kappa_val = self._kappa(x_ni, theta_star)
             z = eta - kappa_val
-            uNI = - self.ctrl_gain * z
-            u = self._nh_to_cartctrl(xni, eta, uNI)
+            u_ni = - self.ctrl_gain * z
+            u = self._nh_to_cartctrl(x_ni, eta, u_ni)
 
             if self.ctrl_bnds.any():
                 for k in range(2):
@@ -1317,7 +1292,7 @@ class NominalController:
 
 
 class Simulation:
-    """class to create simulation and run simulation."""
+    """class to create and run simulation."""
 
     def __init__(self,
                  dim_state=5,
