@@ -54,30 +54,31 @@ class System:
     """
     Class of continuous-time dynamical systems with exogenous input and dynamical disturbance for use with ODE solvers.
     In RL, this is considered the *environment*.
-    Normally, you should pass ``closed_loop``, which represents the right-hand side, to your solver.
+    Normally, you should pass `closed_loop`, which represents the right-hand side, to your solver.
 
-    Attributes
+    Parameters
     ----------
-    dim_state, dim_input, dim_output, dim_disturb : : integer
-        System dimensions 
-    pars : : list
-        List of fixed parameters of the system
-    ctrlBnds : : array of shape ``[dim_input, 2]``
-        Box control constraints.
-        First element in each row is the lower bound, the second - the upper bound.
-        If empty, control is unconstrained (default)
-    is_dyn_ctrl : : 0 or 1
-        If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
-    is_disturb : : 0 or 1
-        If 0, no disturbance is fed into the system
-    sigma_q, mu_q, tau_q : : list
+    dim_state, dim_input, dim_output, dim_disturb -- 
+        * System dimensions
+    
+    m, I --
+        * m = robot's mass
+        * I = moment of inertia about the vertical axis
+
+    f_min, f_max, m_min, m_max -- 
+        * control bounds
+        * Box control constraints. First element in each row is the lower bound, the second - the upper bound. If empty, control is unconstrained (default)
+    
+    is_dyn_ctrl -- 
+        * 0 or 1
+        * If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
+    
+    is_disturb --
+        * 0 or 1
+        * If 0, no disturbance is fed into the system
+    
+    sigma_q, mu_q, tau_q --
         Parameters of the disturbance model
-
-    Customization
-    -------------        
-
-    Change specification of ``stateDyn, out, disturbDyn``.
-    Set up dimensions properly and use the parameters ``pars`` and ``parsDisturb`` in accordance with your system specification
 
     """
 
@@ -97,7 +98,7 @@ class System:
                  sigma_q=None,
                  mu_q=None,
                  tau_q=None):
-        """system - needs description"""
+        """system """
         self.dim_state = dim_state
         self.dim_input = dim_input
         self.dim_output = dim_output
@@ -106,7 +107,7 @@ class System:
         self.I = I
         self.ctrlBnds = np.array([[f_min, f_max], [m_min, m_max]])
 
-        """disturbance - needs description"""
+        """disturbance"""
         self.is_disturb = is_disturb
         self.sigma_q = sigma_q
         self.mu_q = mu_q
@@ -127,7 +128,7 @@ class System:
             self._dim_full_state = self.dim_state + self.dim_disturb
 
     @staticmethod
-    def stateDyn(t, x, u, q, m, I, dim_state, is_disturb):
+    def state_dyn(t, x, u, q, m, I, dim_state, is_disturb):
         """
         Right-hand side of the system internal dynamics
 
@@ -139,19 +140,14 @@ class System:
         | :math:`u` : input
         | :math:`q` : disturbance
 
-        The time variable ``t`` is commonly used by ODE solvers, and you shouldn't have it explicitly referenced in the definition, unless your system is
-        non-autonomous.
+        The time variable ``t`` is commonly used by ODE solvers, and you shouldn't have it explicitly referenced in the definition, unless your system is non-autonomous.
         For the latter case, however, you already have the input and disturbance at your disposal
 
-        Parameters of the system are contained in ``pars`` attribute.
-        Make a proper use of them here
-
-        Normally, you should not call this method directly, but rather :func:`~RLframe.system.closed_loop` from your ODE solver and, respectively,
-        :func:`~RLframe.system.sysOut` from your controller
+        Normally, you should not call this method directly, but rather :func:`System.closed_loop` from your ODE solver and, respectively, `System.sys_out` from your controller
 
         System description
         ------------------
-        **Describe your system specification here**
+        **Description of system specification here**
 
         Three-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [[1]_]
 
@@ -269,7 +265,7 @@ class System:
 
         See also
         --------
-        :func:`~RLframe.system.stateDyn`
+        :func:`~RLframe.system.state_dyn`
 
         """
         # y = x[:3] + measNoise # <-- Measure only position and orientation
@@ -279,7 +275,7 @@ class System:
     def receive_action(self, u):
         """
         Receive exogeneous control action to be fed into the system.
-        This action is commonly computed by your controller (agent) using the system output :func:`~RLframe.system.sysOut` 
+        This action is commonly computed by your controller (agent) using the system output :func:`~RLframe.system.sys_out` 
 
         Parameters
         ----------
@@ -347,7 +343,7 @@ class System:
             for k in range(self.dim_input):
                 u[k] = np.clip(u[k], self.ctrlBnds[k, 0], self.ctrlBnds[k, 1])
 
-        DfullState[0:self.dim_state] = System.stateDyn(
+        DfullState[0:self.dim_state] = System.state_dyn(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.is_disturb:
@@ -690,7 +686,7 @@ class Controller:
         self.y_buffer = np.zeros([buffer_size, dim_output])
 
         """ other """
-        self.sys_rhs = System.stateDyn
+        self.sys_rhs = System.state_dyn
         self.sys_out = System.out
 
         # discount factor
