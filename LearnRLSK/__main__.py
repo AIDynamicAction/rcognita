@@ -41,6 +41,8 @@ def main(args=None):
         # controller
         parser.add_argument('-gamma', type=int, default=1,
                             help="Discounting factor gamma.")
+        
+        parser.add_argument('-prob_noise_pow', type=int, default=8, help="Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control")
 
         parser.add_argument('-mod_est_phase', type=int,
                             default=2, help="In seconds, an initial phase to fill the estimator's buffer before applying optimal control.")
@@ -104,14 +106,12 @@ def main(args=None):
                             default=0, help="description")
 
         # tbd
-        parser.add_argument('-f_man', type=int, default=-3, help="description")
-        parser.add_argument('-n_man', type=int, default=-1, help="description")
         parser.add_argument('-f_min', type=int, default=5, help="description")
         parser.add_argument('-f_max', type=int, default=5, help="description")
         parser.add_argument('-m_min', type=int, default=-1, help="description")
         parser.add_argument('-m_max', type=int, default=1, help="description")
-        parser.add_argument('-prob_noise_pow', type=int,
-                            default=8, help="description")
+        parser.add_argument('-n_man', type=int, default=-1, help="description")
+        parser.add_argument('-f_man', type=int, default=-3, help="description")
 
         args = parser.parse_args()
 
