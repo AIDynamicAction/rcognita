@@ -477,7 +477,10 @@ class Controller:
 
         # initial values of the system's state
         alpha = np.pi / 2
-        initial_state = np.array([initial_x, initial_y, alpha]) # initial state
+        initial_state = np.zeros(dim_state)
+        initial_state[0] = initial_x
+        initial_state[1] = initial_y
+        initial_state[2] = alpha
         self.system_state = initial_state
 
         """ model estimator """
@@ -1207,6 +1210,8 @@ class Simulation:
                  dim_state=5,
                  dim_input=2,
                  dimDisturb=2,
+                 initial_x=5,
+                 initial_y=5,
                  t0=0,
                  t1=100,
                  n_runs=1,
@@ -1243,11 +1248,16 @@ class Simulation:
         # number of episodes
         self.n_runs = n_runs
 
+        self.initial_x = initial_x
+        self.initial_y = initial_y
+        self.alpha = np.pi / 2
+
         # initial values of state
-        self.x0 = np.zeros(dim_state)
-        self.x0[0] = 5
-        self.x0[1] = 5
-        self.x0[2] = np.pi / 2
+        initial_state = np.zeros(dim_state)
+        initial_state[0] = initial_x
+        initial_state[1] = initial_y
+        initial_state[2] = self.alpha
+        self.system_state = initial_state
 
         # initial value of control
         self.u0 = np.zeros(dim_input)
@@ -1314,9 +1324,9 @@ class Simulation:
         self.is_dyn_ctrl = is_dyn_ctrl
 
         if self.is_dyn_ctrl:
-            self.ksi0 = np.concatenate([self.x0, self.q0, self.u0])
+            self.ksi0 = np.concatenate([self.system_state, self.q0, self.u0])
         else:
-            self.ksi0 = np.concatenate([self.x0, self.q0])
+            self.ksi0 = np.concatenate([self.system_state, self.q0])
 
         # extras
         self.data_files = logdata(self.n_runs, save=self.is_log_data)
@@ -1336,11 +1346,8 @@ class Simulation:
         return simulator
 
     def _create_figure(self, agent):
-        y0 = System.get_curr_state(self.x0)
-        x_coord0 = self.x0[0]
-        y_coord0 = self.x0[1]
-        alpha0 = self.x0[2]
-        alpha_deg0 = alpha0 / 2 / np.pi
+        y0 = System.get_curr_state(self.system_state)
+        alpha_deg0 = self.alpha / 2 / np.pi
 
         plt.close('all')
 
@@ -1362,7 +1369,7 @@ class Simulation:
         self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],
                                 'k--', lw=0.75)   # Help line
         self.traj_line, = self.xy_plane_axes.plot(
-            x_coord0, y_coord0, 'b--', lw=0.5)
+            self.initial_x, self.initial_y, 'b--', lw=0.5)
         self.robot_marker = pltMarker(angle=alpha_deg0)
 
         text_time = 't = {time:2.3f}'.format(time=self.t0)
@@ -1381,9 +1388,9 @@ class Simulation:
         self.sol_axes.plot([self.t0, self.t1], [0, 0],
                            'k--', lw=0.75)   # Help line
         self.norm_line, = self.sol_axes.plot(self.t0, la.norm(
-            [x_coord0, y_coord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+            [self.initial_x, self.initial_y]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
         self.alpha_line, = self.sol_axes.plot(
-            self.t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
+            self.t0, self.alpha, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
         self.sol_axes.legend(fancybox=True, loc='upper right')
         self.sol_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
@@ -1434,11 +1441,8 @@ class Simulation:
         return self.sim_fig
 
     def _initialize_figure(self):
-        x_coord0 = self.x0[0]
-        y_coord0 = self.x0[1]
-
         self.sol_scatter = self.xy_plane_axes.scatter(
-            x_coord0, y_coord0, marker=self.robot_marker.marker, s=400, c='b')
+            self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
         self.current_run = 1
 
         return self.sol_scatter
