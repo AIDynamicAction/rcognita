@@ -241,7 +241,7 @@ class System:
         return Du
 
     @staticmethod
-    def return_curr_state(x, u=[]):
+    def get_curr_state(x, u=[]):
         """
         Return current state of system
 
@@ -285,7 +285,7 @@ class System:
                 t = simulator.t
                 ksi = simulator.y
                 x = ksi[0:sys.dim_state]
-                y = sys.return_curr_state(x)
+                y = sys.get_curr_state(x)
                 u = myController(y)
                 sys.receive_action(u)
 
@@ -328,19 +328,6 @@ class Controller:
     dim_input, dim_output --
         * Dimension of input and output which should comply with the system-to-be-controlled
 
-    ctrl_mode --
-        * Controller mode. Currently available (`r` is the running cost, `\\gamma` is the discounting factor):
-        * Controller modes: 
-        * 1, 2 - Model-predictive control (MPC)
-        * 3, 4 - RL/ADP via `N_a-1` roll-outs of `r`
-        * 5, 6 - RL/ADP via normalized stacked Q-learning [[1]_]
-        * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
-        * Modes 2, 4, 6 use am estimated online, see `controller.estimateModel` 
-
-    f_min, f_max, m_min, m_max -- 
-        * control bounds
-        * Box control constraints. First element in each row is the lower bound, the second - the upper bound. If empty, control is unconstrained (default)
-
     t0 --
         * default = 0
         * Initial value of the controller's internal clock
@@ -348,18 +335,11 @@ class Controller:
     sample_time --
         * Controller's sampling time (in seconds)
     
-    n_actor --
-        * Size of prediction horizon `N_a` 
-    
-    pred_step_size --
-        * Prediction step size in `J` as defined above (in seconds). Should be a multiple of `sample_time`. Commonly, equals it, but here left adjustable for
-        * convenience. Larger prediction step size leads to longer factual horizon
-    
     sys_rhs, sys_out --      
         * Functions that represents the right-hand side, resp., the output of the exogenously passed model.
         * The latter could be, for instance, the true model of the system.
-        * In turn, `xSys` represents the (true) current state of the system and should be updated accordingly.
-        * Parameters `sys_rhs, sys_out, xSys` are used in controller modes which rely on them.
+        * In turn, `system_state` represents the (true) current state of the system and should be updated accordingly.
+        * Parameters `sys_rhs, sys_out, system_state` are used in controller modes which rely on them.
     
     prob_noise_pow -- 
         Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
@@ -368,13 +348,22 @@ class Controller:
         * Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
     
     mod_est_period -- 
-        * Time between model estimate updates (in seconds)
+        * In seconds, the time between model estimate updates. This constant
+        determines how often the estimated parameters are updated. The more
+        often the model is updated, the higher the computational burden is.
+        On the other hand, more frequent updates help keep the model actual. 
     
     buffer_size -- 
-        * Size of the buffer to store data
+        * The size of the buffer to store data for model estimation. The bigger
+        the buffer, the more accurate the estimation may be achieved. For
+        successful model estimation, the system must be sufficiently excited.
+        Using bigger buffers is a way to achieve this. 
     
     model_order --
-        * Order of the state-space estimation model           
+        * The order of the state-space estimation model. We are interested in
+        adequate predictions of y under given u's. The higher the model
+        order, the better estimation results may be achieved, but be aware of
+        overfitting         
 
         **See** `controller._estimate_model` . **This is just a particular model estimator.
         When customizing,** `controller._estimate_model`
@@ -391,13 +380,27 @@ class Controller:
         * Discounting factor.
         * Characterizes fading of running costs along horizon
     
+    n_actor --
+        * Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
+
     n_critic --
         * Critic stack size `N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
         optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
     
     critic_period --
-        * The same meaning as `mod_est_period` 
-    
+        * # Time between critic updates
+
+    pred_step_size --
+        * Prediction step size in `J` as defined above (in seconds). Should be a multiple of `sample_time`. Commonly, equals it, but here left adjustable for
+        * convenience. Larger prediction step size leads to longer factual horizon
+        
+    r_cost_struct --
+        * Choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
+            Notation: chi = [y, u]
+            1 - quadratic chi.T @ R1 @ chi
+            2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
+            R1, R2 must be positive-definite
+
     critic_struct -- 
         * Choice of the structure of the critic's feature vector
            * 1 - Quadratic-linear
@@ -405,13 +408,27 @@ class Controller:
            * 3 - Quadratic, no mixed terms
            * 4 - Quadratic, no mixed terms in input and output
 
-    
-    r_cost_struct --
-        * Choice of the running cost structure.
-            Notation: chi = [y, u]
-            1 - quadratic chi.T @ R1 @ chi
-            2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
-            R1, R2 must be positive-definite          
+    n_critic --
+        * Should not greater than buffer_size. The critic optimizes the temporal error which is a measure of critic's ability to capture the optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer. The principle here is pretty much the same as with the model estimation: accuracy against performance
+
+    ctrl_mode --
+        Modes with online model estimation are experimental
+            
+            0     - manual constant control (only for basic testing)
+            -1    - nominal parking controller (for benchmarking optimal controllers)
+            1     - model-predictive control (MPC). Prediction via discretized true model
+            2     - adaptive MPC. Prediction via estimated model
+            3     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via discretized true model
+            4     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via estimated model
+            5     - RL: stacked Q-learning. Prediction via discretized true model
+            6     - RL: stacked Q-learning. Prediction via estimated model
+            
+        * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
+        * Modes 2, 4, 6 use am estimated online, see `controller.estimateModel` 
+
+    f_min, f_max, m_min, m_max (ctrl_bnds) -- 
+        * control bounds
+        * Box control constraints. First element in each row is the lower bound, the second - the upper bound. If empty, control is unconstrained (default)
 
     References
     ----------
@@ -424,6 +441,8 @@ class Controller:
                  dim_input=2,
                  dim_output=5,
                  ctrl_mode=1,
+                 initial_x=5,
+                 initial_y=5,
                  m=10,
                  I=1,
                  t0=0,
@@ -456,40 +475,19 @@ class Controller:
         """ disturbance """
         self.is_disturb = is_disturb
 
-        # initial values of state
-        self.x0 = np.zeros(dim_state)
-        self.x0[0] = 5
-        self.x0[1] = 5
-        self.x0[2] = np.pi / 2
-        self.xSys = self.x0
+        # initial values of the system's state
+        alpha = np.pi / 2
+        initial_state = np.array([initial_x, initial_y, alpha]) # initial state
+        self.system_state = initial_state
 
         """ model estimator """
         self.est_clock = t0
         self.is_prob_noise = 1
         self.prob_noise_pow = prob_noise_pow
-
-        # In seconds, an initial phase to fill the estimator's buffer before applying optimal control
         self.mod_est_phase = mod_est_phase
-
-        """ In seconds, the time between model estimate updates. This constant
-        determines how often the estimated parameters are updated. The more
-        often the model is updated, the higher the computational burden is.
-        On the other hand, more frequent updates help keep the model actual. """
         self.mod_est_period = mod_est_period
-
-        """ The size of the buffer to store data for model estimation. The bigger
-        the buffer, the more accurate the estimation may be achieved. For
-        successful model estimation, the system must be sufficiently excited.
-        Using bigger buffers is a way to achieve this. """
         self.buffer_size = buffer_size
-
-        """ The order of the state-space estimation model. We are interested in
-        adequate predictions of y under given u's. The higher the model
-        order, the better estimation results may be achieved, but be aware of
-        overfitting """
         self.model_order = model_order
-
-        """ Estimated model parameters can be stored in stacks and the best among the mod_est_checks last ones is picked """
         self.mod_est_checks = mod_est_checks
 
         A = np.zeros([self.model_order, self.model_order])
@@ -497,90 +495,35 @@ class Controller:
         C = np.zeros([self.dim_output, self.model_order])
         D = np.zeros([self.dim_output, self.dim_input])
         x0_est = np.zeros(self.model_order)
+
         self.my_model = model(A, B, C, D, x0_est)
         self.model_stack = []
 
         for k in range(self.mod_est_checks):
             self.model_stack.append(self.my_model)
 
-        """ Controller 
+        """ Controller  """
 
-            # u[0]: Pushing force F [N]
-            # u[1]: Steering torque M [N m]
-        """
-
-        # Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
         self.n_actor = n_actor
-
-        # Time between critic updates
         self.critic_period = critic_period
-
-        # In seconds. Should be a multiple of dt
         self.pred_step_size = pred_step_size
 
-        """ RL elements
-
-            Running cost. 
-
-            Choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
-
-            Notation: chi = [y, u]
-            1 - quadratic chi.T @ R1 @ chi
-            2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
-            R1, R2 must be positive-definite
-        """
+        """ RL elements """
         self.r_cost_struct = r_cost_struct
         self.R1 = np.diag([10, 10, 1, 0, 0, 0, 0])
-        # R1 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
-        # R1 = np.array([[10, 2, 1, 0, 0], [0, 10, 2, 0, 0], [0, 0, 1, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in y
-        # R1 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 1, 1, 1],
-        # [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
-
         self.R2 = np.array([[10, 2, 1, 0, 0],
                             [0, 10, 2, 0, 0],
                             [0, 0, 10, 0, 0],
                             [0, 0, 0, 0, 0],
                             [0, 0, 0, 0, 0]])
-        # R2 = np.diag([10, 10, 1, 0, 0])  # No mixed terms
-        # R2 = np.array([[10, 2, 1, 1, 1], [0, 10, 2, 1, 1], [0, 0, 10, 1, 1],
-        # [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]])  # mixed terms in chi
         self.r_cost_pars = [self.R1, self.R2]
         self.i_cost_val = 0
-
-        """critic structure
-
-            1 - quadratic-linear
-            2 - quadratic
-            3 - quadratic, no mixed terms
-            4 - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...]
-            # u[0]^2 + ...
-        """
         self.critic_struct = critic_struct
         self.critic_clock = t0
-
-        """Critic stack size.
-
-            Should not greater than buffer_size. The critic optimizes the temporal error which is a measure of critic's ability to capture the optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer. The principle here is pretty much the same as with the model estimation: accuracy against performance
-
-        """
         self.n_critic = n_critic
-
-        # Clip critic buffer size
         self.n_critic = np.min([self.n_critic, self.buffer_size - 1])
 
-        """control mode
-        
-            Modes with online model estimation are experimental
-            
-            0     - manual constant control (only for basic testing)
-            -1    - nominal parking controller (for benchmarking optimal controllers)
-            1     - model-predictive control (MPC). Prediction via discretized true model
-            2     - adaptive MPC. Prediction via estimated model
-            3     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via discretized true model
-            4     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via estimated model
-            5     - RL: stacked Q-learning. Prediction via discretized true model
-            6     - RL: stacked Q-learning. Prediction via estimated model
-        """
+        """control mode"""
         self.ctrl_mode = ctrl_mode
         self.ctrl_clock = t0
         self.sample_time = sample_time
@@ -599,7 +542,7 @@ class Controller:
 
         """ other """
         self.sys_rhs = System.get_next_state
-        self.sys_out = System.return_curr_state
+        self.sys_out = System.get_curr_state
 
         # discount factor
         self.gamma = gamma
@@ -647,7 +590,7 @@ class Controller:
         Fetch exogenous model state. Used in some controller modes. See class documentation
 
         """
-        self.xSys = x
+        self.system_state = x
 
     def _dss_sim(self, A, B, C, D, uSqn, x0, y0):
         """
@@ -895,7 +838,7 @@ class Controller:
         # System output prediction
         if (ctrl_mode == 1) or (ctrl_mode == 3) or (ctrl_mode == 5):    # Via exogenously passed model
             Y[0, :] = y
-            x = self.xSys
+            x = self.system_state
             for k in range(1, self.n_actor):
                 # Euler scheme
                 x = x + delta * \
@@ -1393,7 +1336,7 @@ class Simulation:
         return simulator
 
     def _create_figure(self, agent):
-        y0 = System.return_curr_state(self.x0)
+        y0 = System.get_curr_state(self.x0)
         x_coord0 = self.x0[0]
         y_coord0 = self.x0[1]
         alpha0 = self.x0[2]
@@ -1572,7 +1515,7 @@ class Simulation:
         ksi = simulator.y
 
         x = ksi[0:self.dim_state]
-        y = sys.return_curr_state(x)
+        y = sys.get_curr_state(x)
 
         u = ctrlSelector(
             t, y, self.u_man, nominal_ctrl, agent, self.ctrl_mode)
