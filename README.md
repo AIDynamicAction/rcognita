@@ -62,7 +62,7 @@ Then, open terminal and create a virtualenv:
 ```
 conda init
 conda create -n venv python=3.7.0
-conda info --envs
+conda info --envs # or conda env list
 conda activate venv
 ```
 

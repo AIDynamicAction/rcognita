@@ -22,6 +22,9 @@ Buffers are updated from bottom
 """
 
 # imports
+import os
+import pathlib
+from tabulate import tabulate
 
 # scipy
 import scipy as sp
@@ -32,6 +35,7 @@ from scipy.optimize import basinhopping
 import numpy as np
 from numpy.random import rand
 from numpy.random import randn
+import numpy.linalg as la
 from scipy import signal
 import sippy  # Github:CPCLAB-UNIPI/SIPPY
 
@@ -41,7 +45,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
 # LearnRLSK
-from .utilities import *
+from . import utilities
 
 # other
 import warnings
@@ -52,7 +56,7 @@ from mpldatacursor import datacursor
 
 class System:
     """
-    Class of continuous-time dynamical systems with exogenous input and dynamical disturbance for use with ODE solvers.
+    Class of continuous-time dynamical systems with input and dynamical disturbance for use with ODE solvers.
     In RL, this is considered the *environment*.
     Normally, you should pass `closed_loop`, which represents the right-hand side, to your solver.
 
@@ -205,7 +209,7 @@ class System:
         """
         Dynamical disturbance model:
 
-            q = \\rho(q)
+            q = rho(q)
 
 
         System description
@@ -245,16 +249,8 @@ class System:
         """
         Return current state of system
 
-        This is commonly associated with signals that are measured in the system.
-        Normally, output depends only on state `x` since no physical processes transmit input to output instantly
-
-        System description
-        ------------------ 
-
-        In a three-wheel robot specified here, we measure the full state vector, which means the system be equipped with position sensors along with force and torque sensors
-
         """
-        y = x  # <-- Position, force and torque sensors on
+        y = x 
         return y
 
     def receive_action(self, u):
@@ -499,7 +495,7 @@ class Controller:
         D = np.zeros([self.dim_output, self.dim_input])
         x0_est = np.zeros(self.model_order)
 
-        self.my_model = model(A, B, C, D, x0_est)
+        self.my_model = utilities._model(A, B, C, D, x0_est)
         self.model_stack = []
 
         for k in range(self.mod_est_checks):
@@ -535,10 +531,10 @@ class Controller:
         self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
         self.min_bounds = np.array(self.ctrl_bnds[:, 0])
         self.max_bounds = np.array(self.ctrl_bnds[:, 1])
-        self.u_min = repMat(self.min_bounds, 1, n_actor)
-        self.u_max = repMat(self.max_bounds, 1, n_actor)
+        self.u_min = utilities._repMat(self.min_bounds, 1, n_actor)
+        self.u_max = utilities._repMat(self.max_bounds, 1, n_actor)
         self.u_curr = self.min_bounds / 10
-        self.u_init = repMat(self.min_bounds / 10, 1, self.n_actor)
+        self.u_init = utilities._repMat(self.min_bounds / 10, 1, self.n_actor)
 
         self.u_buffer = np.zeros([buffer_size, dim_input])
         self.y_buffer = np.zeros([buffer_size, dim_output])
@@ -754,10 +750,10 @@ class Controller:
         chi = np.concatenate([y, u])
 
         if self.critic_struct == 1:
-            return np.concatenate([uptria2vec(np.kron(chi, chi)), chi])
+            return np.concatenate([_uptria2vec(np.kron(chi, chi)), chi])
 
         elif self.critic_struct == 2:
-            return np.concatenate([uptria2vec(np.kron(chi, chi))])
+            return np.concatenate([_uptria2vec(np.kron(chi, chi))])
 
         elif self.critic_struct == 3:
             return chi * chi
@@ -952,8 +948,8 @@ class Controller:
                 time_in_critic_period = t - self.critic_clock
 
                 # Update data buffers
-                self.u_buffer = pushVec(self.u_buffer, self.u_curr)
-                self.y_buffer = pushVec(self.y_buffer, y)
+                self.u_buffer = utilities._pushVec(self.u_buffer, self.u_curr)
+                self.y_buffer = utilities._pushVec(self.y_buffer, y)
 
                 if time_in_critic_period >= self.critic_period:
                     # Update critic's internal clock
@@ -1329,10 +1325,25 @@ class Simulation:
             self.ksi0 = np.concatenate([self.system_state, self.q0])
 
         # extras
-        self.data_files = logdata(self.n_runs, save=self.is_log_data)
+        self.data_files = self._logdata(self.n_runs, save=self.is_log_data)
 
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
+
+    def _ctrlSelector(self, t, y, uMan, nominalCtrl, agent, mode):
+        """
+        Main interface for different agents
+
+        """
+        
+        if mode==0: # Manual control
+            u = uMan
+        elif mode==-1: # Nominal controller
+            u = nominalCtrl.compute_action(t, y)
+        elif mode > 0: # Optimal controller
+            u = agent.compute_action(t, y)
+            
+        return u
 
     def create_simulator(self, closed_loop):
         simulator = sp.integrate.RK45(closed_loop,
@@ -1370,7 +1381,7 @@ class Simulation:
                                 'k--', lw=0.75)   # Help line
         self.traj_line, = self.xy_plane_axes.plot(
             self.initial_x, self.initial_y, 'b--', lw=0.5)
-        self.robot_marker = pltMarker(angle=alpha_deg0)
+        self.robot_marker = utilities._pltMarker(angle=alpha_deg0)
 
         text_time = 't = {time:2.3f}'.format(time=self.t0)
 
@@ -1414,7 +1425,7 @@ class Simulation:
         self.ctrlAxs.plot([self.t0, self.t1], [0, 0],
                           'k--', lw=0.75)   # Help line
         self.ctrl_lines = self.ctrlAxs.plot(
-            self.t0, toColVec(self.u0).T, lw=0.5)
+            self.t0, utilities._toColVec(self.u0).T, lw=0.5)
         self.ctrlAxs.legend(
             iter(self.ctrl_lines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
 
@@ -1508,6 +1519,58 @@ class Simulation:
         else:
             nominal_ctrl.reset(self.t0)
 
+    def _onKeyPress(self, event, anm):
+        if event.key == ' ':
+            if anm.running is True:
+                anm.event_source.stop()
+                anm.running = False
+                
+            elif anm.running is False:
+                anm.event_source.start()
+                anm.running = True
+            
+        elif event.key == 'q':
+            plt.close('all')
+            print("Program exit")
+            os._exit(1)
+
+    def _logDataRow(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
+        with open(dataFile, 'a', newline='') as outfile:
+                writer = csv.writer(outfile)
+                writer.writerow([t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]])
+
+    def _logdata(self, Nruns, save=False):
+        dataFiles = [None] * Nruns
+
+        if save:
+            cwd = os.getcwd()
+            datafolder = '/data'
+            dataFolder_path = cwd + datafolder
+            
+            # create data dir
+            pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True) 
+
+            date = datetime.now().strftime("%Y-%m-%d")
+            time = datetime.now().strftime("%Hh%Mm%Ss")
+            dataFiles = [None] * Nruns
+            for k in range(0, Nruns):
+                dataFiles[k] = dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+                with open(dataFiles[k], 'w', newline='') as outfile:
+                    writer = csv.writer(outfile)
+                    writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
+
+        return dataFiles
+
+    def _printSimStep(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
+        # alphaDeg = alpha/np.pi*180      
+        
+        headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]']  
+        dataRow = [t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]]  
+        rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f', '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')   
+        table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
+        
+        print(table)
+
     def _wrapper_take_steps(self, k, *args):
         return self._take_step(*args)
 
@@ -1521,7 +1584,7 @@ class Simulation:
         x = ksi[0:self.dim_state]
         y = sys.get_curr_state(x)
 
-        u = ctrlSelector(
+        u = self._ctrlSelector(
             t, y, self.u_man, nominal_ctrl, agent, self.ctrl_mode)
 
         sys.receive_action(u)
@@ -1536,10 +1599,10 @@ class Simulation:
         icost = agent.i_cost_val
 
         if self.is_print_sim_step:
-            printSimStep(t, x_coord, y_coord, alpha, v, omega, icost, u)
+            self._printSimStep(t, x_coord, y_coord, alpha, v, omega, icost, u)
 
         if self.is_log_data:
-            logDataRow(self.current_data_file, t, x_coord,
+            self._logDataRow(self.current_data_file, t, x_coord,
                        y_coord, alpha, v, omega, icost.val, u)
 
         if animate == True:
@@ -1588,6 +1651,6 @@ class Simulation:
 
             anm.running = True
             self.sim_fig.canvas.mpl_connect(
-                'key_press_event', lambda event: onKeyPress(event, anm))
+                'key_press_event', lambda event: self._onKeyPress(event, anm))
             self.sim_fig.tight_layout()
             plt.show()
