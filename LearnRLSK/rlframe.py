@@ -54,39 +54,7 @@ from . import utilities
 from mpldatacursor import datacursor
 from tabulate import tabulate
 
-
-
-class System:
-    """
-    Class of continuous-time dynamical systems with input and dynamical disturbance for use with ODE solvers.
-    In RL, this is considered the *environment*.
-    Normally, you should pass `closed_loop`, which represents the right-hand side, to your solver.
-
-    Parameters
-    ----------
-    dim_state, dim_input, dim_output, dim_disturb -- 
-        * System dimensions
-    
-    m, I --
-        * m = robot's mass
-        * I = moment of inertia about the vertical axis
-
-    f_min, f_max, m_min, m_max -- 
-        * control bounds
-    
-    is_dyn_ctrl -- 
-        * 0 or 1
-        * If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
-    
-    is_disturb --
-        * 0 or 1
-        * If 0, no disturbance is fed into the system
-    
-    sigma_q, mu_q, tau_q --
-        * Parameters of the disturbance model
-
-    """
-
+class Generic:
     @classmethod
     def print_docstring(cls):
         print(cls.__doc__)
@@ -99,6 +67,52 @@ class System:
                 pass
             else:
                 print(param)
+
+
+class System(Generic):
+    """
+    Class of continuous-time dynamical systems with input and dynamical disturbance for use with ODE solvers.
+    
+    In RL, this is considered the *environment*.
+    Normally, you should pass `closed_loop`, which represents the right-hand side, to your solver.
+
+    Parameters
+    ----------
+    dim_state, dim_input, dim_output, dim_disturb -- System dimensions
+        * dim_state = dimension of state vector 
+            * default = 5
+            * x_t = [x_c, y_c, alpha, upsilon, omega]
+
+        * dim_input = dimension of action vector
+            * default = 2
+            * u_t = [F, M]
+
+        * dim_output = dimension of output vector
+            * default = 5
+            * * x_t+1 = [x_c, y_c, alpha, upsilon, omega]
+
+        * dim_disturb = dimension of disturbance vector
+            * default = 2
+            * actuator disturbance that gets added to F and M
+    
+    m, I -- robot hyperparameters
+        * m = robot's mass
+        * I = moment of inertia about the vertical axis
+
+    f_min, f_max, m_min, m_max -- control bounds
+    
+    is_dyn_ctrl -- is dynamic control?
+        * 0 or 1
+        * If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
+    
+    is_disturb -- use disturbance?
+        * 0 or 1
+        * If 0, no disturbance is fed into the system
+    
+    sigma_q, mu_q, tau_q -- hyperparameters to disturbance
+        * Parameters of the disturbance model
+
+    """
 
     def __init__(self,
                  dim_state=5,
@@ -330,7 +344,7 @@ class System:
         return full_state
 
 
-class Controller:
+class Controller(Generic):
     """
     Optimal controller (a.k.a. agent) class.
 
@@ -446,10 +460,6 @@ class Controller:
     .. [1] Osinenko, Pavel, et al. "Stacked adaptive dynamic programming with unknown system model." IFAC-PapersOnLine 50.1 (2017): 4150-4155        
 
     """
-
-    @classmethod
-    def print_docstring(cls):
-        print(cls.__doc__)
 
     def __init__(self,
                  dim_state=5,
@@ -1004,7 +1014,7 @@ class Controller:
             return self.u_curr
 
 
-class NominalController:
+class NominalController(Generic):
     """
     This is a class of nominal controllers used for benchmarking of optimal controllers.
     Specification should be provided for each individual case (system)
@@ -1218,7 +1228,7 @@ class NominalController:
             return self.u_curr
 
 
-class Simulation:
+class Simulation(Generic):
     """class to create and run simulation."""
 
     def __init__(self,
