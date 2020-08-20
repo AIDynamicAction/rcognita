@@ -24,7 +24,10 @@ Buffers are updated from bottom
 # imports
 import os
 import pathlib
-from tabulate import tabulate
+import inspect
+import warnings
+import sys
+from collections import namedtuple
 
 # scipy
 import scipy as sp
@@ -48,10 +51,9 @@ import matplotlib.animation as animation
 from . import utilities
 
 # other
-import warnings
-import sys
-from collections import namedtuple
 from mpldatacursor import datacursor
+from tabulate import tabulate
+
 
 
 class System:
@@ -84,6 +86,19 @@ class System:
         * Parameters of the disturbance model
 
     """
+
+    @classmethod
+    def print_docstring(cls):
+        print(cls.__doc__)
+
+    @classmethod
+    def print_init_params(cls):
+        signature = inspect.signature(cls.__init__)
+        for i, param in enumerate(signature.parameters.values()):
+            if i == 0:
+                pass
+            else:
+                print(param)
 
     def __init__(self,
                  dim_state=5,
@@ -431,6 +446,10 @@ class Controller:
     .. [1] Osinenko, Pavel, et al. "Stacked adaptive dynamic programming with unknown system model." IFAC-PapersOnLine 50.1 (2017): 4150-4155        
 
     """
+
+    @classmethod
+    def print_docstring(cls):
+        print(cls.__doc__)
 
     def __init__(self,
                  dim_state=5,
