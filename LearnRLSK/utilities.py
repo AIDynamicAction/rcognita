@@ -1,17 +1,27 @@
 from svgpath2mpl import parse_path
 import numpy as np
 from numpy.matlib import repmat
-import matplotlib as mpl 
+import matplotlib as mpl
+import inspect
+
+
+# hidden tests
+def check_call(func):
+    def wrapper(*args):
+        func(*args)
+        setattr(*args, 'func_has_been_called', True)
+    return wrapper
 
 # classes
 
-# super class
 class Generic:
     @classmethod
+    @check_call
     def print_docstring(cls):
         print(cls.__doc__)
 
     @classmethod
+    @check_call
     def print_init_params(cls):
         signature = inspect.signature(cls.__init__)
         for i, param in enumerate(signature.parameters.values()):
@@ -168,5 +178,3 @@ def _uptria2vec(mat):
         for j in range(n):
             vec[j] = mat[i, j]
             k += 1
-
-

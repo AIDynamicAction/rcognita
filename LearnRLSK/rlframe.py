@@ -24,7 +24,6 @@ Buffers are updated from bottom
 # imports
 import os
 import pathlib
-import inspect
 import warnings
 import sys
 from collections import namedtuple
