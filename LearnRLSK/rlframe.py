@@ -54,22 +54,7 @@ from . import utilities
 from mpldatacursor import datacursor
 from tabulate import tabulate
 
-class Generic:
-    @classmethod
-    def print_docstring(cls):
-        print(cls.__doc__)
-
-    @classmethod
-    def print_init_params(cls):
-        signature = inspect.signature(cls.__init__)
-        for i, param in enumerate(signature.parameters.values()):
-            if i == 0:
-                pass
-            else:
-                print(param)
-
-
-class System(Generic):
+class System(utilities.Generic):
     """
     Class of continuous-time dynamical systems with input and dynamical disturbance for use with ODE solvers.
     
@@ -344,7 +329,7 @@ class System(Generic):
         return full_state
 
 
-class Controller(Generic):
+class Controller(utilities.Generic):
     """
     Optimal controller (a.k.a. agent) class.
 
@@ -1014,7 +999,7 @@ class Controller(Generic):
             return self.u_curr
 
 
-class NominalController(Generic):
+class NominalController(utilities.Generic):
     """
     This is a class of nominal controllers used for benchmarking of optimal controllers.
     Specification should be provided for each individual case (system)
@@ -1065,7 +1050,7 @@ class NominalController(Generic):
 
     def _zeta(self, x_ni, theta):
         """
-        Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators)
+        utilities.Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators)
 
         """
 
@@ -1228,7 +1213,7 @@ class NominalController(Generic):
             return self.u_curr
 
 
-class Simulation(Generic):
+class Simulation(utilities.Generic):
     """class to create and run simulation."""
 
     def __init__(self,

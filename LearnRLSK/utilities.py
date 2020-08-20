@@ -3,44 +3,22 @@ import numpy as np
 from numpy.matlib import repmat
 import matplotlib as mpl 
 
+# classes
 
-#%% Utilities
-def _toColVec(argin):
-    if argin.ndim < 2:
-        return np.reshape(argin, (argin.size, 1))
-    elif argin.ndim ==2:
-        if argin.shape[0] < argin.shape[1]:
-            return argin.T
-        else:
-            return argin
+# super class
+class Generic:
+    @classmethod
+    def print_docstring(cls):
+        print(cls.__doc__)
 
-def _repMat(argin, n, m):
-    """
-    Ensures 1D result
-    
-    """
-    return np.squeeze(repmat(argin, n, m))
-
-# def pushColRight(matrix, vec):
-#     return np.hstack([matrix[:,1:], _toColVec(vec)])
-
-def _pushVec(matrix, vec):
-    return np.vstack([matrix[1:,:], vec])
-
-def _uptria2vec(mat):
-    """
-    Convert upper triangular square sub-matrix to column vector
-    
-    """    
-    n = mat.shape[0]
-    
-    vec = np.zeros( n*(n+1)/2, 1 )
-    
-    k = 0
-    for i in range(n):
-        for j in range(n):
-            vec[j] = mat[i, j]
-            k += 1
+    @classmethod
+    def print_init_params(cls):
+        signature = inspect.signature(cls.__init__)
+        for i, param in enumerate(signature.parameters.values()):
+            if i == 0:
+                pass
+            else:
+                print(param)
 
 class _model:
     """
@@ -150,3 +128,45 @@ class _pltMarker:
         self.marker._transform = self.marker.get_transform().rotate_deg(angle-self.angle)
         self.angle = angle
     
+
+
+
+# functions
+def _toColVec(argin):
+    if argin.ndim < 2:
+        return np.reshape(argin, (argin.size, 1))
+    elif argin.ndim ==2:
+        if argin.shape[0] < argin.shape[1]:
+            return argin.T
+        else:
+            return argin
+
+def _repMat(argin, n, m):
+    """
+    Ensures 1D result
+    
+    """
+    return np.squeeze(repmat(argin, n, m))
+
+# def pushColRight(matrix, vec):
+#     return np.hstack([matrix[:,1:], _toColVec(vec)])
+
+def _pushVec(matrix, vec):
+    return np.vstack([matrix[1:,:], vec])
+
+def _uptria2vec(mat):
+    """
+    Convert upper triangular square sub-matrix to column vector
+    
+    """    
+    n = mat.shape[0]
+    
+    vec = np.zeros( n*(n+1)/2, 1 )
+    
+    k = 0
+    for i in range(n):
+        for j in range(n):
+            vec[j] = mat[i, j]
+            k += 1
+
+
