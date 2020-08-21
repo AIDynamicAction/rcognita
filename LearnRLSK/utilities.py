@@ -31,18 +31,9 @@ class Generic:
                 print(param)
 
 class _model:
-    """
-        Class of estimated models
+    """ Class of estimated models             
         
-        So far, uses just the state-space structure:
-            
-    .. math::
-        \\begin{array}{ll}
-            \\hat x^+ & = A \\hat x + B u \\newline
-            y^+  & = C \\hat x + D u,
-        \\end{array}                 
-        
-    Attributes
+    Parameters
     ---------- 
     A, B, C, D : : arrays of proper shape
         State-space _model parameters

@@ -53,46 +53,42 @@ from . import utilities
 from mpldatacursor import datacursor
 from tabulate import tabulate
 
+
 class System(utilities.Generic):
     """
     Class of continuous-time dynamical systems with input and dynamical disturbance for use with ODE solvers.
-    
+
     In RL, this is considered the *environment*.
     Normally, you should pass `closed_loop`, which represents the right-hand side, to your solver.
 
     Parameters
     ----------
-    dim_state, dim_input, dim_output, dim_disturb -- System dimensions
-        * dim_state = dimension of state vector 
-            * default = 5
-            * x_t = [x_c, y_c, alpha, upsilon, omega]
+    dim_state -- dimension of state vector 
+        * x_t = [x_c, y_c, alpha, upsilon, omega]
 
-        * dim_input = dimension of action vector
-            * default = 2
-            * u_t = [F, M]
+    dim_input -- dimension of action vector
+        * u_t = [F, M]
 
-        * dim_output = dimension of output vector
-            * default = 5
-            * * x_t+1 = [x_c, y_c, alpha, upsilon, omega]
+    dim_output -- dimension of output vector
+        * x_t+1 = [x_c, y_c, alpha, upsilon, omega]
 
-        * dim_disturb = dimension of disturbance vector
-            * default = 2
-            * actuator disturbance that gets added to F and M
-    
+    dim_disturb -- dimension of disturbance vector
+        * actuator disturbance that gets added to F and M
+
     m, I -- robot hyperparameters
         * m = robot's mass
         * I = moment of inertia about the vertical axis
 
     f_min, f_max, m_min, m_max -- control bounds
-    
+
     is_dyn_ctrl -- is dynamic control?
         * 0 or 1
         * If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
-    
+
     is_disturb -- use disturbance?
         * 0 or 1
         * If 0, no disturbance is fed into the system
-    
+
     sigma_q, mu_q, tau_q -- hyperparameters to disturbance
         * Parameters of the disturbance model
 
@@ -145,16 +141,14 @@ class System(utilities.Generic):
 
     @staticmethod
     def get_next_state(t, x, u, q, m, I, dim_state, is_disturb):
-        """
-        Right-hand side of the system internal dynamics
+        """ Right-hand side of the system internal dynamics
 
             x_t+1 = f(x_t, u_t, q_t)
 
         where:
-
-            `x` : state
-            `u` : input
-            `q` : disturbance
+            x -- state
+            u -- input
+            q -- disturbance
 
 
         System description
@@ -163,22 +157,20 @@ class System(utilities.Generic):
         Three-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [[1]_]
 
         Variables:
-            `x_с` : x-coordinate [m]
-            `y_с` : y-coordinate [m]
-            `\\alpha` : turning angle [rad]
-            `v` : speed [m/s]
-            `\\omega` : revolution speed [rad/s]
-            `F` : pushing force [N]          
-            `M` : steering torque [Nm]
-            `m` : robot mass [kg]
-            `I` : robot moment of inertia around vertical axis [kg m\ :sup:`2`]
-            `q` : actuator disturbance (see `System._add_disturbance`). Is zero if `is_disturb = 0`
+            * x_с -- x-coordinate [m]
+            * y_с -- y-coordinate [m]
+            * \\alpha : turning angle [rad]
+            * v -- speed [m/s]
+            * \\omega : revolution speed [rad/s]
+            * F -- pushing force [N]          
+            * M -- steering torque [Nm]
+            * m -- robot mass [kg]
+            * I -- robot moment of inertia around vertical axis [kg m^2]
+            * q -- actuator disturbance (see System._add_disturbance). Is zero if is_disturb = 0
 
-            `x = [x_c, y_c, \\alpha, v, \\omega]`
-
-            `u = [F, M]`
-
-            `pars` = `[m, I]`
+            x = [x_c, y_c, \\alpha, v, \\omega]`
+            u = [F, M]
+            pars = [m, I]
 
         References
         ----------
@@ -219,18 +211,7 @@ class System(utilities.Generic):
         return next_state
 
     def _add_disturbance(self, t, q):
-        """
-        Dynamical disturbance model:
-
-            q = rho(q)
-
-
-        System description
-        ------------------ 
-
-        `sigma_q, mu_q, tau_q`, with each being an array of shape `[dim_disturb, ]`
-
-        """
+        """ Dynamical disturbance model """
 
         Dq = np.zeros(self.dim_disturb)
 
@@ -245,7 +226,7 @@ class System(utilities.Generic):
         Dynamical controller. 
 
         When `is_dyn_ctrl=0`, the controller is considered static, which is to say that the control actions are computed immediately from the system's output.
-        
+
         In case of a dynamical controller, the system's state vector effectively gets extended.
         Dynamical controllers have some advantages compared to the static ones.
 
@@ -259,22 +240,12 @@ class System(utilities.Generic):
 
     @staticmethod
     def get_curr_state(x, u=[]):
-        """
-        Return current state of system
-
-        """
-        y = x 
+        """ Return current state of system """
+        y = x
         return y
 
     def receive_action(self, u):
-        """
-        Receive control action from agent. 
-
-        Parameters
-        ----------
-        u : array of shape `[dim_input, ]`
-
-        """
+        """ Receive control action from agent. """
         self.u = u
 
     def closed_loop(self, t, ksi):
@@ -314,7 +285,8 @@ class System(utilities.Generic):
 
         if self.control_bounds.any():
             for k in range(self.dim_input):
-                u[k] = np.clip(u[k], self.control_bounds[k, 0], self.control_bounds[k, 1])
+                u[k] = np.clip(u[k], self.control_bounds[k, 0],
+                               self.control_bounds[k, 1])
 
         full_state[0:self.dim_state] = System.get_next_state(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
@@ -334,110 +306,64 @@ class Controller(utilities.Generic):
 
     Parameters
     ----------
-    dim_input, dim_output --
-        * Dimension of input and output which should comply with the system-to-be-controlled
+    dim_input -- dimension of controller input/action
 
-    t0 --
-        * default = 0
-        * Initial value of the controller's internal clock
-    
-    sample_time --
-        * Controller's sampling time (in seconds)
-    
-    sys_rhs, sys_out --      
-        * Functions that represents the right-hand side, resp., the output of the exogenously passed model.
-        * The latter could be, for instance, the true model of the system.
-        * In turn, `system_state` represents the (true) current state of the system and should be updated accordingly.
-        * Parameters `sys_rhs, sys_out, system_state` are used in controller modes which rely on them.
-    
-    prob_noise_pow -- 
-        Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
-    
-    mod_est_phase -- 
-        * Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
-    
-    mod_est_period -- 
-        * In seconds, the time between model estimate updates. This constant
-        determines how often the estimated parameters are updated. The more
-        often the model is updated, the higher the computational burden is.
-        On the other hand, more frequent updates help keep the model actual. 
-    
-    buffer_size -- 
-        * The size of the buffer to store data for model estimation. The bigger
-        the buffer, the more accurate the estimation may be achieved. For
-        successful model estimation, the system must be sufficiently excited.
-        Using bigger buffers is a way to achieve this. 
-    
-    model_order --
-        * The order of the state-space estimation model. We are interested in
-        adequate predictions of y under given u's. The higher the model
-        order, the better estimation results may be achieved, but be aware of
-        overfitting         
+    dim_output -- dimension of controller output which should comply with the system-to-be-controlled
 
-        **See** `controller._estimate_model` . **This is just a particular model estimator.
-        When customizing,** `controller._estimate_model`
-        **may be changed and in turn the parameter** `model_order` **also. For instance, you might want to use an artifial
-        neural net and specify its layers and numbers
-        of neurons, in which case** `model_order` **could be substituted for, say,** `Nlayers`, `Nneurons` 
-    
-    mod_est_checks --
-        * Estimated model parameters can be stored in stacks and the best among the `mod_est_checks` last ones is picked.
+    t0 -- Initial value of the controller's internal clock
+
+    sample_time --Controller's sampling time (in seconds)
+
+    prob_noise_pow -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
+
+    mod_est_phase -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
+
+    mod_est_period -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
+
+    buffer_size -- The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
+
+    model_order -- The order of the state-space estimation model. We are        interested in adequate predictions of y under given u's. The higher the model order, the better estimation results may be achieved, but be aware of overfitting.
+
+    mod_est_checks -- Estimated model parameters can be stored in stacks and the best among the `mod_est_checks` last ones is picked.
         * May improve the prediction quality somewhat
-    
-    gamma --
+
+    gamma -- Discounting factor
         * number in (0, 1]
-        * Discounting factor.
         * Characterizes fading of running costs along horizon
-    
-    n_actor --
-        * Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
 
-    n_critic --
-        * Critic stack size `N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
-        optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
-    
-    critic_period --
-        * # Time between critic updates
+    n_actor -- Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
 
-    pred_step_size --
-        * Prediction step size in `J` as defined above (in seconds). Should be a multiple of `sample_time`. Commonly, equals it, but here left adjustable for
-        * convenience. Larger prediction step size leads to longer factual horizon
-        
-    r_cost_struct --
-        * Choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
-            Notation: chi = [y, u]
-            1 - quadratic chi.T @ R1 @ chi
-            2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
-            R1, R2 must be positive-definite
+    n_critic -- Critic stack size. The critic optimizes the temporal error which is a measure of critic's ability to capture the optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
 
-    critic_struct -- 
-        * Choice of the structure of the critic's feature vector
-           * 1 - Quadratic-linear
-           * 2 - Quadratic
-           * 3 - Quadratic, no mixed terms
-           * 4 - Quadratic, no mixed terms in input and output
+    critic_period -- Time between critic updates
 
-    n_critic --
-        * Should not greater than buffer_size. The critic optimizes the temporal error which is a measure of critic's ability to capture the optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer. The principle here is pretty much the same as with the model estimation: accuracy against performance
+    pred_step_size -- Prediction step size in `J` as defined above (in seconds). Should be a multiple of `sample_time`. Commonly, equals it, but here left adjustable for convenience. Larger prediction step size leads to longer factual horizon
 
-    ctrl_mode --
-        Modes with online model estimation are experimental
-            
-            0     - manual constant control (only for basic testing)
-            -1    - nominal parking controller (for benchmarking optimal controllers)
-            1     - model-predictive control (MPC). Prediction via discretized true model
-            2     - adaptive MPC. Prediction via estimated model
-            3     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via discretized true model
-            4     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via estimated model
-            5     - RL: stacked Q-learning. Prediction via discretized true model
-            6     - RL: stacked Q-learning. Prediction via estimated model
-            
+    r_cost_struct -- choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
+        * 1 - quadratic chi.T @ R1 @ chi
+        * 2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
+
+    critic_struct -- Choice of the structure of the critic's feature vector
+        * 1 - Quadratic-linear
+        * 2 - Quadratic
+        * 3 - Quadratic, no mixed terms
+        * 4 - Quadratic, no mixed terms in input and output
+
+    ctrl_mode -- Modes with online model estimation are experimental 
+        * 0     - manual constant control (only for basic testing)
+        * -1    - nominal parking controller (for benchmarking optimal controllers)
+        * 1     - model-predictive control (MPC). Prediction via discretized true model
+        * 2     - adaptive MPC. Prediction via estimated model
+        * 3     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via discretized true model
+        * 4     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via estimated model
+        * 5     - RL: stacked Q-learning. Prediction via discretized true model
+        * 6     - RL: stacked Q-learning. Prediction via estimated model
+
         * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
-        * Modes 2, 4, 6 use am estimated online, see `controller.estimateModel` 
+        * Modes 2, 4, 6 use an estimated online
 
-    f_min, f_max, m_min, m_max (ctrl_bnds) -- 
-        * control bounds
-        * Box control constraints. First element in each row is the lower bound, the second - the upper bound. If empty, control is unconstrained (default)
+    f_min, f_max, m_min, m_max -- control bounds
+
 
     References
     ----------
@@ -492,16 +418,17 @@ class Controller(utilities.Generic):
         initial_state[2] = alpha
         self.system_state = initial_state
 
-        """ model estimator """
+        # model hyperparams
         self.est_clock = t0
         self.is_prob_noise = 1
         self.prob_noise_pow = prob_noise_pow
         self.mod_est_phase = mod_est_phase
         self.mod_est_period = mod_est_period
+        self.mod_est_checks = mod_est_checks
         self.buffer_size = buffer_size
         self.model_order = model_order
-        self.mod_est_checks = mod_est_checks
 
+        # model params
         A = np.zeros([self.model_order, self.model_order])
         B = np.zeros([self.model_order, self.dim_input])
         C = np.zeros([self.dim_output, self.model_order])
@@ -560,16 +487,13 @@ class Controller(utilities.Generic):
         self.gamma = gamma
 
         if self.critic_struct == 1:
-            self.dim_crit = ((self.dim_output + self.dim_input) + 1) * \
-                (self.dim_output + self.dim_input) / \
-                2 + (self.dim_output + self.dim_input)
+            self.dim_crit = ((self.dim_output + self.dim_input) + 1) * (self.dim_output + self.dim_input) / 2 + (self.dim_output + self.dim_input)
 
             self.w_min = -1e3 * np.ones(int(self.dim_crit))
             self.w_max = 1e3 * np.ones(int(self.dim_crit))
 
         elif self.critic_struct == 2:
-            self.dim_crit = ((self.dim_output + self.dim_input) + 1) * \
-                (self.dim_output + self.dim_input) / 2
+            self.dim_crit = ((self.dim_output + self.dim_input) + 1) * (self.dim_output + self.dim_input) / 2
             self.w_min = np.zeros(self.dim_crit)
             self.w_max = 1e3 * np.ones(int(self.dim_crit))
 
@@ -590,7 +514,6 @@ class Controller(utilities.Generic):
     def reset(self, t0):
         """
         Resets agent for use in multi-episode simulation.
-        Only internal clock and current actions are reset.
         All the learned parameters are retained
 
         """
@@ -598,10 +521,7 @@ class Controller(utilities.Generic):
         self.u_curr = self.min_bounds / 10
 
     def receive_sys_state(self, x):
-        """
-        Fetch exogenous model state. Used in some controller modes. See class documentation
-
-        """
+        """ Fetch exogenous model state. """
         self.system_state = x
 
     def _dss_sim(self, A, B, C, D, uSqn, x0, y0):
@@ -616,6 +536,7 @@ class Controller(utilities.Generic):
             x = x0
             ySqn[0, :] = y0
             xSqn[0, :] = x0
+            
             for k in range(1, uSqn.shape[0]):
                 x = A @ x + B @ uSqn[k - 1, :]
                 xSqn[k, :] = x
@@ -623,11 +544,9 @@ class Controller(utilities.Generic):
 
             return ySqn, xSqn
 
-    def rcost(self, y, u):
+    def running_cost(self, y, u):
         """
         Running cost (a.k.a. utility, reward, instantaneous cost etc.)
-
-        See class documentation
         """
         chi = np.concatenate([y, u])
 
@@ -648,11 +567,13 @@ class Controller(utilities.Generic):
     def update_icost(self, y, u):
         """
         Sample-to-sample integrated running cost. This can be handy to evaluate the performance of the agent.
+        
         If the agent succeeded to stabilize the system, `icost` would converge to a finite value which is the performance mark.
+        
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
 
         """
-        self.i_cost_val += self.rcost(y, u) * self.sample_time
+        self.i_cost_val += self.running_cost(y, u) * self.sample_time
 
     def _estimate_model(self, t, y):
         """
@@ -673,17 +594,6 @@ class Controller(utilities.Generic):
                     self.est_clock = t
 
                     try:
-                        # Using ssid from Githug:AndyLamperski/pyN4SID
-                        # Aid, Bid, Cid, Did, _ ,_ = ssid.N4SID(serf.u_buffer.T,  self.y_buffer.T,
-                        #                                       NumRows = self.dim_input + self.model_order,
-                        #                                       NumCols = self.buffer_size - (self.dim_input + self.model_order)*2,
-                        #                                       NSig = self.model_order,
-                        #                                       require_stable=False)
-                        # self.my_model.updatePars(Aid, Bid, Cid, Did)
-
-                        # Using Github:CPCLAB-UNIPI/SIPPY
-                        # method: N4SID, MOESP, CVA, PARSIM-P, PARSIM-S,
-                        # PARSIM-K
                         SSest = sippy.system_identification(self.y_buffer,
                                                             self.u_buffer,
                                                             id_method='N4SID',
@@ -698,22 +608,9 @@ class Controller(utilities.Generic):
                         self.my_model.updatePars(
                             SSest.A, SSest.B, SSest.C, SSest.D)
 
-                        # [EXPERIMENTAL] Using MATLAB's system identification toolbox
-                        # us_ml = eng.transpose(matlab.double(self.u_buffer.tolist()))
-                        # ys_ml = eng.transpose(matlab.double(self.y_buffer.tolist()))
-
-                        # Aml, Bml, Cml, Dml = eng.mySSest_simple(ys_ml, us_ml, dt, model_order, nargout=4)
-
-                        # self.my_model.updatePars(np.asarray(Aml), np.asarray(Bml), np.asarray(Cml), np.asarray(Dml) )
-
                     except:
                         print('Model estimation problem')
-                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]),
-                                                 np.zeros(
-                            [self.model_order, self.dim_input]),
-                            np.zeros(
-                            [self.dim_output, self.model_order]),
-                            np.zeros([self.dim_output, self.dim_input]))
+                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]), np.zeros( [self.model_order, self.dim_input]), np.zeros( [self.dim_output, self.model_order]), np.zeros([self.dim_output, self.dim_input]))
 
                     # Model checks
                     if self.mod_est_checks > 0:
@@ -730,7 +627,6 @@ class Controller(utilities.Generic):
                             y_est, _ = self._dss_sim(
                                 A, B, C, D, self.u_buffer, x0_est, y)
                             meanErr = np.mean(y_est - self.y_buffer, axis=0)
-
 
                             totAbsErr = np.sum(np.abs(meanErr))
                             if totAbsErr <= totAbsErrCurr:
@@ -755,9 +651,8 @@ class Controller(utilities.Generic):
         Customization
         -------------
 
-        Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
         If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like `W @ self._phi( y, u )` 
-        within `controller._critic_cost`
+        within `controller._get_critic_cost`
 
         """
         chi = np.concatenate([y, u])
@@ -774,9 +669,8 @@ class Controller(utilities.Generic):
         elif self.critic_struct == 4:
             return np.concatenate([y**2, np.kron(y, u), u**2])
 
-    def _critic_cost(self, W, U, Y):
-        """
-        Cost function of the critic
+    def _get_critic_cost(self, W, U, Y):
+        """ Cost function of the critic
 
         Currently uses value-iteration-like method  
 
@@ -795,20 +689,20 @@ class Controller(utilities.Generic):
             u_next = U[k, :]
 
             # Temporal difference
-            e = W @ self._phi(y_prev, u_prev) - self.gamma * self.Wprev @ self._phi(y_next, u_next) - self.rcost(y_prev, u_prev)
+            e = W @ self._phi(y_prev, u_prev) - self.gamma * self.Wprev @ self._phi(y_next, u_next) - self.running_cost(y_prev, u_prev)
 
             Jc += 1 / 2 * e**2
 
         return Jc
 
     def _critic(self, Wprev, Winit, U, Y):
-        """
-        See class documentation. Parameter `delta` here is a shorthand for `pred_step_size`
+        """ Critic
+        Parameter `delta` here is a shorthand for `pred_step_size`
 
         Customization
         -------------
 
-        This method normally should not be altered, adjust `controller._critic_cost` instead.
+        This method normally should not be altered, adjust `controller._get_critic_cost` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -826,31 +720,25 @@ class Controller(utilities.Generic):
 
         bnds = sp.optimize.Bounds(self.w_min, self.w_max, keep_feasible=True)
 
-        W = minimize(lambda W: self._critic_cost(W, U, Y), Winit,
+        W = minimize(lambda W: self._get_critic_cost(W, U, Y), Winit,
                      method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
-
 
         return W
 
-    def _actor_cost(self, U, y, N, W, delta, ctrl_mode):
+    def _get_actor_cost(self, U, y, N, W, delta, ctrl_mode):
         """
-        See class documentation. Parameter `delta` here is a shorthand for `pred_step_size`
-
-        Customization
-        -------------        
-
-        Introduce your mode and the respective actor function in this method. Don't forget to provide description in the class documentation
-
+        Parameter `delta` here is a shorthand for `pred_step_size`
         """
 
         myU = np.reshape(U, [N, self.dim_input])
-
         Y = np.zeros([N, self.dim_output])
 
         # System output prediction
-        if (ctrl_mode == 1) or (ctrl_mode == 3) or (ctrl_mode == 5):    # Via exogenously passed model
+        if (ctrl_mode == 1) or (ctrl_mode == 3) or (ctrl_mode == 5):    
+        # Via exogenously passed model
             Y[0, :] = y
             x = self.system_state
+            
             for k in range(1, self.n_actor):
                 # Euler scheme
                 x = x + delta * \
@@ -858,22 +746,27 @@ class Controller(utilities.Generic):
                                  self.I, self.dim_state, self.is_disturb)
                 Y[k, :] = self.sys_out(x)
 
-        elif (ctrl_mode == 2) or (ctrl_mode == 4) or (ctrl_mode == 6):    # Via estimated model
+        elif (ctrl_mode == 2) or (ctrl_mode == 4) or (ctrl_mode == 6):    
+            # Via estimated model
             myU_upsampled = myU.repeat(int(delta / self.sample_time), axis=0)
             Yupsampled, _ = self._dss_sim(
                 self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0_est, y)
             Y = Yupsampled[::int(delta / self.sample_time)]
 
         J = 0
+        
         if (ctrl_mode == 1) or (ctrl_mode == 2):     # MPC
             for k in range(N):
-                J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
+                J += self.gamma**k * self.running_cost(Y[k, :], myU[k, :])
+        
         # RL: Q-learning with n_critic-1 roll-outs of running cost
         elif (ctrl_mode == 3) or (ctrl_mode == 4):
             for k in range(N - 1):
-                J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
+                J += self.gamma**k * self.running_cost(Y[k, :], myU[k, :])
             J += W @ self._phi(Y[-1, :], myU[-1, :])
-        elif (ctrl_mode == 5) or (ctrl_mode == 6):     # RL: (normalized) stacked Q-learning
+        
+        elif (ctrl_mode == 5) or (ctrl_mode == 6):     
+            # RL: (normalized) stacked Q-learning
             for k in range(N):
                 Q = W @ self._phi(Y[k, :], myU[k, :])
                 J += 1 / N * Q
@@ -882,13 +775,9 @@ class Controller(utilities.Generic):
 
     def _actor(self, y, u_init, N, W, delta, ctrl_mode):
         """
-        See class documentation. Parameter `delta` here is a shorthand for `pred_step_size`
+        See class documentation. Parameter `delta` here is a shorthand for `pred_step_size`    
 
-        Customization
-        -------------         
-
-        This method normally should not be altered, adjust `controller._actor_cost`, `controller._actor` instead.
-        The only customization you might want here is regarding the optimization algorithm
+        This method normally should not be altered. The only customization you might want here is regarding the optimization algorithm
 
         """
 
@@ -913,28 +802,20 @@ class Controller(utilities.Generic):
             if isGlobOpt:
                 minimizer_kwargs = {
                     'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                U = basinhopping(lambda U: self._actor_cost(
+                U = basinhopping(lambda U: self._get_actor_cost(
                     U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
+            
             else:
-                U = minimize(lambda U: self._actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
+                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
                              method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
             U = myu_init
 
-
         return U[:self.dim_input]    # Return first action
 
     def compute_action(self, t, y):
-        """
-        Main method. See class documentation
-
-        Customization
-        -------------         
-
-        Add your modes, that you introduced in `controller._actor_cost`, here
-
-        """
+        """ Main method. """
 
         time_in_sample = t - self.ctrl_clock
 
@@ -984,7 +865,6 @@ class Controller(utilities.Generic):
                 elif not self.is_prob_noise and (self.ctrl_mode in (4, 6)):
                     u = self._actor(y, self.u_init, self.n_actor,
                                     W, self.pred_step_size, self.mode)
-
 
                 elif self.ctrl_mode in (3, 5):
                     u = self._actor(y, self.u_init, self.n_actor,
@@ -1274,11 +1154,13 @@ class Simulation(utilities.Generic):
         # initial value of disturbance
         self.q0 = np.zeros(dimDisturb)
 
-        # sensitivity of the solver. The lower the values, the more accurate the simulation results are
+        # sensitivity of the solver. The lower the values, the more accurate
+        # the simulation results are
         self.a_tol = a_tol
         self.r_tol = r_tol
 
-        # x and y limits of scatter plot. Used so far rather for visualization only, but may be integrated into the actor as constraints
+        # x and y limits of scatter plot. Used so far rather for visualization
+        # only, but may be integrated into the actor as constraints
         self.x_min = x_min
         self.x_max = x_max
         self.y_min = y_min
@@ -1348,14 +1230,14 @@ class Simulation(utilities.Generic):
         Main interface for different agents
 
         """
-        
-        if mode==0: # Manual control
+
+        if mode == 0:  # Manual control
             u = uMan
-        elif mode==-1: # Nominal controller
+        elif mode == -1:  # Nominal controller
             u = nominalCtrl.compute_action(t, y)
-        elif mode > 0: # Optimal controller
+        elif mode > 0:  # Optimal controller
             u = agent.compute_action(t, y)
-            
+
         return u
 
     def create_simulator(self, closed_loop):
@@ -1420,9 +1302,9 @@ class Simulation(utilities.Generic):
 
         # Cost
         self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
-            0, 1e4 * agent.rcost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
+            0, 1e4 * agent.running_cost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
 
-        r = agent.rcost(y0, self.u0)
+        r = agent.running_cost(y0, self.u0)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
         self.text_icost_handle = self.sim_fig.text(
             0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
@@ -1537,11 +1419,11 @@ class Simulation(utilities.Generic):
             if anm.running is True:
                 anm.event_source.stop()
                 anm.running = False
-                
+
             elif anm.running is False:
                 anm.event_source.start()
                 anm.running = True
-            
+
         elif event.key == 'q':
             plt.close('all')
             print("Program exit")
@@ -1549,8 +1431,9 @@ class Simulation(utilities.Generic):
 
     def _logDataRow(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
         with open(dataFile, 'a', newline='') as outfile:
-                writer = csv.writer(outfile)
-                writer.writerow([t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]])
+            writer = csv.writer(outfile)
+            writer.writerow([t, xCoord, yCoord, alpha,
+                             v, omega, icost, u[0], u[1]])
 
     def _logdata(self, Nruns, save=False):
         dataFiles = [None] * Nruns
@@ -1559,29 +1442,34 @@ class Simulation(utilities.Generic):
             cwd = os.getcwd()
             datafolder = '/data'
             dataFolder_path = cwd + datafolder
-            
+
             # create data dir
-            pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True) 
+            pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True)
 
             date = datetime.now().strftime("%Y-%m-%d")
             time = datetime.now().strftime("%Hh%Mm%Ss")
             dataFiles = [None] * Nruns
             for k in range(0, Nruns):
-                dataFiles[k] = dataFolder_path + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+                dataFiles[k] = dataFolder_path + '/RLsim__' + date + \
+                    '__' + time + '__run{run:02d}.csv'.format(run=k + 1)
                 with open(dataFiles[k], 'w', newline='') as outfile:
                     writer = csv.writer(outfile)
-                    writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'] )
+                    writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
+                                     'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'])
 
         return dataFiles
 
     def _printSimStep(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
-        # alphaDeg = alpha/np.pi*180      
-        
-        headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]']  
-        dataRow = [t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]]  
-        rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f', '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')   
-        table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
-        
+        # alphaDeg = alpha/np.pi*180
+
+        headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
+                     'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]']
+        dataRow = [t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]]
+        rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f',
+                     '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')
+        table = tabulate([headerRow, dataRow], floatfmt=rowFormat,
+                         headers='firstrow', tablefmt='grid')
+
         print(table)
 
     def _wrapper_take_steps(self, k, *args):
@@ -1616,11 +1504,11 @@ class Simulation(utilities.Generic):
 
         if self.is_log_data:
             self._logDataRow(self.current_data_file, t, x_coord,
-                       y_coord, alpha, v, omega, icost.val, u)
+                             y_coord, alpha, v, omega, icost.val, u)
 
         if animate == True:
             alpha_deg = alpha / np.pi * 180
-            r = agent.rcost(y, u)
+            r = agent.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
             self._update_scatter(text_time, ksi, alpha_deg,
                                  x_coord, y_coord, t, alpha, r, icost, u)
