@@ -22,6 +22,7 @@ Buffers are updated from bottom
 """
 
 # imports
+from IPython.display import HTML
 import os
 import pathlib
 import warnings
@@ -110,7 +111,7 @@ class System(utilities.Generic):
                  sigma_q=None,
                  mu_q=None,
                  tau_q=None):
-        """system """
+        """ system """
         self.dim_state = dim_state
         self.dim_input = dim_input
         self.dim_output = dim_output
@@ -119,7 +120,7 @@ class System(utilities.Generic):
         self.I = I
         self.control_bounds = np.array([[f_min, f_max], [m_min, m_max]])
 
-        """disturbance"""
+        """ disturbance """
         self.is_disturb = is_disturb
         self.sigma_q = sigma_q
         self.mu_q = mu_q
@@ -142,6 +143,9 @@ class System(utilities.Generic):
     @staticmethod
     def get_next_state(t, x, u, q, m, I, dim_state, is_disturb):
         """ Right-hand side of the system internal dynamics
+            
+            Generalized derivative
+            # dynamics 
 
             x_t+1 = f(x_t, u_t, q_t)
 
@@ -270,7 +274,7 @@ class System(utilities.Generic):
                 sys.receive_action(u)
 
         """
-
+        # environment + disturbance
         full_state = np.zeros(self._dim_full_state)
 
         x = ksi[0:self.dim_state]
@@ -1090,6 +1094,8 @@ class NominalController(utilities.Generic):
         else:
             return self.u_curr
 
+import gc
+
 class Simulation(utilities.Generic):
     """class to create and run simulation."""
 
@@ -1249,6 +1255,7 @@ class Simulation(utilities.Generic):
                                       rtol=self.r_tol)
         return simulator
 
+    # create graph
     def _create_figure(self, agent):
         y0 = System.get_curr_state(self.system_state)
         alpha_deg0 = self.alpha / 2 / np.pi
@@ -1365,6 +1372,7 @@ class Simulation(utilities.Generic):
     def _update_text(self, text_handle, newText):
         text_handle.set_text(newText)
 
+    # update artists # update graphical artists
     def _update_scatter(self, text_time, ksi, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
         self._update_text(self.text_time_handle, text_time)
         # Update the robot's track on the plot
@@ -1387,21 +1395,6 @@ class Simulation(utilities.Generic):
         # Control
         for (line, uSingle) in zip(self.ctrl_lines, u):
             self._update_line(line, t, uSingle)
-
-    def _onKeyPress(self, event, anm):
-        if event.key == ' ':
-            if anm.running is True:
-                anm.event_source.stop()
-                anm.running = False
-
-            elif anm.running is False:
-                anm.event_source.start()
-                anm.running = True
-
-        elif event.key == 'q':
-            plt.close('all')
-            print("Program exit")
-            os._exit(1)
 
     def _logDataRow(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
         with open(dataFile, 'a', newline='') as outfile:
@@ -1446,45 +1439,11 @@ class Simulation(utilities.Generic):
 
         print(table)
 
-    def _wrapper_take_steps(self, k, *args):
-        _, _, _, simulator, _ = args
-        t = simulator.t
-
-        if t < self.t1:
-            return self._take_step(*args)
-        else:
-            print("Program exit")
-            os._exit(1)
-
-    def _reset_sim(self, agent, nominal_ctrl, simulator):
-        if self.is_print_sim_step:
-            print('.....................................Run {run:2d} done.....................................'.format(
-                run=self.current_run))
-
-        self.current_run += 1
-
-        if self.current_run > self.n_runs:
-            return
-
-        if self.is_log_data:
-            self.current_data_file = self.data_files[self.current_run - 1]
-
-        # Reset simulator
-        simulator.status = 'running'
-        simulator.t = self.t0
-        simulator.y = self.ksi0
-
-        # Reset controller
-        if self.ctrl_mode > 0:
-            agent.reset(self.t0)
-        else:
-            nominal_ctrl.reset(self.t0)
-
     def _take_step(self, sys, agent, nominal_ctrl, simulator, animate=False):
         simulator.step()
 
         t = simulator.t
-        ksi = simulator.y
+        ksi = simulator.y # ksi = full_state
 
         x = ksi[0:self.dim_state]
         y = sys.get_curr_state(x)
@@ -1519,6 +1478,66 @@ class Simulation(utilities.Generic):
         if animate == True:
             return self.sol_scatter
 
+    def _reset_sim(self, agent, nominal_ctrl, simulator):
+        if self.is_print_sim_step:
+            print('.....................................Run {run:2d} done.....................................'.format(
+                run=self.current_run))
+
+        if self.current_run < self.n_runs:
+            return
+
+            self.current_run += 1
+
+            if self.is_log_data:
+                self.current_data_file = self.data_files[self.current_run - 1]
+
+            # Reset simulator
+            simulator.status = 'running'
+            simulator.t = self.t0
+            simulator.y = self.ksi0
+
+            # Reset controller
+            if self.ctrl_mode > 0:
+                agent.reset(self.t0)
+            else:
+                nominal_ctrl.reset(self.t0)
+
+
+    def graceful_exit(self):
+        plt.close('all') 
+        # graceful exit from Jupyter
+        try:
+            __IPYTHON__
+
+        # graceful exit from terminal
+        except NameError:
+            print("Program exit")
+            sys.exit()
+
+    def _wrapper_take_steps(self, k, *args):
+        _, agent, nominal_ctrl, simulator, _ = args
+        t = simulator.t
+
+        if t < self.t1:
+            return self._take_step(*args)
+        else:
+            self._reset_sim(agent, nominal_ctrl, simulator)
+
+    def _onKeyPress(self, event, anm, args):
+        if event.key == ' ':
+            if anm.running is True:
+                anm.event_source.stop()
+                anm.running = False
+
+            elif anm.running is False:
+                anm.event_source.start()
+                anm.running = True
+
+        elif event.key == 'q':
+            _, agent, nominal_ctrl, simulator, _ = args
+            self._reset_sim(agent, nominal_ctrl, simulator)
+            self.graceful_exit()
+
     def run_simulation(self, sys, agent, nominal_ctrl, simulator):
         if self.is_visualization == 0:
             self.current_run = 1
@@ -1549,6 +1568,7 @@ class Simulation(utilities.Generic):
 
             animate = True
             fargs = (sys, agent, nominal_ctrl, simulator, animate)
+
             anm = animation.FuncAnimation(self.sim_fig,
                                           self._wrapper_take_steps,
                                           fargs=fargs,
@@ -1557,6 +1577,6 @@ class Simulation(utilities.Generic):
 
             anm.running = True
             self.sim_fig.canvas.mpl_connect(
-                'key_press_event', lambda event: self._onKeyPress(event, anm))
+                'key_press_event', lambda event: self._onKeyPress(event, anm, fargs))
             self.sim_fig.tight_layout()
-            plt.show()
+            plt.show(aspect='auto')
