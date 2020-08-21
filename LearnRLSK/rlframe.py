@@ -775,7 +775,7 @@ class Controller(utilities.Generic):
 
     def _actor(self, y, u_init, N, W, delta, ctrl_mode):
         """
-        See class documentation. Parameter `delta` here is a shorthand for `pred_step_size`    
+        Parameter `delta` here is a shorthand for `pred_step_size`    
 
         This method normally should not be altered. The only customization you might want here is regarding the optimization algorithm
 
@@ -1005,8 +1005,7 @@ class NominalController(utilities.Generic):
 
         References
         ----------
-        .. [1] Watanabe, K., Yamamoto, T., Izumi, K., & Maeyama, S. (2010, October). Underactuated control for nonholonomic mobile robots by using double
-               integrator model and invariant manifold theory. In 2010 IEEE/RSJ International Conference on Intelligent Robots and Systems (pp. 2862-2867)
+        .. [1] Watanabe, K., Yamamoto, T., Izumi, K., & Maeyama, S. (2010, October). Underactuated control for nonholonomic mobile robots by using double integrator model and invariant manifold theory. In 2010 IEEE/RSJ International Conference on Intelligent Robots and Systems (pp. 2862-2867)
 
         """
 
@@ -1091,7 +1090,6 @@ class NominalController(utilities.Generic):
         else:
             return self.u_curr
 
-
 class Simulation(utilities.Generic):
     """class to create and run simulation."""
 
@@ -1102,7 +1100,7 @@ class Simulation(utilities.Generic):
                  initial_x=5,
                  initial_y=5,
                  t0=0,
-                 t1=100,
+                 t1=60,
                  n_runs=1,
                  a_tol=1e-5,
                  r_tol=1e-3,
@@ -1390,30 +1388,6 @@ class Simulation(utilities.Generic):
         for (line, uSingle) in zip(self.ctrl_lines, u):
             self._update_line(line, t, uSingle)
 
-    def _reset_sim(self, agent, nominal_ctrl, simulator):
-        if self.is_print_sim_step:
-            print('.....................................Run {run:2d} done.....................................'.format(
-                run=self.current_run))
-
-        self.current_run += 1
-
-        if self.current_run > self.Nruns:
-            return
-
-        if self.is_log_data:
-            self.current_data_file = self.data_files[self.current_run - 1]
-
-        # Reset simulator
-        simulator.status = 'running'
-        simulator.t = self.t0
-        simulator.y = self.ksi0
-
-        # Reset controller
-        if self.ctrl_mode > 0:
-            agent.reset(self.t0)
-        else:
-            nominal_ctrl.reset(self.t0)
-
     def _onKeyPress(self, event, anm):
         if event.key == ' ':
             if anm.running is True:
@@ -1473,10 +1447,40 @@ class Simulation(utilities.Generic):
         print(table)
 
     def _wrapper_take_steps(self, k, *args):
-        return self._take_step(*args)
+        _, _, _, simulator, _ = args
+        t = simulator.t
+
+        if t < self.t1:
+            return self._take_step(*args)
+        else:
+            print("Program exit")
+            os._exit(1)
+
+    def _reset_sim(self, agent, nominal_ctrl, simulator):
+        if self.is_print_sim_step:
+            print('.....................................Run {run:2d} done.....................................'.format(
+                run=self.current_run))
+
+        self.current_run += 1
+
+        if self.current_run > self.n_runs:
+            return
+
+        if self.is_log_data:
+            self.current_data_file = self.data_files[self.current_run - 1]
+
+        # Reset simulator
+        simulator.status = 'running'
+        simulator.t = self.t0
+        simulator.y = self.ksi0
+
+        # Reset controller
+        if self.ctrl_mode > 0:
+            agent.reset(self.t0)
+        else:
+            nominal_ctrl.reset(self.t0)
 
     def _take_step(self, sys, agent, nominal_ctrl, simulator, animate=False):
-        # take step
         simulator.step()
 
         t = simulator.t
@@ -1505,28 +1509,12 @@ class Simulation(utilities.Generic):
         if self.is_log_data:
             self._logDataRow(self.current_data_file, t, x_coord,
                              y_coord, alpha, v, omega, icost.val, u)
-
         if animate == True:
             alpha_deg = alpha / np.pi * 180
             r = agent.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
             self._update_scatter(text_time, ksi, alpha_deg,
                                  x_coord, y_coord, t, alpha, r, icost, u)
-
-        # Run done
-        if t >= self.t1:
-            self._reset_sim(agent, nominal_ctrl, simulator)
-            icost = 0
-
-            for item in self.lines:
-                if item != self.traj_line:
-                    if isinstance(item, list):
-                        for subitem in item:
-                            self._reset_line(subitem)
-                    else:
-                        self._reset_line(item)
-
-            self._update_line(self.traj_line, np.nan, np.nan)
 
         if animate == True:
             return self.sol_scatter
@@ -1536,8 +1524,25 @@ class Simulation(utilities.Generic):
             self.current_run = 1
             self.current_data_file = data_files[0]
 
-            while True:
+            t = simulator.t
+            
+            while t < self.t1:
                 self._take_step(sys, agent, nominal_ctrl, simulator)
+                t += 1
+
+            else:
+                self._reset_sim(agent, nominal_ctrl, simulator)
+                icost = 0
+
+                for item in self.lines:
+                    if item != self.traj_line:
+                        if isinstance(item, list):
+                            for subitem in item:
+                                self._reset_line(subitem)
+                        else:
+                            self._reset_line(item)
+
+                self._update_line(self.traj_line, np.nan, np.nan)
 
         else:
             self.sim_fig = self._create_figure(agent)
