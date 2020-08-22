@@ -1094,7 +1094,8 @@ class NominalController(utilities.Generic):
         else:
             return self.u_curr
 
-import gc
+
+from matplotlib.figure import figaspect
 
 class Simulation(utilities.Generic):
     """class to create and run simulation."""
@@ -1105,6 +1106,8 @@ class Simulation(utilities.Generic):
                  dimDisturb=2,
                  initial_x=5,
                  initial_y=5,
+                 fig_width=8,
+                 fig_height=8,
                  t0=0,
                  t1=60,
                  n_runs=1,
@@ -1139,6 +1142,7 @@ class Simulation(utilities.Generic):
         self.t1 = t1
 
         # number of episodes
+        self.current_run = 0
         self.n_runs = n_runs
 
         self.initial_x = initial_x
@@ -1169,6 +1173,10 @@ class Simulation(utilities.Generic):
         self.x_max = x_max
         self.y_min = y_min
         self.y_max = y_max
+
+        # matplotlib fig size in inches
+        self.fig_width = fig_width
+        self.fig_height = fig_height
 
         """ controller sampling time.
         The system itself is continuous as a physical process while the controller is digital.
@@ -1262,7 +1270,7 @@ class Simulation(utilities.Generic):
 
         plt.close('all')
 
-        self.sim_fig = plt.figure(figsize=(10, 10))
+        self.sim_fig = plt.figure(figsize=(self.fig_width, self.fig_height))
 
         # xy plane
         self.xy_plane_axes = self.sim_fig.add_subplot(221,
@@ -1311,6 +1319,7 @@ class Simulation(utilities.Generic):
 
         r = agent.running_cost(y0, self.u0)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
+        
         self.text_icost_handle = self.sim_fig.text(
             0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
         self.r_cost_line, = self.cost_axes.plot(
@@ -1354,7 +1363,6 @@ class Simulation(utilities.Generic):
     def _initialize_figure(self):
         self.sol_scatter = self.xy_plane_axes.scatter(
             self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
-        self.current_run = 1
 
         return self.sol_scatter
 
@@ -1483,45 +1491,32 @@ class Simulation(utilities.Generic):
             print('.....................................Run {run:2d} done.....................................'.format(
                 run=self.current_run))
 
-        if self.current_run < self.n_runs:
-            return
+        if self.is_log_data:
+            self.current_data_file = self.data_files[self.current_run - 1]
 
-            self.current_run += 1
+        # Reset simulator
+        simulator.status = 'running'
+        simulator.t = self.t0
+        simulator.y = self.ksi0
 
-            if self.is_log_data:
-                self.current_data_file = self.data_files[self.current_run - 1]
-
-            # Reset simulator
-            simulator.status = 'running'
-            simulator.t = self.t0
-            simulator.y = self.ksi0
-
-            # Reset controller
-            if self.ctrl_mode > 0:
-                agent.reset(self.t0)
-            else:
-                nominal_ctrl.reset(self.t0)
+        # Reset controller
+        if self.ctrl_mode > 0:
+            agent.reset(self.t0)
+        else:
+            nominal_ctrl.reset(self.t0)
 
 
     def graceful_exit(self):
         plt.close('all') 
-        # graceful exit from Jupyter
+        # graceful exit from Jupyter notebook
         try:
             __IPYTHON__
+            return None
 
         # graceful exit from terminal
         except NameError:
             print("Program exit")
             sys.exit()
-
-    def _wrapper_take_steps(self, k, *args):
-        _, agent, nominal_ctrl, simulator, _ = args
-        t = simulator.t
-
-        if t < self.t1:
-            return self._take_step(*args)
-        else:
-            self._reset_sim(agent, nominal_ctrl, simulator)
 
     def _onKeyPress(self, event, anm, args):
         if event.key == ' ':
@@ -1538,30 +1533,46 @@ class Simulation(utilities.Generic):
             self._reset_sim(agent, nominal_ctrl, simulator)
             self.graceful_exit()
 
+    def _wrapper_take_steps(self, k, *args):
+        _, agent, nominal_ctrl, simulator, _ = args
+        t = simulator.t
+
+        if self.current_run < self.n_runs:
+            if t < self.t1:
+                return self._take_step(*args)
+            else:
+                self.current_run += 1
+                self._reset_sim(agent, nominal_ctrl, simulator)
+        else:
+            self.graceful_exit()
+
     def run_simulation(self, sys, agent, nominal_ctrl, simulator):
         if self.is_visualization == 0:
-            self.current_run = 1
             self.current_data_file = data_files[0]
 
             t = simulator.t
             
-            while t < self.t1:
-                self._take_step(sys, agent, nominal_ctrl, simulator)
-                t += 1
+            while self.current_run < self.n_runs:
+                while t < self.t1:
+                    self._take_step(sys, agent, nominal_ctrl, simulator)
+                    t += 1
 
+                else:
+                    self._reset_sim(agent, nominal_ctrl, simulator)
+                    icost = 0
+
+                    for item in self.lines:
+                        if item != self.traj_line:
+                            if isinstance(item, list):
+                                for subitem in item:
+                                    self._reset_line(subitem)
+                            else:
+                                self._reset_line(item)
+
+                    self._update_line(self.traj_line, np.nan, np.nan)
+                self.current_run += 1
             else:
-                self._reset_sim(agent, nominal_ctrl, simulator)
-                icost = 0
-
-                for item in self.lines:
-                    if item != self.traj_line:
-                        if isinstance(item, list):
-                            for subitem in item:
-                                self._reset_line(subitem)
-                        else:
-                            self._reset_line(item)
-
-                self._update_line(self.traj_line, np.nan, np.nan)
+                self.graceful_exit()
 
         else:
             self.sim_fig = self._create_figure(agent)
@@ -1579,4 +1590,4 @@ class Simulation(utilities.Generic):
             self.sim_fig.canvas.mpl_connect(
                 'key_press_event', lambda event: self._onKeyPress(event, anm, fargs))
             self.sim_fig.tight_layout()
-            plt.show(aspect='auto')
+            plt.show()
