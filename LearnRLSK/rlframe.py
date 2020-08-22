@@ -316,6 +316,12 @@ class Controller(utilities.Generic):
     t0 -- Initial value of the controller's internal clock
 
     sample_time --Controller's sampling time (in seconds)
+        The system itself is continuous as a physical process while the controller is digital.
+
+        Things to note:
+            * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
+            * smaller sampling times lead to higher computation times
+            * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
 
     prob_noise_pow -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
 
@@ -382,6 +388,8 @@ class Controller(utilities.Generic):
                  m=10,
                  I=1,
                  t0=0,
+                 initial_x=5,
+                 initial_y=5,
                  f_min=-5,
                  f_max=5,
                  m_min=-1,
@@ -407,6 +415,8 @@ class Controller(utilities.Generic):
         self.dim_state = dim_state
         self.m = m
         self.I = I
+        self.initial_x = initial_x
+        self.initial_y = initial_y
 
         """ disturbance """
         self.is_disturb = is_disturb
@@ -466,9 +476,22 @@ class Controller(utilities.Generic):
         """control mode"""
         self.ctrl_mode = ctrl_mode
         self.ctrl_clock = t0
+
+        """ controller sampling time.
+        The system itself is continuous as a physical process while the controller is digital.
+
+            Things to note:
+                * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
+                * smaller sampling times lead to higher computation times
+                * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
+        """
         self.sample_time = sample_time
 
         # manual control
+        self.f_min = f_min
+        self.f_max = f_max
+        self.m_min = m_min
+        self.m_max = m_max
         self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
         self.min_bounds = np.array(self.ctrl_bnds[:, 0])
         self.max_bounds = np.array(self.ctrl_bnds[:, 1])
@@ -1101,12 +1124,17 @@ class NominalController(utilities.Generic):
 
 
 class Simulation(utilities.Generic):
-    """class to create and run simulation."""
+    """class to create and run simulation.
+
+    a_tol, r_tol -- sensitivity of the solver
+
+
+    """
 
     def __init__(self,
-                 dim_state=5,
-                 dim_input=2,
-                 dimDisturb=2,
+                 system,
+                 controller,
+                 nominal_ctrl,
                  fig_width=8,
                  fig_height=8,
                  t0=0,
@@ -1118,22 +1146,23 @@ class Simulation(utilities.Generic):
                  x_max=10,
                  y_min=-10,
                  y_max=10,
-                 sample_time=0.05,
                  f_man=-3,
                  n_man=-1,
-                 f_min=-5,
-                 f_max=5,
-                 m_min=-1,
-                 m_max=1,
                  is_log_data=0,
                  is_visualization=False,
                  is_print_sim_step=False,
                  is_dyn_ctrl=0,
                  ctrl_mode=5):
+
+        self.system = system
+        self.controller = controller
+        self.nominal_ctrl = nominal_ctrl
+
+
         """system """
-        self.dim_state = dim_state
-        self.dim_input = dim_input
-        self.dimDisturb = dimDisturb
+        self.dim_state = system.dim_state
+        self.dim_input = system.dim_input
+        self.dim_disturb = system.dim_disturb
 
         """simulation"""
         # start time of episode
@@ -1145,22 +1174,22 @@ class Simulation(utilities.Generic):
         # number of episodes
         self.n_runs = n_runs
 
-        self.initial_x = 5
-        self.initial_y = 5
+        self.initial_x = controller.initial_x
+        self.initial_y = controller.initial_y
         self.alpha = np.pi / 2
 
-        # initial value of control
-        self.u0 = np.zeros(dim_input)
-
-        # initial value of disturbance
-        self.q0 = np.zeros(dimDisturb)
-
         # initial values of state
-        initial_state = np.zeros(dim_state)
-        initial_state[0] = self.initial_x
-        initial_state[1] = self.initial_y
+        initial_state = np.zeros(system.dim_state)
+        initial_state[0] = controller.initial_x
+        initial_state[1] = controller.initial_y
         initial_state[2] = self.alpha
         self.system_state = initial_state
+
+        # initial value of control
+        self.u0 = np.zeros(system.dim_input)
+
+        # initial value of disturbance
+        self.q0 = np.zeros(system.dim_disturb)
 
         # Static or dynamic controller
         self.is_dyn_ctrl = is_dyn_ctrl
@@ -1170,10 +1199,17 @@ class Simulation(utilities.Generic):
         else:
             self.full_state = np.concatenate([self.system_state, self.q0])
 
-        # sensitivity of the solver. The lower the values, the more accurate
-        # the simulation results are
-        self.a_tol = a_tol
-        self.r_tol = r_tol
+        closed_loop = system.closed_loop
+        sample_time = controller.sample_time
+
+        self.simulator = sp.integrate.RK45(closed_loop,
+                                      self.t0,
+                                      self.full_state,
+                                      self.t1,
+                                      max_step=sample_time / 2,
+                                      first_step=1e-6,
+                                      atol=a_tol,
+                                      rtol=r_tol)
 
         # x and y limits of scatter plot. Used so far rather for visualization
         # only, but may be integrated into the actor as constraints
@@ -1186,30 +1222,7 @@ class Simulation(utilities.Generic):
         self.fig_width = fig_width
         self.fig_height = fig_height
 
-        """ controller sampling time.
-        The system itself is continuous as a physical process while the controller is digital.
-
-            Things to note:
-                * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
-                * smaller sampling times lead to higher computation times
-                * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
-        """
-        self.sample_time = sample_time
-
-        """control mode
-        
-            Modes with online model estimation are experimental
-            
-            0     - manual constant control (only for basic testing)
-            -1    - nominal parking controller (for benchmarking optimal controllers)
-            1     - model-predictive control (MPC). Prediction via discretized true model
-            2     - adaptive MPC. Prediction via estimated model
-            3     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via discretized true model
-            4     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via estimated model
-            5     - RL: stacked Q-learning. Prediction via discretized true model
-            6     - RL: stacked Q-learning. Prediction via estimated model
-        """
-        self.ctrl_mode = ctrl_mode
+        self.ctrl_mode = controller.ctrl_mode
 
         # manual control
         self.f_man = f_man
@@ -1217,10 +1230,10 @@ class Simulation(utilities.Generic):
         self.u_man = np.array([f_man, n_man])
 
         # control constraints
-        self.f_min = f_min
-        self.f_max = f_max
-        self.m_min = m_min
-        self.m_max = m_max
+        self.f_min = controller.f_min
+        self.f_max = controller.f_max
+        self.m_min = controller.m_min
+        self.m_max = controller.m_max
 
         self.control_bounds = np.array(
             [[self.f_min, self.f_max], [self.m_min, self.m_max]])
@@ -1230,8 +1243,6 @@ class Simulation(utilities.Generic):
         self.is_log_data = is_log_data
         self.is_visualization = is_visualization
         self.is_print_sim_step = is_print_sim_step
-
-
 
         # extras
         self.data_files = self._logdata(self.n_runs, save=self.is_log_data)
@@ -1264,16 +1275,19 @@ class Simulation(utilities.Generic):
 
         return u
 
-    def create_simulator(self, closed_loop):
-        simulator = sp.integrate.RK45(closed_loop,
-                                      self.t0,
-                                      self.full_state,
-                                      self.t1,
-                                      max_step=self.sample_time / 2,
-                                      first_step=1e-6,
-                                      atol=self.a_tol,
-                                      rtol=self.r_tol)
-        return simulator
+    # def create_simulator(self, system, controller):
+    #     closed_loop = system.closed_loop
+    #     sample_time = controller.sample_time
+
+    #     simulator = sp.integrate.RK45(closed_loop,
+    #                                   self.t0,
+    #                                   self.full_state,
+    #                                   self.t1,
+    #                                   max_step=sample_time / 2,
+    #                                   first_step=1e-6,
+    #                                   atol=self.a_tol,
+    #                                   rtol=self.r_tol)
+    #     return simulator
 
     # create graph
     def _create_figure(self, agent):
@@ -1562,22 +1576,22 @@ class Simulation(utilities.Generic):
             elif self.run_in_window is True:
                 self.graceful_exit(plt_close = False)
 
-    def run_simulation(self, sys, agent, nominal_ctrl, simulator, run_in_window = False):
+    def run_simulation(self, run_in_window = False):
         self.run_in_window = run_in_window
         self.current_run = 1
 
         if self.is_visualization:
             self.current_data_file = data_files[0]
 
-            t = simulator.t
+            t = self.simulator.t
             
             while self.current_run <= self.n_runs:
                 while t < self.t1:
-                    self._take_step(sys, agent, nominal_ctrl, simulator)
+                    self._take_step(self.system, self.controller, self.nominal_ctrl, self.simulator)
                     t += 1
 
                 else:
-                    self._reset_sim(agent, nominal_ctrl, simulator)
+                    self._reset_sim(self.controller, self.nominal_ctrl, self.simulator)
                     icost = 0
 
                     for item in self.lines:
@@ -1594,10 +1608,10 @@ class Simulation(utilities.Generic):
                 self.graceful_exit()
 
         else:
-            self.sim_fig = self._create_figure(agent)
+            self.sim_fig = self._create_figure(self.controller)
 
             animate = True
-            fargs = (sys, agent, nominal_ctrl, simulator, animate)
+            fargs = (self.system, self.controller, self.nominal_ctrl, self.simulator, animate)
 
             anm = animation.FuncAnimation(self.sim_fig,
                                           self._wrapper_take_steps,
