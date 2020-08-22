@@ -96,11 +96,11 @@ def main(args=None):
         parser.add_argument('-is_log_data', type=int,
                             default=0, help="Log data?")
 
-        parser.add_argument('-is_visualization', type=int,
-                            default=1, help="Visualize data?")
+        parser.add_argument('-is_visualization', type=bool,
+                            default=True, help="Visualize data?")
 
-        parser.add_argument('-is_print_sim_step', type=int,
-                            default=1, help="Print simulation steps?")
+        parser.add_argument('-is_print_sim_step', type=bool,
+                            default=True, help="Print simulation steps?")
 
         parser.add_argument('-is_disturb', type=int,
                             default=0, help="description")

@@ -251,7 +251,7 @@ class System(utilities.Generic):
         """ Receive control action from agent. """
         self.u = u
 
-    def closed_loop(self, t, ksi):
+    def closed_loop(self, t, full_state):
         """
         Closed loop of the system.
         This function is designed for use with ODE solvers.
@@ -259,29 +259,29 @@ class System(utilities.Generic):
 
         Examples
         --------
-        Assuming `sys` is a `system`-object, `t0, t1` - start and stop times, and `ksi0` - a properly defined initial condition:
+        Assuming `sys` is a `system`-object, `t0, t1` - start and stop times, and `full_state` - a properly defined initial condition:
 
         >>> import scipy as sp
-        >>> simulator = sp.integrate.RK45(sys.closed_loop, t0, ksi0, t1)
+        >>> simulator = sp.integrate.RK45(sys.closed_loop, t0, full_state, t1)
         >>> while t < t1:
                 simulator.step()
                 t = simulator.t
-                ksi = simulator.y
-                x = ksi[0:sys.dim_state]
+                full_state = simulator.y
+                x = full_state[0:sys.dim_state]
                 y = sys.get_curr_state(x)
                 u = myController(y)
                 sys.receive_action(u)
 
         """
         # environment + disturbance
-        full_state = np.zeros(self._dim_full_state)
+        new_full_state = np.zeros(self._dim_full_state)
 
-        x = ksi[0:self.dim_state]
-        q = ksi[self.dim_state:]
+        x = full_state[0:self.dim_state]
+        q = full_state[self.dim_state:]
 
         if self.is_dyn_ctrl:
-            u = ksi[-self.dim_input:]
-            full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
+            u = full_state[-self.dim_input:]
+            new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
         else:
             # Fetch the control action stored in the system
             u = self.u
@@ -291,16 +291,16 @@ class System(utilities.Generic):
                 u[k] = np.clip(u[k], self.control_bounds[k, 0],
                                self.control_bounds[k, 1])
 
-        full_state[0:self.dim_state] = System.get_next_state(
+        new_full_state[0:self.dim_state] = System.get_next_state(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.is_disturb:
-            full_state[self.dim_state:] = self._add_disturbance(t, q)
+            new_full_state[self.dim_state:] = self._add_disturbance(t, q)
 
         # Track system's state
         self._x = x
 
-        return full_state
+        return new_full_state
 
 
 class Controller(utilities.Generic):
@@ -379,8 +379,6 @@ class Controller(utilities.Generic):
                  dim_input=2,
                  dim_output=5,
                  ctrl_mode=1,
-                 initial_x=5,
-                 initial_y=5,
                  m=10,
                  I=1,
                  t0=0,
@@ -416,8 +414,8 @@ class Controller(utilities.Generic):
         # initial values of the system's state
         alpha = np.pi / 2
         initial_state = np.zeros(dim_state)
-        initial_state[0] = initial_x
-        initial_state[1] = initial_y
+        initial_state[0] = 5
+        initial_state[1] = 5
         initial_state[2] = alpha
         self.system_state = initial_state
 
@@ -1109,8 +1107,6 @@ class Simulation(utilities.Generic):
                  dim_state=5,
                  dim_input=2,
                  dimDisturb=2,
-                 initial_x=5,
-                 initial_y=5,
                  fig_width=8,
                  fig_height=8,
                  t0=0,
@@ -1122,7 +1118,7 @@ class Simulation(utilities.Generic):
                  x_max=10,
                  y_min=-10,
                  y_max=10,
-                 dt=0.05,
+                 sample_time=0.05,
                  f_man=-3,
                  n_man=-1,
                  f_min=-5,
@@ -1130,8 +1126,8 @@ class Simulation(utilities.Generic):
                  m_min=-1,
                  m_max=1,
                  is_log_data=0,
-                 is_visualization=1,
-                 is_print_sim_step=1,
+                 is_visualization=False,
+                 is_print_sim_step=False,
                  is_dyn_ctrl=0,
                  ctrl_mode=5):
         """system """
@@ -1149,22 +1145,30 @@ class Simulation(utilities.Generic):
         # number of episodes
         self.n_runs = n_runs
 
-        self.initial_x = initial_x
-        self.initial_y = initial_y
+        self.initial_x = 5
+        self.initial_y = 5
         self.alpha = np.pi / 2
-
-        # initial values of state
-        initial_state = np.zeros(dim_state)
-        initial_state[0] = initial_x
-        initial_state[1] = initial_y
-        initial_state[2] = self.alpha
-        self.system_state = initial_state
 
         # initial value of control
         self.u0 = np.zeros(dim_input)
 
         # initial value of disturbance
         self.q0 = np.zeros(dimDisturb)
+
+        # initial values of state
+        initial_state = np.zeros(dim_state)
+        initial_state[0] = self.initial_x
+        initial_state[1] = self.initial_y
+        initial_state[2] = self.alpha
+        self.system_state = initial_state
+
+        # Static or dynamic controller
+        self.is_dyn_ctrl = is_dyn_ctrl
+
+        if self.is_dyn_ctrl:
+            self.full_state = np.concatenate([self.system_state, self.q0, self.u0])
+        else:
+            self.full_state = np.concatenate([self.system_state, self.q0])
 
         # sensitivity of the solver. The lower the values, the more accurate
         # the simulation results are
@@ -1188,9 +1192,9 @@ class Simulation(utilities.Generic):
             Things to note:
                 * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
                 * smaller sampling times lead to higher computation times
-                * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with dt and try achieve a trade-off between stability and computational performance
+                * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
         """
-        self.dt = dt
+        self.sample_time = sample_time
 
         """control mode
         
@@ -1227,19 +1231,23 @@ class Simulation(utilities.Generic):
         self.is_visualization = is_visualization
         self.is_print_sim_step = is_print_sim_step
 
-        # Static or dynamic controller
-        self.is_dyn_ctrl = is_dyn_ctrl
 
-        if self.is_dyn_ctrl:
-            self.ksi0 = np.concatenate([self.system_state, self.q0, self.u0])
-        else:
-            self.ksi0 = np.concatenate([self.system_state, self.q0])
 
         # extras
         self.data_files = self._logdata(self.n_runs, save=self.is_log_data)
 
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
+
+    def set_initial_coords(self, controller, initial_x, initial_y):
+        self.initial_x = initial_x
+        self.initial_y = initial_y
+        self.system_state[0] = initial_x
+        self.system_state[1] = initial_y
+        self.full_state[0] = initial_x
+        self.full_state[1] = initial_y
+        controller.initial_x = initial_x
+        controller.initial_y = initial_y
 
     def _ctrlSelector(self, t, y, uMan, nominalCtrl, agent, mode):
         """
@@ -1259,9 +1267,9 @@ class Simulation(utilities.Generic):
     def create_simulator(self, closed_loop):
         simulator = sp.integrate.RK45(closed_loop,
                                       self.t0,
-                                      self.ksi0,
+                                      self.full_state,
                                       self.t1,
-                                      max_step=self.dt / 2,
+                                      max_step=self.sample_time / 2,
                                       first_step=1e-6,
                                       atol=self.a_tol,
                                       rtol=self.r_tol)
@@ -1385,10 +1393,10 @@ class Simulation(utilities.Generic):
         text_handle.set_text(newText)
 
     # update artists # update graphical artists
-    def _update_scatter(self, text_time, ksi, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
+    def _update_scatter(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
         self._update_text(self.text_time_handle, text_time)
         # Update the robot's track on the plot
-        self._update_line(self.traj_line, *ksi[:2])
+        self._update_line(self.traj_line, *full_state[:2])
 
         self.robot_marker.rotate(alpha_deg)    # Rotate the robot on the plot
         self.sol_scatter.remove()
@@ -1434,7 +1442,7 @@ class Simulation(utilities.Generic):
                 with open(dataFiles[k], 'w', newline='') as outfile:
                     writer = csv.writer(outfile)
                     writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
-                                     'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]'])
+                                     'v [m/s]', 'omega [rad/s]', 'int r sample_time', 'F [N]', 'M [N m]'])
 
         return dataFiles
 
@@ -1442,7 +1450,7 @@ class Simulation(utilities.Generic):
         # alphaDeg = alpha/np.pi*180
 
         headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
-                     'v [m/s]', 'omega [rad/s]', 'int r dt', 'F [N]', 'M [N m]']
+                     'v [m/s]', 'omega [rad/s]', 'int r sample_time', 'F [N]', 'M [N m]']
         dataRow = [t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]]
         rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f',
                      '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')
@@ -1455,9 +1463,9 @@ class Simulation(utilities.Generic):
         simulator.step()
 
         t = simulator.t
-        ksi = simulator.y # ksi = full_state
+        full_state = simulator.y
 
-        x = ksi[0:self.dim_state]
+        x = full_state[0:self.dim_state]
         y = sys.get_curr_state(x)
 
         u = self._ctrlSelector(
@@ -1467,11 +1475,11 @@ class Simulation(utilities.Generic):
         agent.receive_sys_state(sys._x)
         agent.update_icost(y, u)
 
-        x_coord = ksi[0]
-        y_coord = ksi[1]
-        alpha = ksi[2]
-        v = ksi[3]
-        omega = ksi[4]
+        x_coord = full_state[0]
+        y_coord = full_state[1]
+        alpha = full_state[2]
+        v = full_state[3]
+        omega = full_state[4]
         icost = agent.i_cost_val
 
         if self.is_print_sim_step:
@@ -1484,7 +1492,7 @@ class Simulation(utilities.Generic):
             alpha_deg = alpha / np.pi * 180
             r = agent.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
-            self._update_scatter(text_time, ksi, alpha_deg,
+            self._update_scatter(text_time, full_state, alpha_deg,
                                  x_coord, y_coord, t, alpha, r, icost, u)
 
     def _reset_sim(self, agent, nominal_ctrl, simulator):
@@ -1498,7 +1506,7 @@ class Simulation(utilities.Generic):
         # Reset simulator
         simulator.status = 'running'
         simulator.t = self.t0
-        simulator.y = self.ksi0
+        simulator.y = self.full_state
 
         # Reset controller
         if self.ctrl_mode > 0:
@@ -1558,7 +1566,7 @@ class Simulation(utilities.Generic):
         self.run_in_window = run_in_window
         self.current_run = 1
 
-        if self.is_visualization == 0:
+        if self.is_visualization:
             self.current_data_file = data_files[0]
 
             t = simulator.t
