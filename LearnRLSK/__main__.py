@@ -167,7 +167,6 @@ def main(args=None):
         nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
 
     sim = Simulation(sys, agent, nominalCtrl, t1=30)
-    # simulator = sim.create_simulator(sys, agent)
     sim.run_simulation()
 
 
