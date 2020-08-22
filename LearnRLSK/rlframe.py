@@ -22,7 +22,6 @@ Buffers are updated from bottom
 """
 
 # imports
-from IPython.display import HTML
 import os
 import pathlib
 import warnings
@@ -719,13 +718,17 @@ class Controller(utilities.Generic):
             # 'disp': True, 'verbose': 2}
             critic_opt_options = {'maxiter': 200, 'disp': False}
         else:
-            critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False,
-                                  'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}  # 'disp': True, 'verbose': 2}
+            warnings.filterwarnings('ignore')
+            # critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False,'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
+            critic_opt_options = {'maxiter': 200, 'disp': False, 'ftol': 1e-7} 
 
         bnds = sp.optimize.Bounds(self.w_min, self.w_max, keep_feasible=True)
 
         W = minimize(lambda W: self._get_critic_cost(W, U, Y), Winit,
-                     method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
+                     method=critic_opt_method, 
+                     tol=1e-7, 
+                     bounds=bnds, 
+                     options=critic_opt_options).x
 
         return W
 
@@ -793,8 +796,9 @@ class Controller(utilities.Generic):
             # 'disp': True, 'verbose': 2}
             actor_opt_options = {'maxiter': 300, 'disp': False}
         else:
-            actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False,
-                                 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}  # 'disp': True, 'verbose': 2}
+            # actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False,
+            #                      'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
+            actor_opt_options = {'maxiter': 300, 'disp': False, 'ftol': 1e-7}
 
         isGlobOpt = 0
 
@@ -810,8 +814,11 @@ class Controller(utilities.Generic):
                     U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
             
             else:
+                warnings.filterwarnings('ignore')
                 U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
-                             method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x
+                             method=actor_opt_method, tol=1e-7, 
+                             bounds=bnds, 
+                             options=actor_opt_options).x
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
             U = myu_init
@@ -1094,8 +1101,6 @@ class NominalController(utilities.Generic):
         else:
             return self.u_curr
 
-
-from matplotlib.figure import figaspect
 
 class Simulation(utilities.Generic):
     """class to create and run simulation."""
@@ -1410,8 +1415,8 @@ class Simulation(utilities.Generic):
             writer.writerow([t, xCoord, yCoord, alpha,
                              v, omega, icost, u[0], u[1]])
 
-    def _logdata(self, Nruns, save=False):
-        dataFiles = [None] * Nruns
+    def _logdata(self, n_runs, save=False):
+        dataFiles = [None] * n_runs
 
         if save:
             cwd = os.getcwd()
@@ -1423,8 +1428,8 @@ class Simulation(utilities.Generic):
 
             date = datetime.now().strftime("%Y-%m-%d")
             time = datetime.now().strftime("%Hh%Mm%Ss")
-            dataFiles = [None] * Nruns
-            for k in range(0, Nruns):
+            dataFiles = [None] * n_runs
+            for k in range(0, n_runs):
                 dataFiles[k] = dataFolder_path + '/RLsim__' + date + \
                     '__' + time + '__run{run:02d}.csv'.format(run=k + 1)
                 with open(dataFiles[k], 'w', newline='') as outfile:
@@ -1506,8 +1511,11 @@ class Simulation(utilities.Generic):
             nominal_ctrl.reset(self.t0)
 
 
-    def graceful_exit(self):
-        plt.close('all') 
+    def graceful_exit(self, plt_close=True):
+        if plt_close:
+            plt.close('all') 
+        
+        self.current_run = 0
         # graceful exit from Jupyter notebook
         try:
             __IPYTHON__
@@ -1534,7 +1542,7 @@ class Simulation(utilities.Generic):
             self.graceful_exit()
 
     def _wrapper_take_steps(self, k, *args):
-        _, agent, nominal_ctrl, simulator, _ = args
+        _, agent, nominal_ctrl, simulator, _, run_in_window = args
         t = simulator.t
 
         if self.current_run < self.n_runs:
@@ -1544,9 +1552,12 @@ class Simulation(utilities.Generic):
                 self.current_run += 1
                 self._reset_sim(agent, nominal_ctrl, simulator)
         else:
-            self.graceful_exit()
+            if run_in_window is False:
+                self.graceful_exit()
+            else:
+                self.graceful_exit(plt_close=False)
 
-    def run_simulation(self, sys, agent, nominal_ctrl, simulator):
+    def run_simulation(self, sys, agent, nominal_ctrl, simulator, run_in_window=False):
         if self.is_visualization == 0:
             self.current_data_file = data_files[0]
 
@@ -1578,7 +1589,7 @@ class Simulation(utilities.Generic):
             self.sim_fig = self._create_figure(agent)
 
             animate = True
-            fargs = (sys, agent, nominal_ctrl, simulator, animate)
+            fargs = (sys, agent, nominal_ctrl, simulator, animate, run_in_window)
 
             anm = animation.FuncAnimation(self.sim_fig,
                                           self._wrapper_take_steps,
