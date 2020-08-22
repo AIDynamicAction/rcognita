@@ -1147,7 +1147,6 @@ class Simulation(utilities.Generic):
         self.t1 = t1
 
         # number of episodes
-        self.current_run = 0
         self.n_runs = n_runs
 
         self.initial_x = initial_x
@@ -1511,11 +1510,10 @@ class Simulation(utilities.Generic):
             nominal_ctrl.reset(self.t0)
 
 
-    def graceful_exit(self, plt_close=True):
-        if plt_close:
+    def graceful_exit(self, plt_close = True):
+        if plt_close is True:
             plt.close('all') 
-        
-        self.current_run = 0
+
         # graceful exit from Jupyter notebook
         try:
             __IPYTHON__
@@ -1542,7 +1540,7 @@ class Simulation(utilities.Generic):
             self.graceful_exit()
 
     def _wrapper_take_steps(self, k, *args):
-        _, agent, nominal_ctrl, simulator, _, run_in_window = args
+        _, agent, nominal_ctrl, simulator, _ = args
         t = simulator.t
 
         if self.current_run < self.n_runs:
@@ -1552,12 +1550,16 @@ class Simulation(utilities.Generic):
                 self.current_run += 1
                 self._reset_sim(agent, nominal_ctrl, simulator)
         else:
-            if run_in_window is False:
+            if self.run_in_window is False:
                 self.graceful_exit()
-            else:
-                self.graceful_exit(plt_close=False)
+            
+            elif self.run_in_window is True:
+                self.graceful_exit(plt_close = False)
 
-    def run_simulation(self, sys, agent, nominal_ctrl, simulator, run_in_window=False):
+    def run_simulation(self, sys, agent, nominal_ctrl, simulator, run_in_window = False):
+        self.run_in_window = run_in_window
+        self.current_run = 0
+
         if self.is_visualization == 0:
             self.current_data_file = data_files[0]
 
@@ -1589,7 +1591,7 @@ class Simulation(utilities.Generic):
             self.sim_fig = self._create_figure(agent)
 
             animate = True
-            fargs = (sys, agent, nominal_ctrl, simulator, animate, run_in_window)
+            fargs = (sys, agent, nominal_ctrl, simulator, animate)
 
             anm = animation.FuncAnimation(self.sim_fig,
                                           self._wrapper_take_steps,
