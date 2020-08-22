@@ -1487,9 +1487,6 @@ class Simulation(utilities.Generic):
             self._update_scatter(text_time, ksi, alpha_deg,
                                  x_coord, y_coord, t, alpha, r, icost, u)
 
-        if animate == True:
-            return self.sol_scatter
-
     def _reset_sim(self, agent, nominal_ctrl, simulator):
         if self.is_print_sim_step:
             print('.....................................Run {run:2d} done.....................................'.format(
@@ -1543,9 +1540,10 @@ class Simulation(utilities.Generic):
         _, agent, nominal_ctrl, simulator, _ = args
         t = simulator.t
 
-        if self.current_run < self.n_runs:
+        if self.current_run <= self.n_runs:
             if t < self.t1:
-                return self._take_step(*args)
+                self._take_step(*args)
+            
             else:
                 self.current_run += 1
                 self._reset_sim(agent, nominal_ctrl, simulator)
@@ -1558,14 +1556,14 @@ class Simulation(utilities.Generic):
 
     def run_simulation(self, sys, agent, nominal_ctrl, simulator, run_in_window = False):
         self.run_in_window = run_in_window
-        self.current_run = 0
+        self.current_run = 1
 
         if self.is_visualization == 0:
             self.current_data_file = data_files[0]
 
             t = simulator.t
             
-            while self.current_run < self.n_runs:
+            while self.current_run <= self.n_runs:
                 while t < self.t1:
                     self._take_step(sys, agent, nominal_ctrl, simulator)
                     t += 1

@@ -4,7 +4,6 @@ from numpy.matlib import repmat
 import matplotlib as mpl
 import inspect
 
-
 # hidden tests
 def check_call(func):
     def wrapper(*args):
