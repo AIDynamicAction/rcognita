@@ -140,13 +140,10 @@ class System(utilities.Generic):
             self._dim_full_state = self.dim_state + self.dim_disturb
 
     @staticmethod
-    def get_next_state(t, x, u, q, m, I, dim_state, is_disturb):
-        """ Right-hand side of the system internal dynamics
-            
-            Generalized derivative
-            # dynamics 
+    def get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
+        """ get system internal dynamics
 
-            x_t+1 = f(x_t, u_t, q_t)
+            Generalized derivative of: x_t+1 = f(x_t, u_t, q_t)
 
         where:
             x -- state
@@ -190,7 +187,7 @@ class System(utilities.Generic):
         omega = x[4]
 
         # create state
-        next_state = np.zeros(dim_state)
+        system_dynamics = np.zeros(dim_state)
 
         # compute new values
         x = v * np.cos(alpha)
@@ -205,13 +202,13 @@ class System(utilities.Generic):
             omega = 1 / I * M
 
         # assign next state
-        next_state[0] = x
-        next_state[1] = y
-        next_state[2] = alpha
-        next_state[3] = v
-        next_state[4] = omega
+        system_dynamics[0] = x
+        system_dynamics[1] = y
+        system_dynamics[2] = alpha
+        system_dynamics[3] = v
+        system_dynamics[4] = omega
 
-        return next_state
+        return system_dynamics
 
     def _add_disturbance(self, t, q):
         """ Dynamical disturbance model """
@@ -247,7 +244,7 @@ class System(utilities.Generic):
         y = x
         return y
 
-    def receive_action(self, u):
+    def get_action(self, u):
         """ Receive control action from agent. """
         self.u = u
 
@@ -270,7 +267,7 @@ class System(utilities.Generic):
                 x = full_state[0:sys.dim_state]
                 y = sys.get_curr_state(x)
                 u = myController(y)
-                sys.receive_action(u)
+                sys.get_action(u)
 
         """
         # environment + disturbance
@@ -291,7 +288,7 @@ class System(utilities.Generic):
                 u[k] = np.clip(u[k], self.control_bounds[k, 0],
                                self.control_bounds[k, 1])
 
-        new_full_state[0:self.dim_state] = System.get_next_state(
+        new_full_state[0:self.dim_state] = System.get_system_dynamics(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.is_disturb:
@@ -504,7 +501,7 @@ class Controller(utilities.Generic):
         self.y_buffer = np.zeros([buffer_size, dim_output])
 
         """ other """
-        self.sys_rhs = System.get_next_state
+        self.sys_rhs = System.get_system_dynamics
         self.sys_out = System.get_curr_state
 
         # discount factor
@@ -544,7 +541,7 @@ class Controller(utilities.Generic):
         self.ctrl_clock = t0
         self.u_curr = self.min_bounds / 10
 
-    def receive_sys_state(self, x):
+    def get_sys_state(self, x):
         """ Fetch exogenous model state. """
         self.system_state = x
 
@@ -1262,8 +1259,9 @@ class Simulation(utilities.Generic):
 
         return u
 
-    # create graph
-    def _create_figure(self, agent, fig_width, fig_height):
+    def _create_figure_plots(self, agent, fig_width, fig_height):
+        """ returns a pyplot figure with 4 plots """
+
         y0 = System.get_curr_state(self.system_state)
         alpha_deg0 = self.alpha / 2 / np.pi
 
@@ -1271,7 +1269,7 @@ class Simulation(utilities.Generic):
 
         self.sim_fig = plt.figure(figsize=(fig_width, fig_height))
 
-        # xy plane
+        # xy plane  subplot
         self.xy_plane_axes = self.sim_fig.add_subplot(221,
                                                       autoscale_on=False,
                                                       xlim=(self.x_min,
@@ -1300,7 +1298,7 @@ class Simulation(utilities.Generic):
 
         self.xy_plane_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
-        # Solution
+        # Solution subplot
         self.sol_axes = self.sim_fig.add_subplot(222, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             2 * np.min([self.x_min, self.y_min]), 2 * np.max([self.x_max, self.y_max])), xlabel='t [s]')
         self.sol_axes.plot([self.t0, self.t1], [0, 0],
@@ -1312,7 +1310,7 @@ class Simulation(utilities.Generic):
         self.sol_axes.legend(fancybox=True, loc='upper right')
         self.sol_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
-        # Cost
+        # Cost subplot
         self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             0, 1e4 * agent.running_cost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
 
@@ -1327,7 +1325,7 @@ class Simulation(utilities.Generic):
             self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
         self.cost_axes.legend(fancybox=True, loc='upper right')
 
-        # Control
+        # Control subplot
         self.ctrlAxs = self.sim_fig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             1.1 * np.min([self.f_min, self.m_min]), 1.1 * np.max([self.f_max, self.m_max])), xlabel='t [s]')
         self.ctrlAxs.plot([self.t0, self.t1], [0, 0],
@@ -1372,16 +1370,15 @@ class Simulation(utilities.Generic):
     def _reset_line(self, line):
         line.set_data([], [])
 
-    # def _update_scatter(self, scatter, newX, newY):
-    #     scatter.set_offsets(
-    #         np.vstack([scatter.get_offsets().data, np.c_[newX, newY]]))
-
     def _update_text(self, text_handle, newText):
         text_handle.set_text(newText)
 
-    # update artists # update graphical artists
-    def _update_scatter(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
+    def _update_all_scatter_lines(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
+        """
+        Update lines on all scatter plots
+        """
         self._update_text(self.text_time_handle, text_time)
+
         # Update the robot's track on the plot
         self._update_line(self.traj_line, *full_state[:2])
 
@@ -1399,17 +1396,18 @@ class Simulation(utilities.Generic):
         self._update_line(self.i_cost_line, t, icost)
         text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
         self._update_text(self.text_icost_handle, text_icost)
+        
         # Control
         for (line, uSingle) in zip(self.ctrl_lines, u):
             self._update_line(line, t, uSingle)
 
-    def _logDataRow(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
+    def _log_data_row(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
         with open(dataFile, 'a', newline='') as outfile:
             writer = csv.writer(outfile)
             writer.writerow([t, xCoord, yCoord, alpha,
                              v, omega, icost, u[0], u[1]])
 
-    def _logdata(self, n_runs, save=False):
+    def _log_data(self, n_runs, save=False):
         dataFiles = [None] * n_runs
 
         if save:
@@ -1433,7 +1431,7 @@ class Simulation(utilities.Generic):
 
         return dataFiles
 
-    def _printSimStep(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
+    def _print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
         # alphaDeg = alpha/np.pi*180
 
         headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
@@ -1458,8 +1456,8 @@ class Simulation(utilities.Generic):
         u = self._ctrlSelector(
             t, y, self.u_man, nominal_ctrl, agent, self.ctrl_mode)
 
-        sys.receive_action(u)
-        agent.receive_sys_state(sys._x)
+        sys.get_action(u)
+        agent.get_sys_state(sys._x)
         agent.update_icost(y, u)
 
         x_coord = full_state[0]
@@ -1470,16 +1468,16 @@ class Simulation(utilities.Generic):
         icost = agent.i_cost_val
 
         if self.is_print_sim_step:
-            self._printSimStep(t, x_coord, y_coord, alpha, v, omega, icost, u)
+            self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, icost, u)
 
         if self.is_log_data:
-            self._logDataRow(self.current_data_file, t, x_coord,
+            self._log_data_row(self.current_data_file, t, x_coord,
                              y_coord, alpha, v, omega, icost.val, u)
         if animate == True:
             alpha_deg = alpha / np.pi * 180
             r = agent.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
-            self._update_scatter(text_time, full_state, alpha_deg,
+            self._update_all_scatter_lines(text_time, full_state, alpha_deg,
                                  x_coord, y_coord, t, alpha, r, icost, u)
 
     def _reset_sim(self, agent, nominal_ctrl, simulator):
@@ -1516,7 +1514,7 @@ class Simulation(utilities.Generic):
             print("Program exit")
             sys.exit()
 
-    def _onKeyPress(self, event, anm, args):
+    def _on_key_press(self, event, anm, args):
         if event.key == ' ':
             if anm.running is True:
                 anm.event_source.stop()
@@ -1549,11 +1547,11 @@ class Simulation(utilities.Generic):
             elif self.close_plt_on_finish is False:
                 self.graceful_exit(plt_close = False)
 
-    def run_simulation(self, close_plt_on_finish = False, fig_width=8, fig_height=8, n_runs=1):
+    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish = True):
         self.close_plt_on_finish = close_plt_on_finish
         self.current_run = 1
         self.n_runs = n_runs
-        self.data_files = self._logdata(n_runs, save=self.is_log_data)
+        self.data_files = self._log_data(n_runs, save=self.is_log_data)
 
         if self.is_visualization:
             self.current_data_file = data_files[0]
@@ -1583,7 +1581,7 @@ class Simulation(utilities.Generic):
                 self.graceful_exit()
 
         else:
-            self.sim_fig = self._create_figure(self.controller, fig_width, fig_height)
+            self.sim_fig = self._create_figure_plots(self.controller, fig_width, fig_height)
 
             animate = True
             fargs = (self.system, self.controller, self.nominal_ctrl, self.simulator, animate)
@@ -1596,6 +1594,6 @@ class Simulation(utilities.Generic):
 
             anm.running = True
             self.sim_fig.canvas.mpl_connect(
-                'key_press_event', lambda event: self._onKeyPress(event, anm, fargs))
+                'key_press_event', lambda event: self._on_key_press(event, anm, fargs))
             self.sim_fig.tight_layout()
             plt.show()
