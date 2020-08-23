@@ -50,17 +50,17 @@ def main(args=None):
         parser.add_argument('-model_order', type=int,
                             default=5, help="The order of the state-space estimation model.")
 
-        parser.add_argument('-mod_update_freq', type=int,
+        parser.add_argument('-model_update_time', type=int,
                             default=0, help="In seconds, the time between model estimate updates. This constant determines how often the estimated parameters")
 
         parser.add_argument('-stacked_model_params', type=int,
                             default=0, help="Estimated model parameters can be stored in stacks and the best among the last ones is picked")
 
         parser.add_argument('-buffer_size', type=int,
-                            default=200, help="The size of the buffer to store data for model estimation. Is measured in numbers of periods of length dt.")
+                            default=50, help="The size of the buffer to store data for model estimation. Is measured in numbers of periods of length dt.")
 
-        parser.add_argument('-nactor', type=int, default=6,
-                            help="Number of prediction steps. Nactor=1 means the controller is purely data-driven and doesn't use prediction.")
+        parser.add_argument('-n_actor', type=int, default=6,
+                            help="Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.")
 
         parser.add_argument('-r_cost_struct', type=int,
                             default=1, help="Choice of the running cost structure.")
@@ -68,11 +68,11 @@ def main(args=None):
         parser.add_argument('-n_critic', type=int,
                             default=50, help="critic stack size.")
 
-        parser.add_argument('-critic_struct', type=int,
+        parser.add_argument('-critic_mode', type=int,
                             default=3, help="choice of the structure of critic's feature vector. Options: 1, 2, 3, or 4. See code.")
 
         parser.add_argument('-ctrl_mode', type=int,
-                            default=5, help="Control modes. 0, -1, 1, 2, 3, 4, 5 or 6")
+                            default=3, help="Control modes. 0, -1, 1, 2, 3, 4, 5 or 6")
 
         parser.add_argument('-is_dyn_ctrl', type=int,
                             default=0, help="Is dynamical controller.")
@@ -137,7 +137,7 @@ def main(args=None):
         initial_buffer_fill = args.initial_buffer_fill,
         model_order = args.model_order,
         initial_buffer_power = args.initial_buffer_power,
-        mod_update_freq = args.mod_update_freq,
+        model_update_time = args.model_update_time,
         stacked_model_params = args.stacked_model_params,
         f_man = args.f_man,
         n_man = args.n_man,
@@ -145,12 +145,12 @@ def main(args=None):
         f_max = args.f_max,
         m_min = args.m_min,
         m_max = args.m_max,
-        n_actor = args.nactor,
+        n_actor = args.n_actor,
         buffer_size = args.buffer_size,
         r_cost_struct = args.r_cost_struct,
         n_critic = args.n_critic,
         gamma = args.gamma,
-        critic_struct = args.critic_struct,
+        critic_mode = args.critic_mode,
         is_log_data = args.is_log_data,
         is_visualization = args.is_visualization,
         is_print_sim_step = args.is_print_sim_step,
@@ -161,13 +161,13 @@ def main(args=None):
         # environment
         sys = System(dim_state, dim_input, dim_output, dim_disturb,
                      m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
-        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, initial_buffer_power, initial_buffer_fill, buffer_size, model_order, stacked_model_params, mod_update_freq, gamma, n_critic, critic_struct, r_cost_struct)
+        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, initial_buffer_power, initial_buffer_fill, buffer_size, model_order, stacked_model_params, model_update_time, gamma, n_critic, critic_mode, r_cost_struct)
         nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
 
     else:
         # environment
         sys = System()
-        agent = Controller(sys, ctrl_mode=5, n_actor=6, buffer_size=200, critic_struct=3, n_critic=50, initial_buffer_power=8, initial_buffer_fill=2)
+        agent = Controller(sys, ctrl_mode=5, n_actor=6, buffer_size=200, critic_mode=3, n_critic=50, initial_buffer_power=8, initial_buffer_fill=2)
         nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
 
     sim = Simulation(sys, agent, nominalCtrl, t1=30)

@@ -20,7 +20,7 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'rcognita = rcognita.__main__:main',
+            'rcogn = rcognita.__main__:main',
         ],
     },
     python_requires="~=3.7",

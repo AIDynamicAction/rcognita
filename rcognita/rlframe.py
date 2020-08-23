@@ -117,10 +117,10 @@ class System(utilities.Generic):
         self.dim_disturb = dim_disturb
         self.m = m
         self.I = I
-        self.f_min=f_min,
-        self.f_max=f_max,
-        self.m_min=m_min,
-        self.m_max=m_max,
+        self.f_min = f_min,
+        self.f_max = f_max,
+        self.m_min = m_min,
+        self.m_max = m_max,
         self.control_bounds = np.array([[f_min, f_max], [m_min, m_max]])
 
         """ disturbance """
@@ -282,7 +282,8 @@ class System(utilities.Generic):
 
         if self.is_dyn_ctrl:
             u = full_state[-self.dim_input:]
-            new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
+            new_full_state[-self.dim_input:
+                           ] = self._create_dyn_controller(t, u, y)
         else:
             # Fetch the control action stored in the system
             u = self.u
@@ -308,8 +309,8 @@ class Controller(utilities.Generic):
     """
     Optimal controller (a.k.a. agent) class.
 
-    Parameters
-    ----------
+    Parameters and descriptions of instance attributes
+    --------------------------------------------------
 
     t0 -- Initial value of the controller's internal clock
 
@@ -323,9 +324,10 @@ class Controller(utilities.Generic):
 
 
     initial_buffer_fill -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
+
     initial_buffer_power -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
 
-    mod_update_freq -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
+    model_update_time -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
 
     buffer_size -- The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
 
@@ -340,9 +342,15 @@ class Controller(utilities.Generic):
 
     n_actor -- Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
 
-    n_critic -- Critic stack size. The critic optimizes the temporal error which is a measure of critic's ability to capture the optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
+    n_critic -- Critic stack size. The critic optimizes the temporal error (a.k.a. the value function). The temporal errors are stacked up using the said buffer
 
     critic_period -- Time between critic updates
+
+    critic_mode -- Choice of the structure of the critic's feature vector
+        * 1 - Quadratic-linear
+        * 2 - Quadratic
+        * 3 - Quadratic, no mixed terms
+        * 4 - Quadratic, no mixed terms in input and output
 
     pred_step_size -- Prediction step size in `J` as defined above (in seconds). Should be a multiple of `sample_time`. Commonly, equals it, but here left adjustable for convenience. Larger prediction step size leads to longer factual horizon
 
@@ -350,11 +358,6 @@ class Controller(utilities.Generic):
         * 1 - quadratic chi.T @ R1 @ chi
         * 2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
 
-    critic_struct -- Choice of the structure of the critic's feature vector
-        * 1 - Quadratic-linear
-        * 2 - Quadratic
-        * 3 - Quadratic, no mixed terms
-        * 4 - Quadratic, no mixed terms in input and output
 
     ctrl_mode -- Modes with online model estimation are experimental 
         * 0     - manual constant control (only for basic testing)
@@ -376,24 +379,23 @@ class Controller(utilities.Generic):
     """
 
     def __init__(self,
-                system,
-                 ctrl_mode=1,
+                 system,
+                 ctrl_mode=3,
                  t0=0,
                  initial_x=5,
                  initial_y=5,
-                 n_actor=1,
-                 n_critic=4,
-                 buffer_size=20,
+                 n_actor=6,
+                 n_critic=50,
+                 buffer_size=50,
                  critic_period=0.1,
-                 critic_struct=1,
+                 critic_mode=1,
                  r_cost_struct=1,
                  sample_time=0.1,
-                 initial_buffer_fill=1,
-                 initial_buffer_power=1,
-                 mod_update_freq=0.1,
+                 model_update_time=0.1,
+                 initial_buffer_fill=6,
+                 initial_buffer_power=2,
                  stacked_model_params=0,
                  model_order=3,
-                 pred_step_size=0.1,
                  gamma=1,
                  is_disturb=0):
         """ system vars """
@@ -405,7 +407,7 @@ class Controller(utilities.Generic):
 
         self.initial_x = initial_x
         self.initial_y = initial_y
-        
+
         """ disturbance """
         self.is_disturb = is_disturb
 
@@ -422,7 +424,7 @@ class Controller(utilities.Generic):
         self.is_prob_noise = 1
         self.initial_buffer_power = initial_buffer_power
         self.initial_buffer_fill = initial_buffer_fill
-        self.mod_update_freq = mod_update_freq
+        self.model_update_time = model_update_time
         self.stacked_model_params = stacked_model_params
         self.buffer_size = buffer_size
         self.model_order = model_order
@@ -444,7 +446,7 @@ class Controller(utilities.Generic):
 
         self.n_actor = n_actor
         self.critic_period = critic_period
-        self.pred_step_size = pred_step_size
+        self.pred_step_size = sample_time
 
         """ RL elements """
         self.r_cost_struct = r_cost_struct
@@ -456,7 +458,7 @@ class Controller(utilities.Generic):
                             [0, 0, 0, 0, 0]])
         self.r_cost_pars = [self.R1, self.R2]
         self.i_cost_val = 0
-        self.critic_struct = critic_struct
+        self.critic_mode = critic_mode
         self.critic_clock = t0
         self.n_critic = n_critic
         self.n_critic = np.min([self.n_critic, self.buffer_size - 1])
@@ -491,24 +493,27 @@ class Controller(utilities.Generic):
         # discount factor
         self.gamma = gamma
 
-        if self.critic_struct == 1:
-            self.dim_crit = int(((self.dim_output + self.dim_input) + 1) * (self.dim_output + self.dim_input) / 2 + (self.dim_output + self.dim_input))
+        if self.critic_mode == 1:
+            self.dim_crit = int(((self.dim_output + self.dim_input) + 1) * (
+                self.dim_output + self.dim_input) / 2 + (self.dim_output + self.dim_input))
 
             self.w_min = -1e3 * np.ones(self.dim_crit)
             self.w_max = 1e3 * np.ones(self.dim_crit)
 
-        elif self.critic_struct == 2:
-            self.dim_crit = int(((self.dim_output + self.dim_input) + 1) * (self.dim_output + self.dim_input) / 2)
+        elif self.critic_mode == 2:
+            self.dim_crit = int(((self.dim_output + self.dim_input) + 1)
+                                * (self.dim_output + self.dim_input) / 2)
             self.w_min = np.zeros(self.dim_crit)
             self.w_max = 1e3 * np.ones(self.dim_crit)
 
-        elif self.critic_struct == 3:
+        elif self.critic_mode == 3:
             self.dim_crit = int(self.dim_output + self.dim_input)
             self.w_min = np.zeros(self.dim_crit)
             self.w_max = 1e3 * np.ones(self.dim_crit)
 
-        elif self.critic_struct == 4:
-            self.dim_crit = int(self.dim_output + self.dim_output * self.dim_input + self.dim_input)
+        elif self.critic_mode == 4:
+            self.dim_crit = int(
+                self.dim_output + self.dim_output * self.dim_input + self.dim_input)
             self.w_min = -1e3 * np.ones(self.dim_crit)
             self.w_max = 1e3 * np.ones(self.dim_crit)
 
@@ -539,7 +544,7 @@ class Controller(utilities.Generic):
             x = x0
             ySqn[0, :] = y0
             xSqn[0, :] = x0
-            
+
             for k in range(1, uSqn.shape[0]):
                 x = A @ x + B @ uSqn[k - 1, :]
                 xSqn[k, :] = x
@@ -570,9 +575,9 @@ class Controller(utilities.Generic):
     def update_icost(self, y, u):
         """
         Sample-to-sample integrated running cost. This can be handy to evaluate the performance of the agent.
-        
+
         If the agent succeeded to stabilize the system, `icost` would converge to a finite value which is the performance mark.
-        
+
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
 
         """
@@ -592,7 +597,7 @@ class Controller(utilities.Generic):
                 time_in_est_period = t - self.est_clock
 
                 # Estimate model if required by ctrlStatMode
-                if (time_in_est_period >= mod_update_freq) and (self.ctrl_mode in (2, 4, 6)):
+                if (time_in_est_period >= model_update_time) and (self.ctrl_mode in (2, 4, 6)):
                     # Update model estimator's internal clock
                     self.est_clock = t
 
@@ -611,7 +616,8 @@ class Controller(utilities.Generic):
 
                     except:
                         print('Model estimation problem')
-                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]), np.zeros( [self.model_order, self.dim_input]), np.zeros( [self.dim_output, self.model_order]), np.zeros([self.dim_output, self.dim_input]))
+                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]), np.zeros([self.model_order, self.dim_input]), np.zeros(
+                            [self.dim_output, self.model_order]), np.zeros([self.dim_output, self.dim_input]))
 
                     # Model checks
                     if self.stacked_model_params > 0:
@@ -658,16 +664,16 @@ class Controller(utilities.Generic):
         """
         chi = np.concatenate([y, u])
 
-        if self.critic_struct == 1:
+        if self.critic_mode == 1:
             return np.concatenate([_uptria2vec(np.kron(chi, chi)), chi])
 
-        elif self.critic_struct == 2:
+        elif self.critic_mode == 2:
             return np.concatenate([_uptria2vec(np.kron(chi, chi))])
 
-        elif self.critic_struct == 3:
+        elif self.critic_mode == 3:
             return chi * chi
 
-        elif self.critic_struct == 4:
+        elif self.critic_mode == 4:
             return np.concatenate([y**2, np.kron(y, u), u**2])
 
     def _get_critic_cost(self, W, U, Y):
@@ -718,14 +724,14 @@ class Controller(utilities.Generic):
         else:
             warnings.filterwarnings('ignore')
             # critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False,'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
-            critic_opt_options = {'maxiter': 200, 'disp': False, 'ftol': 1e-7} 
+            critic_opt_options = {'maxiter': 200, 'disp': False, 'ftol': 1e-7}
 
         bnds = sp.optimize.Bounds(self.w_min, self.w_max, keep_feasible=True)
 
         W = minimize(lambda W: self._get_critic_cost(W, U, Y), Winit,
-                     method=critic_opt_method, 
-                     tol=1e-7, 
-                     bounds=bnds, 
+                     method=critic_opt_method,
+                     tol=1e-7,
+                     bounds=bnds,
                      options=critic_opt_options).x
 
         return W
@@ -739,11 +745,11 @@ class Controller(utilities.Generic):
         Y = np.zeros([N, self.dim_output])
 
         # System output prediction
-        if (ctrl_mode == 1) or (ctrl_mode == 3) or (ctrl_mode == 5):    
-        # Via exogenously passed model
+        if (ctrl_mode == 1) or (ctrl_mode == 3) or (ctrl_mode == 5):
+            # Via exogenously passed model
             Y[0, :] = y
             x = self.system_state
-            
+
             for k in range(1, self.n_actor):
                 # Euler scheme
                 x = x + delta * \
@@ -751,7 +757,7 @@ class Controller(utilities.Generic):
                                  self.I, self.dim_state, self.is_disturb)
                 Y[k, :] = self.sys_out(x)
 
-        elif (ctrl_mode == 2) or (ctrl_mode == 4) or (ctrl_mode == 6):    
+        elif (ctrl_mode == 2) or (ctrl_mode == 4) or (ctrl_mode == 6):
             # Via estimated model
             myU_upsampled = myU.repeat(int(delta / self.sample_time), axis=0)
             Yupsampled, _ = self._dss_sim(
@@ -759,18 +765,18 @@ class Controller(utilities.Generic):
             Y = Yupsampled[::int(delta / self.sample_time)]
 
         J = 0
-        
+
         if (ctrl_mode == 1) or (ctrl_mode == 2):     # MPC
             for k in range(N):
                 J += self.gamma**k * self.running_cost(Y[k, :], myU[k, :])
-        
+
         # RL: Q-learning with n_critic-1 roll-outs of running cost
         elif (ctrl_mode == 3) or (ctrl_mode == 4):
             for k in range(N - 1):
                 J += self.gamma**k * self.running_cost(Y[k, :], myU[k, :])
             J += W @ self._phi(Y[-1, :], myU[-1, :])
-        
-        elif (ctrl_mode == 5) or (ctrl_mode == 6):     
+
+        elif (ctrl_mode == 5) or (ctrl_mode == 6):
             # RL: (normalized) stacked Q-learning
             for k in range(N):
                 Q = W @ self._phi(Y[k, :], myU[k, :])
@@ -810,12 +816,12 @@ class Controller(utilities.Generic):
                     'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
                 U = basinhopping(lambda U: self._get_actor_cost(
                     U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
-            
+
             else:
                 warnings.filterwarnings('ignore')
                 U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
-                             method=actor_opt_method, tol=1e-7, 
-                             bounds=bnds, 
+                             method=actor_opt_method, tol=1e-7,
+                             bounds=bnds,
                              options=actor_opt_options).x
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
@@ -870,7 +876,8 @@ class Controller(utilities.Generic):
 
                 # Actor. Apply control when model estimation phase is over
                 if self.is_prob_noise and (self.ctrl_mode in (4, 6)):
-                    u = self.initial_buffer_power * (rand(self.dim_input) - 0.5)
+                    u = self.initial_buffer_power * \
+                        (rand(self.dim_input) - 0.5)
                 elif not self.is_prob_noise and (self.ctrl_mode in (4, 6)):
                     u = self._actor(y, self.u_init, self.n_actor,
                                     W, self.pred_step_size, self.mode)
@@ -1132,7 +1139,6 @@ class Simulation(utilities.Generic):
         self.controller = controller
         self.nominal_ctrl = nominal_ctrl
 
-
         """system """
         self.dim_state = system.dim_state
         self.dim_input = system.dim_input
@@ -1166,7 +1172,8 @@ class Simulation(utilities.Generic):
         self.is_dyn_ctrl = is_dyn_ctrl
 
         if self.is_dyn_ctrl:
-            self.full_state = np.concatenate([self.system_state, self.q0, self.u0])
+            self.full_state = np.concatenate(
+                [self.system_state, self.q0, self.u0])
         else:
             self.full_state = np.concatenate([self.system_state, self.q0])
 
@@ -1174,13 +1181,13 @@ class Simulation(utilities.Generic):
         sample_time = controller.sample_time
 
         self.simulator = sp.integrate.RK45(closed_loop,
-                                      self.t0,
-                                      self.full_state,
-                                      self.t1,
-                                      max_step=sample_time / 2,
-                                      first_step=1e-6,
-                                      atol=a_tol,
-                                      rtol=r_tol)
+                                           self.t0,
+                                           self.full_state,
+                                           self.t1,
+                                           max_step=sample_time / 2,
+                                           first_step=1e-6,
+                                           atol=a_tol,
+                                           rtol=r_tol)
 
         # x and y limits of scatter plot. Used so far rather for visualization
         # only, but may be integrated into the actor as constraints
@@ -1296,7 +1303,7 @@ class Simulation(utilities.Generic):
 
         r = agent.running_cost(y0, self.u0)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
-        
+
         self.text_icost_handle = self.sim_fig.text(
             0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
         self.r_cost_line, = self.cost_axes.plot(
@@ -1376,7 +1383,7 @@ class Simulation(utilities.Generic):
         self._update_line(self.i_cost_line, t, icost)
         text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
         self._update_text(self.text_icost_handle, text_icost)
-        
+
         # Control
         for (line, uSingle) in zip(self.ctrl_lines, u):
             self._update_line(line, t, uSingle)
@@ -1448,17 +1455,18 @@ class Simulation(utilities.Generic):
         icost = agent.i_cost_val
 
         if self.is_print_sim_step:
-            self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, icost, u)
+            self._print_sim_step(t, x_coord, y_coord,
+                                 alpha, v, omega, icost, u)
 
         if self.is_log_data:
             self._log_data_row(self.current_data_file, t, x_coord,
-                             y_coord, alpha, v, omega, icost.val, u)
+                               y_coord, alpha, v, omega, icost.val, u)
         if animate == True:
             alpha_deg = alpha / np.pi * 180
             r = agent.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
             self._update_all_scatter_lines(text_time, full_state, alpha_deg,
-                                 x_coord, y_coord, t, alpha, r, icost, u)
+                                           x_coord, y_coord, t, alpha, r, icost, u)
 
     def _reset_sim(self, agent, nominal_ctrl, simulator):
         if self.is_print_sim_step:
@@ -1479,10 +1487,9 @@ class Simulation(utilities.Generic):
         else:
             nominal_ctrl.reset(self.t0)
 
-
-    def graceful_exit(self, plt_close = True):
+    def graceful_exit(self, plt_close=True):
         if plt_close is True:
-            plt.close('all') 
+            plt.close('all')
 
         # graceful exit from Jupyter notebook
         try:
@@ -1516,18 +1523,18 @@ class Simulation(utilities.Generic):
         if self.current_run <= self.n_runs:
             if t < self.t1:
                 self._take_step(*args)
-            
+
             else:
                 self.current_run += 1
                 self._reset_sim(agent, nominal_ctrl, simulator)
         else:
             if self.close_plt_on_finish is True:
                 self.graceful_exit()
-            
-            elif self.close_plt_on_finish is False:
-                self.graceful_exit(plt_close = False)
 
-    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish = True):
+            elif self.close_plt_on_finish is False:
+                self.graceful_exit(plt_close=False)
+
+    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True):
         self.close_plt_on_finish = close_plt_on_finish
         self.current_run = 1
         self.n_runs = n_runs
@@ -1537,14 +1544,16 @@ class Simulation(utilities.Generic):
             self.current_data_file = data_files[0]
 
             t = self.simulator.t
-            
+
             while self.current_run <= self.n_runs:
                 while t < self.t1:
-                    self._take_step(self.system, self.controller, self.nominal_ctrl, self.simulator)
+                    self._take_step(self.system, self.controller,
+                                    self.nominal_ctrl, self.simulator)
                     t += 1
 
                 else:
-                    self._reset_sim(self.controller, self.nominal_ctrl, self.simulator)
+                    self._reset_sim(self.controller,
+                                    self.nominal_ctrl, self.simulator)
                     icost = 0
 
                     for item in self.lines:
@@ -1561,10 +1570,12 @@ class Simulation(utilities.Generic):
                 self.graceful_exit()
 
         else:
-            self.sim_fig = self._create_figure_plots(self.controller, fig_width, fig_height)
+            self.sim_fig = self._create_figure_plots(
+                self.controller, fig_width, fig_height)
 
             animate = True
-            fargs = (self.system, self.controller, self.nominal_ctrl, self.simulator, animate)
+            fargs = (self.system, self.controller,
+                     self.nominal_ctrl, self.simulator, animate)
 
             anm = animation.FuncAnimation(self.sim_fig,
                                           self._wrapper_take_steps,
