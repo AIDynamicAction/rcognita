@@ -1,4 +1,4 @@
-from LearnRLSK import System, NominalController, Controller, Simulation
+from rcognita import System, NominalController, Controller, Simulation
 import argparse
 import sys
 
