@@ -413,8 +413,8 @@ class Controller(utilities.Generic):
         # initial values of the system's state
         alpha = np.pi / 2
         initial_state = np.zeros(self.dim_state)
-        initial_state[0] = 5
-        initial_state[1] = 5
+        initial_state[0] = initial_x
+        initial_state[1] = initial_y
         initial_state[2] = alpha
         self.system_state = initial_state
 
