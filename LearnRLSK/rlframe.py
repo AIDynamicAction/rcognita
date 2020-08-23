@@ -323,11 +323,11 @@ class Controller(utilities.Generic):
             * smaller sampling times lead to higher computation times
             * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
 
-    prob_noise_pow -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
 
-    mod_est_phase -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
+    initial_buffer_fill -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
+    initial_buffer_power -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
 
-    mod_est_period -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
+    mod_update_freq -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
 
     buffer_size -- The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
 
@@ -401,11 +401,11 @@ class Controller(utilities.Generic):
                  critic_struct=1,
                  r_cost_struct=1,
                  sample_time=0.1,
-                 mod_est_phase=1,
-                 mod_est_period=0.1,
+                 initial_buffer_fill=1,
+                 mod_update_freq=0.1,
                  mod_est_checks=0,
                  model_order=3,
-                 prob_noise_pow=1,
+                 initial_buffer_power=1,
                  pred_step_size=0.1,
                  gamma=1,
                  is_disturb=0):
@@ -432,9 +432,9 @@ class Controller(utilities.Generic):
         # model hyperparams
         self.est_clock = t0
         self.is_prob_noise = 1
-        self.prob_noise_pow = prob_noise_pow
-        self.mod_est_phase = mod_est_phase
-        self.mod_est_period = mod_est_period
+        self.initial_buffer_power = initial_buffer_power
+        self.initial_buffer_fill = initial_buffer_fill
+        self.mod_update_freq = mod_update_freq
         self.mod_est_checks = mod_est_checks
         self.buffer_size = buffer_size
         self.model_order = model_order
@@ -511,25 +511,25 @@ class Controller(utilities.Generic):
         self.gamma = gamma
 
         if self.critic_struct == 1:
-            self.dim_crit = ((self.dim_output + self.dim_input) + 1) * (self.dim_output + self.dim_input) / 2 + (self.dim_output + self.dim_input)
+            self.dim_crit = int(((self.dim_output + self.dim_input) + 1) * (self.dim_output + self.dim_input) / 2 + (self.dim_output + self.dim_input))
 
-            self.w_min = -1e3 * np.ones(int(self.dim_crit))
-            self.w_max = 1e3 * np.ones(int(self.dim_crit))
+            self.w_min = -1e3 * np.ones(self.dim_crit)
+            self.w_max = 1e3 * np.ones(self.dim_crit)
 
         elif self.critic_struct == 2:
-            self.dim_crit = ((self.dim_output + self.dim_input) + 1) * (self.dim_output + self.dim_input) / 2
+            self.dim_crit = int(((self.dim_output + self.dim_input) + 1) * (self.dim_output + self.dim_input) / 2)
             self.w_min = np.zeros(self.dim_crit)
-            self.w_max = 1e3 * np.ones(int(self.dim_crit))
+            self.w_max = 1e3 * np.ones(self.dim_crit)
 
         elif self.critic_struct == 3:
-            self.dim_crit = self.dim_output + self.dim_input
+            self.dim_crit = int(self.dim_output + self.dim_input)
             self.w_min = np.zeros(self.dim_crit)
-            self.w_max = 1e3 * np.ones(int(self.dim_crit))
+            self.w_max = 1e3 * np.ones(self.dim_crit)
 
         elif self.critic_struct == 4:
-            self.dim_crit = self.dim_output + self.dim_output * self.dim_input + self.dim_input
-            self.w_min = -1e3 * np.ones(int(self.dim_crit))
-            self.w_max = 1e3 * np.ones(int(self.dim_crit))
+            self.dim_crit = int(self.dim_output + self.dim_output * self.dim_input + self.dim_input)
+            self.w_min = -1e3 * np.ones(self.dim_crit)
+            self.w_max = 1e3 * np.ones(self.dim_crit)
 
         self.Wprev = np.ones(int(self.dim_crit))
 
@@ -613,7 +613,7 @@ class Controller(utilities.Generic):
                 time_in_est_period = t - self.est_clock
 
                 # Estimate model if required by ctrlStatMode
-                if (time_in_est_period >= mod_est_period) and (self.ctrl_mode in (2, 4, 6)):
+                if (time_in_est_period >= mod_update_freq) and (self.ctrl_mode in (2, 4, 6)):
                     # Update model estimator's internal clock
                     self.est_clock = t
 
@@ -662,7 +662,7 @@ class Controller(utilities.Generic):
             x0_est, _, _, _ = np.linalg.lstsq(self.my_model.C, y)
             self.my_model.updateIC(x0_est)
 
-            if t >= self.mod_est_phase:
+            if t >= self.initial_buffer_fill:
                     # Drop probing noise
                 self.is_prob_noise = 0
 
@@ -859,7 +859,7 @@ class Controller(utilities.Generic):
 
                 # Apply control when model estimation phase is over
                 if self.is_prob_noise and (self.ctrl_mode == 2):
-                    return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
+                    return self.initial_buffer_power * (rand(self.dim_input) - 0.5)
 
                 elif not self.is_prob_noise and (self.ctrl_mode == 2):
                     u = self._actor(y, self.u_init, self.n_actor,
@@ -893,7 +893,7 @@ class Controller(utilities.Generic):
 
                 # Actor. Apply control when model estimation phase is over
                 if self.is_prob_noise and (self.ctrl_mode in (4, 6)):
-                    u = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
+                    u = self.initial_buffer_power * (rand(self.dim_input) - 0.5)
                 elif not self.is_prob_noise and (self.ctrl_mode in (4, 6)):
                     u = self._actor(y, self.u_init, self.n_actor,
                                     W, self.pred_step_size, self.mode)
@@ -1135,11 +1135,8 @@ class Simulation(utilities.Generic):
                  system,
                  controller,
                  nominal_ctrl,
-                 fig_width=8,
-                 fig_height=8,
                  t0=0,
                  t1=60,
-                 n_runs=1,
                  a_tol=1e-5,
                  r_tol=1e-3,
                  x_min=-10,
@@ -1170,9 +1167,6 @@ class Simulation(utilities.Generic):
 
         # stop time of episode
         self.t1 = t1
-
-        # number of episodes
-        self.n_runs = n_runs
 
         self.initial_x = controller.initial_x
         self.initial_y = controller.initial_y
@@ -1218,10 +1212,6 @@ class Simulation(utilities.Generic):
         self.y_min = y_min
         self.y_max = y_max
 
-        # matplotlib fig size in inches
-        self.fig_width = fig_width
-        self.fig_height = fig_height
-
         self.ctrl_mode = controller.ctrl_mode
 
         # manual control
@@ -1243,9 +1233,6 @@ class Simulation(utilities.Generic):
         self.is_log_data = is_log_data
         self.is_visualization = is_visualization
         self.is_print_sim_step = is_print_sim_step
-
-        # extras
-        self.data_files = self._logdata(self.n_runs, save=self.is_log_data)
 
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
@@ -1275,28 +1262,14 @@ class Simulation(utilities.Generic):
 
         return u
 
-    # def create_simulator(self, system, controller):
-    #     closed_loop = system.closed_loop
-    #     sample_time = controller.sample_time
-
-    #     simulator = sp.integrate.RK45(closed_loop,
-    #                                   self.t0,
-    #                                   self.full_state,
-    #                                   self.t1,
-    #                                   max_step=sample_time / 2,
-    #                                   first_step=1e-6,
-    #                                   atol=self.a_tol,
-    #                                   rtol=self.r_tol)
-    #     return simulator
-
     # create graph
-    def _create_figure(self, agent):
+    def _create_figure(self, agent, fig_width, fig_height):
         y0 = System.get_curr_state(self.system_state)
         alpha_deg0 = self.alpha / 2 / np.pi
 
         plt.close('all')
 
-        self.sim_fig = plt.figure(figsize=(self.fig_width, self.fig_height))
+        self.sim_fig = plt.figure(figsize=(fig_width, fig_height))
 
         # xy plane
         self.xy_plane_axes = self.sim_fig.add_subplot(221,
@@ -1570,15 +1543,17 @@ class Simulation(utilities.Generic):
                 self.current_run += 1
                 self._reset_sim(agent, nominal_ctrl, simulator)
         else:
-            if self.run_in_window is False:
+            if self.close_plt_on_finish is True:
                 self.graceful_exit()
             
-            elif self.run_in_window is True:
+            elif self.close_plt_on_finish is False:
                 self.graceful_exit(plt_close = False)
 
-    def run_simulation(self, run_in_window = False):
-        self.run_in_window = run_in_window
+    def run_simulation(self, close_plt_on_finish = False, fig_width=8, fig_height=8, n_runs=1):
+        self.close_plt_on_finish = close_plt_on_finish
         self.current_run = 1
+        self.n_runs = n_runs
+        self.data_files = self._logdata(n_runs, save=self.is_log_data)
 
         if self.is_visualization:
             self.current_data_file = data_files[0]
@@ -1608,7 +1583,7 @@ class Simulation(utilities.Generic):
                 self.graceful_exit()
 
         else:
-            self.sim_fig = self._create_figure(self.controller)
+            self.sim_fig = self._create_figure(self.controller, fig_width, fig_height)
 
             animate = True
             fargs = (self.system, self.controller, self.nominal_ctrl, self.simulator, animate)
