@@ -4,15 +4,15 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="LearnRLSK", # Replace with your own username
+    name="rcognita", # Replace with your own username
     version="1.5.1",
-    author="Pavel Osinenko",
-    author_email="p.osinenko@skoltech.ru",
-    description="LearnRLSK",
+    author="Pavel Osinenko, Eli Bolotin",
+    author_email="p.osinenko@skoltech.ru, ebolotin6.git@gmail.com",
+    description="Python framework for Dynamic RL",
     long_description="See homepage",
     long_description_content_type="text/markdown",
-    url="https://github.com/AIDA-Skoltech/LearnRLSK",
-    packages=['LearnRLSK'],
+    url="https://github.com/AIDA-Skoltech/rcognita",
+    packages=['rcognita'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -20,7 +20,7 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'lrl = LearnRLSK.__main__:main',
+            'lrl = rcognita.__main__:main',
         ],
     },
     python_requires="~=3.7",
