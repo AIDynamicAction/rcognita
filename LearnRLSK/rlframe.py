@@ -111,12 +111,17 @@ class System(utilities.Generic):
                  mu_q=None,
                  tau_q=None):
         """ system """
+
         self.dim_state = dim_state
         self.dim_input = dim_input
         self.dim_output = dim_output
         self.dim_disturb = dim_disturb
         self.m = m
         self.I = I
+        self.f_min=f_min,
+        self.f_max=f_max,
+        self.m_min=m_min,
+        self.m_max=m_max,
         self.control_bounds = np.array([[f_min, f_max], [m_min, m_max]])
 
         """ disturbance """
@@ -328,9 +333,9 @@ class Controller(utilities.Generic):
 
     buffer_size -- The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
 
-    model_order -- The order of the state-space estimation model. We are        interested in adequate predictions of y under given u's. The higher the model order, the better estimation results may be achieved, but be aware of overfitting.
+    model_order -- The order of the state-space estimation model. We are interested in adequate predictions of y under given u's. The higher the model order, the better estimation results may be achieved, but be aware of overfitting.
 
-    mod_est_checks -- Estimated model parameters can be stored in stacks and the best among the `mod_est_checks` last ones is picked.
+    stacked_model_params -- Estimated model parameters can be stored in stacks and the best among the `stacked_model_params` last ones is picked.
         * May improve the prediction quality somewhat
 
     gamma -- Discounting factor
@@ -378,19 +383,11 @@ class Controller(utilities.Generic):
     """
 
     def __init__(self,
-                 dim_state=5,
-                 dim_input=2,
-                 dim_output=5,
+                system,
                  ctrl_mode=1,
-                 m=10,
-                 I=1,
                  t0=0,
                  initial_x=5,
                  initial_y=5,
-                 f_min=-5,
-                 f_max=5,
-                 m_min=-1,
-                 m_max=1,
                  n_actor=1,
                  n_critic=4,
                  buffer_size=20,
@@ -399,28 +396,29 @@ class Controller(utilities.Generic):
                  r_cost_struct=1,
                  sample_time=0.1,
                  initial_buffer_fill=1,
-                 mod_update_freq=0.1,
-                 mod_est_checks=0,
-                 model_order=3,
                  initial_buffer_power=1,
+                 mod_update_freq=0.1,
+                 stacked_model_params=0,
+                 model_order=3,
                  pred_step_size=0.1,
                  gamma=1,
                  is_disturb=0):
         """ system vars """
-        self.dim_input = dim_input
-        self.dim_output = dim_output
-        self.dim_state = dim_state
-        self.m = m
-        self.I = I
+        self.dim_state = system.dim_state
+        self.dim_input = system.dim_input
+        self.dim_output = system.dim_output
+        self.m = system.m
+        self.I = system.I
+
         self.initial_x = initial_x
         self.initial_y = initial_y
-
+        
         """ disturbance """
         self.is_disturb = is_disturb
 
         # initial values of the system's state
         alpha = np.pi / 2
-        initial_state = np.zeros(dim_state)
+        initial_state = np.zeros(self.dim_state)
         initial_state[0] = 5
         initial_state[1] = 5
         initial_state[2] = alpha
@@ -432,7 +430,7 @@ class Controller(utilities.Generic):
         self.initial_buffer_power = initial_buffer_power
         self.initial_buffer_fill = initial_buffer_fill
         self.mod_update_freq = mod_update_freq
-        self.mod_est_checks = mod_est_checks
+        self.stacked_model_params = stacked_model_params
         self.buffer_size = buffer_size
         self.model_order = model_order
 
@@ -446,7 +444,7 @@ class Controller(utilities.Generic):
         self.my_model = utilities._model(A, B, C, D, x0_est)
         self.model_stack = []
 
-        for k in range(self.mod_est_checks):
+        for k in range(self.stacked_model_params):
             self.model_stack.append(self.my_model)
 
         """ Controller  """
@@ -474,22 +472,15 @@ class Controller(utilities.Generic):
         self.ctrl_mode = ctrl_mode
         self.ctrl_clock = t0
 
-        """ controller sampling time.
-        The system itself is continuous as a physical process while the controller is digital.
-
-            Things to note:
-                * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
-                * smaller sampling times lead to higher computation times
-                * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
-        """
         self.sample_time = sample_time
 
-        # manual control
-        self.f_min = f_min
-        self.f_max = f_max
-        self.m_min = m_min
-        self.m_max = m_max
-        self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
+        self.f_min = system.f_min
+        self.f_max = system.f_max
+        self.m_min = system.m_min
+        self.m_max = system.m_max
+
+        # self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
+        self.ctrl_bnds = system.control_bounds
         self.min_bounds = np.array(self.ctrl_bnds[:, 0])
         self.max_bounds = np.array(self.ctrl_bnds[:, 1])
         self.u_min = utilities._repMat(self.min_bounds, 1, n_actor)
@@ -497,8 +488,8 @@ class Controller(utilities.Generic):
         self.u_curr = self.min_bounds / 10
         self.u_init = utilities._repMat(self.min_bounds / 10, 1, self.n_actor)
 
-        self.u_buffer = np.zeros([buffer_size, dim_input])
-        self.y_buffer = np.zeros([buffer_size, dim_output])
+        self.u_buffer = np.zeros([buffer_size, self.dim_input])
+        self.y_buffer = np.zeros([buffer_size, self.dim_output])
 
         """ other """
         self.sys_rhs = System.get_system_dynamics
@@ -536,13 +527,11 @@ class Controller(utilities.Generic):
         """
         Resets agent for use in multi-episode simulation.
         All the learned parameters are retained
-
         """
         self.ctrl_clock = t0
         self.u_curr = self.min_bounds / 10
 
     def get_sys_state(self, x):
-        """ Fetch exogenous model state. """
         self.system_state = x
 
     def _dss_sim(self, A, B, C, D, uSqn, x0, y0):
@@ -634,14 +623,14 @@ class Controller(utilities.Generic):
                         self.my_model.updatePars(np.zeros([self.model_order, self.model_order]), np.zeros( [self.model_order, self.dim_input]), np.zeros( [self.dim_output, self.model_order]), np.zeros([self.dim_output, self.dim_input]))
 
                     # Model checks
-                    if self.mod_est_checks > 0:
+                    if self.stacked_model_params > 0:
                         # Update estimated model parameter stacks
                         self.model_stack.pop(0)
                         self.model_stack.append(self.model)
 
                         # Perform check of stack of models and pick the best
                         totAbsErrCurr = 1e8
-                        for k in range(self.mod_est_checks):
+                        for k in range(self.stacked_model_params):
                             A, B, C, D = self.model_stack[k].A, self.model_stack[
                                 k].B, self.model_stack[k].C, self.model_stack[k].D
                             x0_est, _, _, _ = np.linalg.lstsq(C, y)
@@ -1217,13 +1206,13 @@ class Simulation(utilities.Generic):
         self.u_man = np.array([f_man, n_man])
 
         # control constraints
-        self.f_min = controller.f_min
-        self.f_max = controller.f_max
-        self.m_min = controller.m_min
-        self.m_max = controller.m_max
+        self.f_min = system.f_min
+        self.f_max = system.f_max
+        self.m_min = system.m_min
+        self.m_max = system.m_max
 
-        self.control_bounds = np.array(
-            [[self.f_min, self.f_max], [self.m_min, self.m_max]])
+        # self.control_bounds = np.array([[self.f_min, self.f_max], [self.m_min, self.m_max]])
+        self.control_bounds = system.control_bounds
 
         """Other"""
         #%% User settings: main switches

@@ -53,7 +53,7 @@ def main(args=None):
         parser.add_argument('-mod_update_freq', type=int,
                             default=0, help="In seconds, the time between model estimate updates. This constant determines how often the estimated parameters")
 
-        parser.add_argument('-mod_est_checks', type=int,
+        parser.add_argument('-stacked_model_params', type=int,
                             default=0, help=" estimated model parameters can be stored in stacks and the best among the modEstchecks last ones is picked")
 
         parser.add_argument('-buffer_size', type=int,
@@ -138,7 +138,7 @@ def main(args=None):
         model_order = args.model_order,
         initial_buffer_power = args.initial_buffer_power,
         mod_update_freq = args.mod_update_freq,
-        mod_est_checks = args.mod_est_checks,
+        stacked_model_params = args.stacked_model_params,
         f_man = args.f_man,
         n_man = args.n_man,
         f_min = args.f_min,
@@ -161,13 +161,13 @@ def main(args=None):
         # environment
         sys = System(dim_state, dim_input, dim_output, dim_disturb,
                      m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
-        agent = Controller(dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, initial_buffer_power, initial_buffer_fill, buffer_size, model_order, mod_est_checks, mod_update_freq, gamma, n_critic, critic_struct, r_cost_struct)
+        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, initial_buffer_power, initial_buffer_fill, buffer_size, model_order, stacked_model_params, mod_update_freq, gamma, n_critic, critic_struct, r_cost_struct)
         nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
 
     else:
         # environment
         sys = System()
-        agent = Controller(ctrl_mode=5, n_actor=6, buffer_size=200, critic_struct=3, n_critic=50, initial_buffer_power=8, initial_buffer_fill=2)
+        agent = Controller(sys, ctrl_mode=5, n_actor=6, buffer_size=200, critic_struct=3, n_critic=50, initial_buffer_power=8, initial_buffer_fill=2)
         nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
 
     sim = Simulation(sys, agent, nominalCtrl, t1=30)
