@@ -736,6 +736,51 @@ class Controller(utilities.Generic):
 
         return W
 
+    def _actor(self, y, u_init, N, W, delta, ctrl_mode):
+        """
+        Parameter `delta` here is a shorthand for `pred_step_size`    
+
+        This method normally should not be altered. The only customization you might want here is regarding the optimization algorithm
+
+        """
+
+        # Optimization method of actor
+        # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP,
+        # trust-constr, Powell
+        actor_opt_method = 'SLSQP'
+        if actor_opt_method == 'trust-constr':
+            # 'disp': True, 'verbose': 2}
+            actor_opt_options = {'maxiter': 300, 'disp': False}
+        else:
+            # actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False,
+            #                      'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
+            actor_opt_options = {'maxiter': 300, 'disp': False, 'ftol': 1e-7}
+
+        isGlobOpt = 0
+
+        myu_init = np.reshape(u_init, [N * self.dim_input, ])
+
+        bnds = sp.optimize.Bounds(self.u_min, self.u_max, keep_feasible=True)
+
+        try:
+            if isGlobOpt:
+                minimizer_kwargs = {
+                    'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
+                U = basinhopping(lambda U: self._get_actor_cost(
+                    U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
+
+            else:
+                warnings.filterwarnings('ignore')
+                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
+                             method=actor_opt_method, tol=1e-7,
+                             bounds=bnds,
+                             options=actor_opt_options).x
+        except ValueError:
+            print("Actor's optimizer failed. Returning default action")
+            U = myu_init
+
+        return U[:self.dim_input]    # Return first action
+
     def _get_actor_cost(self, U, y, N, W, delta, ctrl_mode):
         """
         Parameter `delta` here is a shorthand for `pred_step_size`
@@ -783,51 +828,6 @@ class Controller(utilities.Generic):
                 J += 1 / N * Q
 
         return J
-
-    def _actor(self, y, u_init, N, W, delta, ctrl_mode):
-        """
-        Parameter `delta` here is a shorthand for `pred_step_size`    
-
-        This method normally should not be altered. The only customization you might want here is regarding the optimization algorithm
-
-        """
-
-        # Optimization method of actor
-        # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP,
-        # trust-constr, Powell
-        actor_opt_method = 'SLSQP'
-        if actor_opt_method == 'trust-constr':
-            # 'disp': True, 'verbose': 2}
-            actor_opt_options = {'maxiter': 300, 'disp': False}
-        else:
-            # actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False,
-            #                      'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
-            actor_opt_options = {'maxiter': 300, 'disp': False, 'ftol': 1e-7}
-
-        isGlobOpt = 0
-
-        myu_init = np.reshape(u_init, [N * self.dim_input, ])
-
-        bnds = sp.optimize.Bounds(self.u_min, self.u_max, keep_feasible=True)
-
-        try:
-            if isGlobOpt:
-                minimizer_kwargs = {
-                    'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                U = basinhopping(lambda U: self._get_actor_cost(
-                    U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
-
-            else:
-                warnings.filterwarnings('ignore')
-                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
-                             method=actor_opt_method, tol=1e-7,
-                             bounds=bnds,
-                             options=actor_opt_options).x
-        except ValueError:
-            print('Actor''s optimizer failed. Returning default action')
-            U = myu_init
-
-        return U[:self.dim_input]    # Return first action
 
     def compute_action(self, t, y):
         """ Main method. """
@@ -880,7 +880,7 @@ class Controller(utilities.Generic):
                         (rand(self.dim_input) - 0.5)
                 elif not self.is_prob_noise and (self.ctrl_mode in (4, 6)):
                     u = self._actor(y, self.u_init, self.n_actor,
-                                    W, self.pred_step_size, self.mode)
+                                    W, self.pred_step_size, self.ctrl_mode)
 
                 elif self.ctrl_mode in (3, 5):
                     u = self._actor(y, self.u_init, self.n_actor,
@@ -1110,9 +1110,7 @@ class NominalController(utilities.Generic):
 class Simulation(utilities.Generic):
     """class to create and run simulation.
 
-    a_tol, r_tol -- sensitivity of the solver
-
-
+    a_tol, r_tol -- sensitivity of the solverxs
     """
 
     def __init__(self,
