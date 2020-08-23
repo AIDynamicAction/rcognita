@@ -311,9 +311,6 @@ class Controller(utilities.Generic):
 
     Parameters
     ----------
-    dim_input -- dimension of controller input/action
-
-    dim_output -- dimension of controller output which should comply with the system-to-be-controlled
 
     t0 -- Initial value of the controller's internal clock
 
@@ -372,9 +369,6 @@ class Controller(utilities.Generic):
 
         * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
         * Modes 2, 4, 6 use an estimated online
-
-    f_min, f_max, m_min, m_max -- control bounds
-
 
     References
     ----------
@@ -610,8 +604,6 @@ class Controller(utilities.Generic):
                                                             SS_fixed_order=self.model_order,
                                                             SS_D_required=False,
                                                             SS_A_stability=False,
-                                                            # SS_f=int(self.buffer_size/12),
-                                                            # SS_p=int(self.buffer_size/10),
                                                             SS_PK_B_reval=False,
                                                             tsample=self.sample_time)
 

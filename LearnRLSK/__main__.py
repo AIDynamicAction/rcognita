@@ -54,7 +54,7 @@ def main(args=None):
                             default=0, help="In seconds, the time between model estimate updates. This constant determines how often the estimated parameters")
 
         parser.add_argument('-stacked_model_params', type=int,
-                            default=0, help=" estimated model parameters can be stored in stacks and the best among the modEstchecks last ones is picked")
+                            default=0, help="Estimated model parameters can be stored in stacks and the best among the last ones is picked")
 
         parser.add_argument('-buffer_size', type=int,
                             default=200, help="The size of the buffer to store data for model estimation. Is measured in numbers of periods of length dt.")
