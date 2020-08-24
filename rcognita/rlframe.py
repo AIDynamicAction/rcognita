@@ -312,6 +312,8 @@ class Controller(utilities.Generic):
     Parameters and descriptions of instance attributes
     --------------------------------------------------
 
+    system - object of class System
+
     t0 -- Initial value of the controller's internal clock
 
     sample_time --Controller's sampling time (in seconds)
@@ -1248,13 +1250,17 @@ class Simulation(utilities.Generic):
         """ returns a pyplot figure with 4 plots """
 
         y0 = System.get_curr_state(self.system_state)
-        alpha_deg0 = self.alpha / 2 / np.pi
+        alpha = self.alpha / 2 / np.pi
 
         plt.close('all')
 
         self.sim_fig = plt.figure(figsize=(fig_width, fig_height))
 
-        # xy plane  subplot
+        """
+        
+        Simulation subplot
+        
+        """
         self.xy_plane_axes = self.sim_fig.add_subplot(221,
                                                       autoscale_on=False,
                                                       xlim=(self.x_min,
@@ -1264,14 +1270,20 @@ class Simulation(utilities.Generic):
                                                       xlabel='x [m]',
                                                       ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
 
+        self.xy_plane_axes.title.set_text('Simulation')
+
         self.xy_plane_axes.set_aspect('equal', adjustable='box')
+        
         self.xy_plane_axes.plot([self.x_min, self.x_max], [
-            0, 0], 'k--', lw=0.75)   # Help line
+            0, 0], 'k--', lw=0.75)   # x-axis
+        
         self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],
-                                'k--', lw=0.75)   # Help line
+                                'k--', lw=0.75)   # y-axis
+        
         self.traj_line, = self.xy_plane_axes.plot(
             self.initial_x, self.initial_y, 'b--', lw=0.5)
-        self.robot_marker = utilities._pltMarker(angle=alpha_deg0)
+        
+        self.robot_marker = utilities._pltMarker(angle=alpha)
 
         text_time = 't = {time:2.3f}'.format(time=self.t0)
 
@@ -1283,40 +1295,70 @@ class Simulation(utilities.Generic):
 
         self.xy_plane_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
-        # Solution subplot
+        """
+        
+        Proximity subplot
+        
+        """
         self.sol_axes = self.sim_fig.add_subplot(222, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             2 * np.min([self.x_min, self.y_min]), 2 * np.max([self.x_max, self.y_max])), xlabel='t [s]')
+        
+        self.sol_axes.title.set_text('Proximity-to-Target')
+
+
         self.sol_axes.plot([self.t0, self.t1], [0, 0],
                            'k--', lw=0.75)   # Help line
+        
         self.norm_line, = self.sol_axes.plot(self.t0, la.norm(
             [self.initial_x, self.initial_y]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+        
         self.alpha_line, = self.sol_axes.plot(
             self.t0, self.alpha, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
+        
         self.sol_axes.legend(fancybox=True, loc='upper right')
+        
         self.sol_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
-        # Cost subplot
+        """
+        
+        Cost subplot
+        
+        """
         self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             0, 1e4 * agent.running_cost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
+
+        self.cost_axes.title.set_text('Cost')
 
         r = agent.running_cost(y0, self.u0)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
         self.text_icost_handle = self.sim_fig.text(
             0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
+        
         self.r_cost_line, = self.cost_axes.plot(
             self.t0, r, 'r-', lw=0.5, label='r')
+        
         self.i_cost_line, = self.cost_axes.plot(
             self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+        
         self.cost_axes.legend(fancybox=True, loc='upper right')
 
-        # Control subplot
+        """
+        
+        Control subplot
+        
+        """
         self.ctrlAxs = self.sim_fig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             1.1 * np.min([self.f_min, self.m_min]), 1.1 * np.max([self.f_max, self.m_max])), xlabel='t [s]')
+        
+        self.ctrlAxs.title.set_text('Control')
+
         self.ctrlAxs.plot([self.t0, self.t1], [0, 0],
                           'k--', lw=0.75)   # Help line
+        
         self.ctrl_lines = self.ctrlAxs.plot(
             self.t0, utilities._toColVec(self.u0).T, lw=0.5)
+        
         self.ctrlAxs.legend(
             iter(self.ctrl_lines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
 
@@ -1358,7 +1400,7 @@ class Simulation(utilities.Generic):
     def _update_text(self, text_handle, newText):
         text_handle.set_text(newText)
 
-    def _update_all_scatter_lines(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
+    def _update_all_lines(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
         """
         Update lines on all scatter plots
         """
@@ -1372,8 +1414,11 @@ class Simulation(utilities.Generic):
         self.sol_scatter = self.xy_plane_axes.scatter(
             x_coord, y_coord, marker=self.robot_marker.marker, s=400, c='b')
 
+        # Euclidean (aka Frobenius) norm
+        self.l2_norm = la.norm([x_coord, y_coord])
+        
         # Solution
-        self._update_line(self.norm_line, t, la.norm([x_coord, y_coord]))
+        self._update_line(self.norm_line, t, self.l2_norm)
         self._update_line(self.alpha_line, t, alpha)
 
         # Cost
@@ -1463,7 +1508,7 @@ class Simulation(utilities.Generic):
             alpha_deg = alpha / np.pi * 180
             r = agent.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
-            self._update_all_scatter_lines(text_time, full_state, alpha_deg,
+            self._update_all_lines(text_time, full_state, alpha_deg,
                                            x_coord, y_coord, t, alpha, r, icost, u)
 
     def _reset_sim(self, agent, nominal_ctrl, simulator):
@@ -1520,6 +1565,7 @@ class Simulation(utilities.Generic):
 
         if self.current_run <= self.n_runs:
             if t < self.t1:
+                self.t_elapsed = t
                 self._take_step(*args)
 
             else:
