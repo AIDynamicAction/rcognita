@@ -4,12 +4,12 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="rcognita", # Replace with your own username
+    name="rcognita",
     version="1.5.1",
     author="Pavel Osinenko, Eli Bolotin",
     author_email="p.osinenko@skoltech.ru, ebolotin6.git@gmail.com",
     description="Python framework for Dynamic RL",
-    long_description="See homepage",
+    long_description="See url",
     long_description_content_type="text/markdown",
     url="https://github.com/AIDA-Skoltech/rcognita",
     packages=['rcognita'],

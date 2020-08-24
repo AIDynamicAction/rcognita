@@ -523,36 +523,8 @@ class Controller(utilities.Generic):
 
         self.Winit = self.Wprev
 
-    def reset(self, t0):
-        """
-        Resets agent for use in multi-episode simulation.
-        All the learned parameters are retained
-        """
-        self.ctrl_clock = t0
-        self.u_curr = self.min_bounds / 10
-
     def get_sys_state(self, x):
         self.system_state = x
-
-    def _dss_sim(self, A, B, C, D, uSqn, x0, y0):
-        """
-        Simulate output response of a discrete-time state-space model
-        """
-        if uSqn.ndim == 1:
-            return y0, x0
-        else:
-            ySqn = np.zeros([uSqn.shape[0], C.shape[0]])
-            xSqn = np.zeros([uSqn.shape[0], A.shape[0]])
-            x = x0
-            ySqn[0, :] = y0
-            xSqn[0, :] = x0
-
-            for k in range(1, uSqn.shape[0]):
-                x = A @ x + B @ uSqn[k - 1, :]
-                xSqn[k, :] = x
-                ySqn[k, :] = C @ x + D @ uSqn[k - 1, :]
-
-            return ySqn, xSqn
 
     def running_cost(self, y, u):
         """
@@ -618,8 +590,10 @@ class Controller(utilities.Generic):
 
                     except:
                         print('Model estimation problem')
-                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]), np.zeros([self.model_order, self.dim_input]), np.zeros(
-                            [self.dim_output, self.model_order]), np.zeros([self.dim_output, self.dim_input]))
+                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]), 
+                            np.zeros([self.model_order, self.dim_input]), 
+                            np.zeros([self.dim_output, self.model_order]), 
+                            np.zeros([self.dim_output, self.dim_input]))
 
                     # Model checks
                     if self.stacked_model_params > 0:
@@ -651,93 +625,6 @@ class Controller(utilities.Generic):
                     # Drop probing noise
                 self.is_prob_noise = 0
 
-    def _phi(self, y, u):
-        """
-        Feature vector of critic
-
-        In Q-learning mode, it uses both `y` and `u`. In value function approximation mode, it should use just `y`
-
-        Customization
-        -------------
-
-        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like `W @ self._phi( y, u )` 
-        within `controller._get_critic_cost`
-
-        """
-        chi = np.concatenate([y, u])
-
-        if self.critic_mode == 1:
-            return np.concatenate([_uptria2vec(np.kron(chi, chi)), chi])
-
-        elif self.critic_mode == 2:
-            return np.concatenate([_uptria2vec(np.kron(chi, chi))])
-
-        elif self.critic_mode == 3:
-            return chi * chi
-
-        elif self.critic_mode == 4:
-            return np.concatenate([y**2, np.kron(y, u), u**2])
-
-    def _get_critic_cost(self, W, U, Y):
-        """ Cost function of the critic
-
-        Currently uses value-iteration-like method  
-
-        Customization
-        -------------        
-
-        Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation 
-
-        """
-        Jc = 0
-
-        for k in range(self.dim_crit, 0, -1):
-            y_prev = Y[k - 1, :]
-            y_next = Y[k, :]
-            u_prev = U[k - 1, :]
-            u_next = U[k, :]
-
-            # Temporal difference
-            e = W @ self._phi(y_prev, u_prev) - self.gamma * self.Wprev @ self._phi(y_next, u_next) - self.running_cost(y_prev, u_prev)
-
-            Jc += 1 / 2 * e**2
-
-        return Jc
-
-    def _critic(self, Wprev, Winit, U, Y):
-        """ Critic
-        Parameter `delta` here is a shorthand for `pred_step_size`
-
-        Customization
-        -------------
-
-        This method normally should not be altered, adjust `controller._get_critic_cost` instead.
-        The only customization you might want here is regarding the optimization algorithm
-
-        """
-
-        # Optimization method of critic
-        # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP,
-        # trust-constr, Powell
-        critic_opt_method = 'SLSQP'
-        if critic_opt_method == 'trust-constr':
-            # 'disp': True, 'verbose': 2}
-            critic_opt_options = {'maxiter': 200, 'disp': False}
-        else:
-            warnings.filterwarnings('ignore')
-            # critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False,'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
-            critic_opt_options = {'maxiter': 200, 'disp': False, 'ftol': 1e-7}
-
-        bnds = sp.optimize.Bounds(self.w_min, self.w_max, keep_feasible=True)
-
-        W = minimize(lambda W: self._get_critic_cost(W, U, Y), Winit,
-                     method=critic_opt_method,
-                     tol=1e-7,
-                     bounds=bnds,
-                     options=critic_opt_options).x
-
-        return W
-
     def _actor(self, y, u_init, N, W, delta, ctrl_mode):
         """
         Parameter `delta` here is a shorthand for `pred_step_size`    
@@ -767,14 +654,23 @@ class Controller(utilities.Generic):
         try:
             if isGlobOpt:
                 minimizer_kwargs = {
-                    'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                U = basinhopping(lambda U: self._get_actor_cost(
-                    U, y, N, W, delta, ctrl_mode), myu_init, minimizer_kwargs=minimizer_kwargs, niter=10).x
+                                    'method': actor_opt_method, 
+                                    'bounds': bnds, 
+                                    'tol': 1e-7, 
+                                    'options': actor_opt_options
+                                    }
+                
+                U = basinhopping(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), 
+                                    myu_init, 
+                                    minimizer_kwargs=minimizer_kwargs, 
+                                    niter=10).x
 
             else:
                 warnings.filterwarnings('ignore')
-                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), myu_init,
-                             method=actor_opt_method, tol=1e-7,
+                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), 
+                             myu_init,
+                             method=actor_opt_method, 
+                             tol=1e-7,
                              bounds=bnds,
                              options=actor_opt_options).x
         except ValueError:
@@ -830,6 +726,66 @@ class Controller(utilities.Generic):
                 J += 1 / N * Q
 
         return J
+
+    def _critic(self, Wprev, Winit, U, Y):
+        """ Critic
+        Parameter `delta` here is a shorthand for `pred_step_size`
+
+        Customization
+        -------------
+
+        This method normally should not be altered, adjust `controller._get_critic_cost` instead.
+        The only customization you might want here is regarding the optimization algorithm
+
+        """
+
+        # Optimization method of critic
+        # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP,
+        # trust-constr, Powell
+        critic_opt_method = 'SLSQP'
+        if critic_opt_method == 'trust-constr':
+            # 'disp': True, 'verbose': 2}
+            critic_opt_options = {'maxiter': 200, 'disp': False}
+        else:
+            warnings.filterwarnings('ignore')
+            # critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False,'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
+            critic_opt_options = {'maxiter': 200, 'disp': False, 'ftol': 1e-7}
+
+        bnds = sp.optimize.Bounds(self.w_min, self.w_max, keep_feasible=True)
+
+        W = minimize(lambda W: self._get_critic_cost(W, U, Y), Winit,
+                     method=critic_opt_method,
+                     tol=1e-7,
+                     bounds=bnds,
+                     options=critic_opt_options).x
+
+        return W
+
+    def _get_critic_cost(self, W, U, Y):
+        """ Cost function of the critic
+
+        Currently uses value-iteration-like method  
+
+        Customization
+        -------------        
+
+        Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation 
+
+        """
+        Jc = 0
+
+        for k in range(self.dim_crit, 0, -1):
+            y_prev = Y[k - 1, :]
+            y_next = Y[k, :]
+            u_prev = U[k - 1, :]
+            u_next = U[k, :]
+
+            # Temporal difference
+            e = W @ self._phi(y_prev, u_prev) - self.gamma * self.Wprev @ self._phi(y_next, u_next) - self.running_cost(y_prev, u_prev)
+
+            Jc += 1 / 2 * e**2
+
+        return Jc
 
     def compute_action(self, t, y):
         """ Main method. """
@@ -894,6 +850,61 @@ class Controller(utilities.Generic):
 
         else:
             return self.u_curr
+
+    def _dss_sim(self, A, B, C, D, uSqn, x0, y0):
+        """
+        Simulate output response of a discrete-time state-space model
+        """
+        if uSqn.ndim == 1:
+            return y0, x0
+        else:
+            ySqn = np.zeros([uSqn.shape[0], C.shape[0]])
+            xSqn = np.zeros([uSqn.shape[0], A.shape[0]])
+            x = x0
+            ySqn[0, :] = y0
+            xSqn[0, :] = x0
+
+            for k in range(1, uSqn.shape[0]):
+                x = A @ x + B @ uSqn[k - 1, :]
+                xSqn[k, :] = x
+                ySqn[k, :] = C @ x + D @ uSqn[k - 1, :]
+
+            return ySqn, xSqn
+
+    def _phi(self, y, u):
+        """
+        Feature vector of critic
+
+        In Q-learning mode, it uses both `y` and `u`. In value function approximation mode, it should use just `y`
+
+        Customization
+        -------------
+
+        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like `W @ self._phi( y, u )` 
+        within `controller._get_critic_cost`
+
+        """
+        chi = np.concatenate([y, u])
+
+        if self.critic_mode == 1:
+            return np.concatenate([_uptria2vec(np.kron(chi, chi)), chi])
+
+        elif self.critic_mode == 2:
+            return np.concatenate([_uptria2vec(np.kron(chi, chi))])
+
+        elif self.critic_mode == 3:
+            return chi * chi
+
+        elif self.critic_mode == 4:
+            return np.concatenate([y**2, np.kron(y, u), u**2])
+
+    def reset(self, t0):
+        """
+        Resets agent for use in multi-episode simulation.
+        All the learned parameters are retained
+        """
+        self.ctrl_clock = t0
+        self.u_curr = self.min_bounds / 10
 
 
 class NominalController(utilities.Generic):
