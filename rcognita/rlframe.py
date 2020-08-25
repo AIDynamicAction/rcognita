@@ -325,9 +325,9 @@ class Controller(utilities.Generic):
             * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
 
 
-    initial_buffer_fill -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
+    estimator_buffer_fill -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
 
-    initial_buffer_power -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
+    estimator_buffer_power -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
 
     model_update_time -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
 
@@ -394,8 +394,8 @@ class Controller(utilities.Generic):
                  r_cost_struct=1,
                  sample_time=0.1,
                  model_update_time=0.1,
-                 initial_buffer_fill=6,
-                 initial_buffer_power=2,
+                 estimator_buffer_fill=6,
+                 estimator_buffer_power=2,
                  stacked_model_params=0,
                  model_order=3,
                  gamma=1,
@@ -424,8 +424,8 @@ class Controller(utilities.Generic):
         # model hyperparams
         self.est_clock = t0
         self.is_prob_noise = 1
-        self.initial_buffer_power = initial_buffer_power
-        self.initial_buffer_fill = initial_buffer_fill
+        self.estimator_buffer_power = estimator_buffer_power
+        self.estimator_buffer_fill = estimator_buffer_fill
         self.model_update_time = model_update_time
         self.stacked_model_params = stacked_model_params
         self.buffer_size = buffer_size
@@ -591,7 +591,7 @@ class Controller(utilities.Generic):
                     except:
                         print('Model estimation problem')
                         self.my_model.updatePars(np.zeros([self.model_order, self.model_order]), 
-                            np.zeros([self.model_order, self.dim_input]), 
+                            np.zeros([self.model_order, self.dim_input]),
                             np.zeros([self.dim_output, self.model_order]), 
                             np.zeros([self.dim_output, self.dim_input]))
 
@@ -621,7 +621,7 @@ class Controller(utilities.Generic):
             x0_est, _, _, _ = np.linalg.lstsq(self.my_model.C, y)
             self.my_model.updateIC(x0_est)
 
-            if t >= self.initial_buffer_fill:
+            if t >= self.estimator_buffer_fill:
                     # Drop probing noise
                 self.is_prob_noise = 0
 
@@ -800,7 +800,7 @@ class Controller(utilities.Generic):
 
                 # Apply control when model estimation phase is over
                 if self.is_prob_noise and (self.ctrl_mode == 2):
-                    return self.initial_buffer_power * (rand(self.dim_input) - 0.5)
+                    return self.estimator_buffer_power * (rand(self.dim_input) - 0.5)
 
                 elif not self.is_prob_noise and (self.ctrl_mode == 2):
                     u = self._actor(y, self.u_init, self.n_actor,
@@ -834,7 +834,7 @@ class Controller(utilities.Generic):
 
                 # Actor. Apply control when model estimation phase is over
                 if self.is_prob_noise and (self.ctrl_mode in (4, 6)):
-                    u = self.initial_buffer_power * \
+                    u = self.estimator_buffer_power * \
                         (rand(self.dim_input) - 0.5)
                 elif not self.is_prob_noise and (self.ctrl_mode in (4, 6)):
                     u = self._actor(y, self.u_init, self.n_actor,

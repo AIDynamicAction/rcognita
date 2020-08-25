@@ -42,9 +42,9 @@ def main(args=None):
         parser.add_argument('-gamma', type=int, default=1,
                             help="Discounting factor gamma.")
         
-        parser.add_argument('-initial_buffer_power', type=int, default=8, help="Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control")
+        parser.add_argument('-estimator_buffer_power', type=int, default=8, help="Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control")
 
-        parser.add_argument('-initial_buffer_fill', type=int,
+        parser.add_argument('-estimator_buffer_fill', type=int,
                             default=2, help="In seconds, an initial phase to fill the estimator's buffer before applying optimal control.")
 
         parser.add_argument('-model_order', type=int,
@@ -134,9 +134,9 @@ def main(args=None):
         y_min = args.y_min,
         y_max = args.y_max,
         dt = args.dt,
-        initial_buffer_fill = args.initial_buffer_fill,
+        estimator_buffer_fill = args.estimator_buffer_fill,
         model_order = args.model_order,
-        initial_buffer_power = args.initial_buffer_power,
+        estimator_buffer_power = args.estimator_buffer_power,
         model_update_time = args.model_update_time,
         stacked_model_params = args.stacked_model_params,
         f_man = args.f_man,
@@ -161,13 +161,13 @@ def main(args=None):
         # environment
         sys = System(dim_state, dim_input, dim_output, dim_disturb,
                      m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
-        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, initial_buffer_power, initial_buffer_fill, buffer_size, model_order, stacked_model_params, model_update_time, gamma, n_critic, critic_mode, r_cost_struct)
+        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, estimator_buffer_power, estimator_buffer_fill, buffer_size, model_order, stacked_model_params, model_update_time, gamma, n_critic, critic_mode, r_cost_struct)
         nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
 
     else:
         # environment
         sys = System()
-        agent = Controller(sys, ctrl_mode=5, n_actor=6, buffer_size=200, critic_mode=3, n_critic=50, initial_buffer_power=8, initial_buffer_fill=2)
+        agent = Controller(sys, ctrl_mode=5, n_actor=6, buffer_size=200, critic_mode=3, n_critic=50, estimator_buffer_power=8, estimator_buffer_fill=2)
         nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
 
     sim = Simulation(sys, agent, nominalCtrl, t1=30)
