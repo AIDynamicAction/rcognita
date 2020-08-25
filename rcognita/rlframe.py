@@ -329,7 +329,7 @@ class Controller(utilities.Generic):
 
     estimator_buffer_power -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
 
-    model_update_time -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
+    estimator_update_time -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
 
     buffer_size -- The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
 
@@ -382,18 +382,18 @@ class Controller(utilities.Generic):
 
     def __init__(self,
                  system,
-                 ctrl_mode=3,
                  t0=0,
                  initial_x=5,
                  initial_y=5,
                  n_actor=6,
                  n_critic=50,
                  buffer_size=50,
-                 critic_period=0.1,
+                 ctrl_mode=3,
                  critic_mode=1,
+                 critic_period=0.1,
                  r_cost_struct=1,
                  sample_time=0.1,
-                 model_update_time=0.1,
+                 estimator_update_time=0.1,
                  estimator_buffer_fill=6,
                  estimator_buffer_power=2,
                  stacked_model_params=0,
@@ -426,7 +426,7 @@ class Controller(utilities.Generic):
         self.is_prob_noise = 1
         self.estimator_buffer_power = estimator_buffer_power
         self.estimator_buffer_fill = estimator_buffer_fill
-        self.model_update_time = model_update_time
+        self.estimator_update_time = estimator_update_time
         self.stacked_model_params = stacked_model_params
         self.buffer_size = buffer_size
         self.model_order = model_order
@@ -452,6 +452,8 @@ class Controller(utilities.Generic):
 
         """ RL elements """
         self.r_cost_struct = r_cost_struct
+
+        # running cost parameters
         self.R1 = np.diag([10, 10, 1, 0, 0, 0, 0])
         self.R2 = np.array([[10, 2, 1, 0, 0],
                             [0, 10, 2, 0, 0],
@@ -459,6 +461,8 @@ class Controller(utilities.Generic):
                             [0, 0, 0, 0, 0],
                             [0, 0, 0, 0, 0]])
         self.r_cost_pars = [self.R1, self.R2]
+
+        # integrated cost
         self.i_cost_val = 0
         self.critic_mode = critic_mode
         self.critic_clock = t0
@@ -471,6 +475,7 @@ class Controller(utilities.Generic):
 
         self.sample_time = sample_time
 
+        # bounds of F and M
         self.f_min = system.f_min
         self.f_max = system.f_max
         self.m_min = system.m_min
@@ -485,7 +490,10 @@ class Controller(utilities.Generic):
         self.u_curr = self.min_bounds / 10
         self.u_init = utilities._repMat(self.min_bounds / 10, 1, self.n_actor)
 
+        # buffer of previous controls
         self.u_buffer = np.zeros([buffer_size, self.dim_input])
+        
+        # buffer of previous outputs
         self.y_buffer = np.zeros([buffer_size, self.dim_output])
 
         """ other """
@@ -571,7 +579,7 @@ class Controller(utilities.Generic):
                 time_in_est_period = t - self.est_clock
 
                 # Estimate model if required by ctrlStatMode
-                if (time_in_est_period >= model_update_time) and (self.ctrl_mode in (2, 4, 6)):
+                if (time_in_est_period >= estimator_update_time) and (self.ctrl_mode in (2, 4, 6)):
                     # Update model estimator's internal clock
                     self.est_clock = t
 
@@ -1220,7 +1228,7 @@ class Simulation(utilities.Generic):
         self.m_min = system.m_min
         self.m_max = system.m_max
 
-        # self.control_bounds = np.array([[self.f_min, self.f_max], [self.m_min, self.m_max]])
+        # control bounds contains the control constraints
         self.control_bounds = system.control_bounds
 
         """Other"""
@@ -1279,9 +1287,8 @@ class Simulation(utilities.Generic):
                                                       ylim=(self.y_min,
                                                             self.y_max),
                                                       xlabel='x [m]',
-                                                      ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
-
-        self.xy_plane_axes.title.set_text('Simulation')
+                                                      ylabel='y [m]', 
+                                                      title=' Simulation: \n Pause - space, q - quit, click - data cursor')
 
         self.xy_plane_axes.set_aspect('equal', adjustable='box')
         

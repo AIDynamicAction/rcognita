@@ -50,7 +50,7 @@ def main(args=None):
         parser.add_argument('-model_order', type=int,
                             default=5, help="The order of the state-space estimation model.")
 
-        parser.add_argument('-model_update_time', type=int,
+        parser.add_argument('-estimator_update_time', type=int,
                             default=0, help="In seconds, the time between model estimate updates. This constant determines how often the estimated parameters")
 
         parser.add_argument('-stacked_model_params', type=int,
@@ -137,7 +137,7 @@ def main(args=None):
         estimator_buffer_fill = args.estimator_buffer_fill,
         model_order = args.model_order,
         estimator_buffer_power = args.estimator_buffer_power,
-        model_update_time = args.model_update_time,
+        estimator_update_time = args.estimator_update_time,
         stacked_model_params = args.stacked_model_params,
         f_man = args.f_man,
         n_man = args.n_man,
@@ -161,7 +161,7 @@ def main(args=None):
         # environment
         sys = System(dim_state, dim_input, dim_output, dim_disturb,
                      m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
-        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, estimator_buffer_power, estimator_buffer_fill, buffer_size, model_order, stacked_model_params, model_update_time, gamma, n_critic, critic_mode, r_cost_struct)
+        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, estimator_buffer_power, estimator_buffer_fill, buffer_size, model_order, stacked_model_params, estimator_update_time, gamma, n_critic, critic_mode, r_cost_struct)
         nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
 
     else:
