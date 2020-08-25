@@ -312,54 +312,17 @@ class Controller(utilities.Generic):
     Parameters and descriptions of instance attributes
     --------------------------------------------------
 
-    system - object of class System
+    system -- object of class System
+
+    initial_x, initial_y -- starting (x,y) coordinates of controller on simulation plot
 
     t0 -- Initial value of the controller's internal clock
 
-    sample_time --Controller's sampling time (in seconds)
-        The system itself is continuous as a physical process while the controller is digital.
-
-        Things to note:
-            * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
-            * smaller sampling times lead to higher computation times
-            * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
-
-
-    estimator_buffer_fill -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
-
-    estimator_buffer_power -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
-
-    estimator_update_time -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
-
-    buffer_size -- The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
-
-    model_order -- The order of the state-space estimation model. We are interested in adequate predictions of y under given u's. The higher the model order, the better estimation results may be achieved, but be aware of overfitting.
-
-    stacked_model_params -- Estimated model parameters can be stored in stacks and the best among the `stacked_model_params` last ones is picked.
-        * May improve the prediction quality somewhat
-
-    gamma -- Discounting factor
-        * number in (0, 1]
-        * Characterizes fading of running costs along horizon
-
     n_actor -- Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
 
-    n_critic -- Critic stack size. The critic optimizes the temporal error (a.k.a. the value function). The temporal errors are stacked up using the said buffer
+    n_critic -- Critic stack size. The critic optimizes the temporal error, a.k.a. the value (of state) function. The temporal errors are stacked up using the said buffer.
 
-    critic_period -- Time between critic updates
-
-    critic_mode -- Choice of the structure of the critic's feature vector
-        * 1 - Quadratic-linear
-        * 2 - Quadratic
-        * 3 - Quadratic, no mixed terms
-        * 4 - Quadratic, no mixed terms in input and output
-
-    pred_step_size -- Prediction step size in `J` as defined above (in seconds). Should be a multiple of `sample_time`. Commonly, equals it, but here left adjustable for convenience. Larger prediction step size leads to longer factual horizon
-
-    r_cost_struct -- choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
-        * 1 - quadratic chi.T @ R1 @ chi
-        * 2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
-
+    buffer_size -- The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
 
     ctrl_mode -- Modes with online model estimation are experimental 
         * 0     - manual constant control (only for basic testing)
@@ -373,6 +336,45 @@ class Controller(utilities.Generic):
 
         * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
         * Modes 2, 4, 6 use an estimated online
+
+    critic_mode -- Choice of the structure of the critic's feature vector
+        * 1 - Quadratic-linear
+        * 2 - Quadratic
+        * 3 - Quadratic, no mixed terms
+        * 4 - Quadratic, no mixed terms in input and output
+
+    critic_update_time -- Time between critic updates
+
+    r_cost_struct -- choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
+        * 1 - quadratic chi.T @ R1 @ chi
+        * 2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
+
+    sample_time -- Controller's sampling time (in seconds). The system itself is continuous as a physical process while the controller is digital.
+
+        Things to note--
+
+        * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
+        * smaller sampling times lead to higher computation times
+        * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
+
+    estimator_buffer_fill -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
+
+    estimator_buffer_power -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
+
+    estimator_update_time -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
+
+    stacked_model_params -- Estimated model parameters can be stored in stacks and the best among the `stacked_model_params` last ones is picked.
+        * May improve the prediction quality somewhat
+
+    pred_step_size -- Prediction step size in `J` (in seconds). Is the time between the computation of control inputs and outputs J. Should be a multiple of `sample_time`. 
+
+    model_order -- The order of the state-space estimation model. We are interested in adequate predictions of y under given u's. The higher the model order, the better estimation results may be achieved, but be aware of overfitting.
+
+    gamma -- Discounting factor
+        * number in (0, 1]
+        * Characterizes fading of running costs along horizon
+
+    is_disturb -- use disturbance?
 
     References
     ----------
@@ -390,17 +392,18 @@ class Controller(utilities.Generic):
                  buffer_size=50,
                  ctrl_mode=3,
                  critic_mode=1,
-                 critic_period=0.1,
+                 critic_update_time=0.1,
                  r_cost_struct=1,
                  sample_time=0.1,
                  estimator_update_time=0.1,
                  estimator_buffer_fill=6,
                  estimator_buffer_power=2,
                  stacked_model_params=0,
+                 pred_step_size=2,
                  model_order=3,
                  gamma=1,
                  is_disturb=0):
-        """ system vars """
+        # system vars
         self.dim_state = system.dim_state
         self.dim_input = system.dim_input
         self.dim_output = system.dim_output
@@ -410,7 +413,7 @@ class Controller(utilities.Generic):
         self.initial_x = initial_x
         self.initial_y = initial_y
 
-        """ disturbance """
+        # disturbance
         self.is_disturb = is_disturb
 
         # initial values of the system's state
@@ -444,13 +447,13 @@ class Controller(utilities.Generic):
         for k in range(self.stacked_model_params):
             self.model_stack.append(self.my_model)
 
-        """ Controller  """
-
+        # number of prediction steps
         self.n_actor = n_actor
-        self.critic_period = critic_period
-        self.pred_step_size = sample_time
 
-        """ RL elements """
+        # time between critic updates
+        self.critic_update_time = critic_update_time
+
+        # choice of running cost structure
         self.r_cost_struct = r_cost_struct
 
         # running cost parameters
@@ -469,20 +472,20 @@ class Controller(utilities.Generic):
         self.n_critic = n_critic
         self.n_critic = np.min([self.n_critic, self.buffer_size - 1])
 
-        """control mode"""
+        # control mode
         self.ctrl_mode = ctrl_mode
         self.ctrl_clock = t0
 
         self.sample_time = sample_time
+        self.pred_step_size = pred_step_size * sample_time
 
         # bounds of F and M
         self.f_min = system.f_min
         self.f_max = system.f_max
         self.m_min = system.m_min
         self.m_max = system.m_max
-
-        # self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
         self.ctrl_bnds = system.control_bounds
+
         self.min_bounds = np.array(self.ctrl_bnds[:, 0])
         self.max_bounds = np.array(self.ctrl_bnds[:, 1])
         self.u_min = utilities._repMat(self.min_bounds, 1, n_actor)
@@ -492,17 +495,18 @@ class Controller(utilities.Generic):
 
         # buffer of previous controls
         self.u_buffer = np.zeros([buffer_size, self.dim_input])
-        
+
         # buffer of previous outputs
         self.y_buffer = np.zeros([buffer_size, self.dim_output])
 
-        """ other """
+        # other
         self.sys_rhs = System.get_system_dynamics
         self.sys_out = System.get_curr_state
 
         # discount factor
         self.gamma = gamma
 
+        # critic weights conditional logic
         if self.critic_mode == 1:
             self.dim_crit = int(((self.dim_output + self.dim_input) + 1) * (
                 self.dim_output + self.dim_input) / 2 + (self.dim_output + self.dim_input))
@@ -598,10 +602,12 @@ class Controller(utilities.Generic):
 
                     except:
                         print('Model estimation problem')
-                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]), 
-                            np.zeros([self.model_order, self.dim_input]),
-                            np.zeros([self.dim_output, self.model_order]), 
-                            np.zeros([self.dim_output, self.dim_input]))
+                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]),
+                                                 np.zeros(
+                                                     [self.model_order, self.dim_input]),
+                                                 np.zeros(
+                                                     [self.dim_output, self.model_order]),
+                                                 np.zeros([self.dim_output, self.dim_input]))
 
                     # Model checks
                     if self.stacked_model_params > 0:
@@ -662,22 +668,22 @@ class Controller(utilities.Generic):
         try:
             if isGlobOpt:
                 minimizer_kwargs = {
-                                    'method': actor_opt_method, 
-                                    'bounds': bnds, 
-                                    'tol': 1e-7, 
-                                    'options': actor_opt_options
-                                    }
-                
-                U = basinhopping(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), 
-                                    myu_init, 
-                                    minimizer_kwargs=minimizer_kwargs, 
-                                    niter=10).x
+                    'method': actor_opt_method,
+                    'bounds': bnds,
+                    'tol': 1e-7,
+                    'options': actor_opt_options
+                }
+
+                U = basinhopping(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode),
+                                 myu_init,
+                                 minimizer_kwargs=minimizer_kwargs,
+                                 niter=10).x
 
             else:
                 warnings.filterwarnings('ignore')
-                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode), 
+                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode),
                              myu_init,
-                             method=actor_opt_method, 
+                             method=actor_opt_method,
                              tol=1e-7,
                              bounds=bnds,
                              options=actor_opt_options).x
@@ -706,6 +712,7 @@ class Controller(utilities.Generic):
                 x = x + delta * \
                     self.sys_rhs([], x, myU[k - 1, :], [], self.m,
                                  self.I, self.dim_state, self.is_disturb)
+                
                 Y[k, :] = self.sys_out(x)
 
         elif (ctrl_mode == 2) or (ctrl_mode == 4) or (ctrl_mode == 6):
@@ -717,7 +724,7 @@ class Controller(utilities.Generic):
 
         J = 0
 
-        if (ctrl_mode == 1) or (ctrl_mode == 2):     # MPC
+        if (ctrl_mode == 1) or (ctrl_mode == 2):
             for k in range(N):
                 J += self.gamma**k * self.running_cost(Y[k, :], myU[k, :])
 
@@ -737,7 +744,6 @@ class Controller(utilities.Generic):
 
     def _critic(self, Wprev, Winit, U, Y):
         """ Critic
-        Parameter `delta` here is a shorthand for `pred_step_size`
 
         Customization
         -------------
@@ -820,13 +826,13 @@ class Controller(utilities.Generic):
 
             elif self.ctrl_mode in (3, 4, 5, 6):
                 # Critic
-                time_in_critic_period = t - self.critic_clock
+                time_in_critic_update_time = t - self.critic_clock
 
                 # Update data buffers
                 self.u_buffer = utilities._pushVec(self.u_buffer, self.u_curr)
                 self.y_buffer = utilities._pushVec(self.y_buffer, y)
 
-                if time_in_critic_period >= self.critic_period:
+                if time_in_critic_update_time >= self.critic_update_time:
                     # Update critic's internal clock
                     self.critic_clock = t
 
@@ -947,7 +953,17 @@ class NominalController(utilities.Generic):
 
     """
 
-    def __init__(self, m=10, I=1, ctrl_gain=10, f_min=-5, f_max=5, m_min=-1, m_max=1, t0=0, sample_time=0.1):
+    def __init__(self,
+                 t0=0,
+                 m=10,
+                 I=1,
+                 ctrl_gain=10,
+                 f_min=-5,
+                 f_max=5,
+                 m_min=-1,
+                 m_max=1,
+                 sample_time=0.1):
+
         self.ctrl_gain = ctrl_gain
         self.ctrl_bnds = np.array([[f_min, f_max], [m_min, m_max]])
         self.ctrl_clock = t0
@@ -1158,12 +1174,11 @@ class Simulation(utilities.Generic):
         self.controller = controller
         self.nominal_ctrl = nominal_ctrl
 
-        """system """
+        # system
         self.dim_state = system.dim_state
         self.dim_input = system.dim_input
         self.dim_disturb = system.dim_disturb
 
-        """simulation"""
         # start time of episode
         self.t0 = t0
 
@@ -1228,11 +1243,10 @@ class Simulation(utilities.Generic):
         self.m_min = system.m_min
         self.m_max = system.m_max
 
-        # control bounds contains the control constraints
+        # control bounds for constraints above
         self.control_bounds = system.control_bounds
 
-        """Other"""
-        #%% User settings: main switches
+        # other
         self.is_log_data = is_log_data
         self.is_visualization = is_visualization
         self.is_print_sim_step = is_print_sim_step
@@ -1287,20 +1301,20 @@ class Simulation(utilities.Generic):
                                                       ylim=(self.y_min,
                                                             self.y_max),
                                                       xlabel='x [m]',
-                                                      ylabel='y [m]', 
+                                                      ylabel='y [m]',
                                                       title=' Simulation: \n Pause - space, q - quit, click - data cursor')
 
         self.xy_plane_axes.set_aspect('equal', adjustable='box')
-        
+
         self.xy_plane_axes.plot([self.x_min, self.x_max], [
             0, 0], 'k--', lw=0.75)   # x-axis
-        
+
         self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],
                                 'k--', lw=0.75)   # y-axis
-        
+
         self.traj_line, = self.xy_plane_axes.plot(
             self.initial_x, self.initial_y, 'b--', lw=0.5)
-        
+
         self.robot_marker = utilities._pltMarker(angle=alpha)
 
         text_time = 't = {time:2.3f}'.format(time=self.t0)
@@ -1320,21 +1334,20 @@ class Simulation(utilities.Generic):
         """
         self.sol_axes = self.sim_fig.add_subplot(222, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             2 * np.min([self.x_min, self.y_min]), 2 * np.max([self.x_max, self.y_max])), xlabel='t [s]')
-        
-        self.sol_axes.title.set_text('Proximity-to-Target')
 
+        self.sol_axes.title.set_text('Proximity-to-Target')
 
         self.sol_axes.plot([self.t0, self.t1], [0, 0],
                            'k--', lw=0.75)   # Help line
-        
+
         self.norm_line, = self.sol_axes.plot(self.t0, la.norm(
             [self.initial_x, self.initial_y]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
-        
+
         self.alpha_line, = self.sol_axes.plot(
             self.t0, self.alpha, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
-        
+
         self.sol_axes.legend(fancybox=True, loc='upper right')
-        
+
         self.sol_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
         """
@@ -1352,13 +1365,13 @@ class Simulation(utilities.Generic):
 
         self.text_icost_handle = self.sim_fig.text(
             0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
-        
+
         self.r_cost_line, = self.cost_axes.plot(
             self.t0, r, 'r-', lw=0.5, label='r')
-        
+
         self.i_cost_line, = self.cost_axes.plot(
             self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
-        
+
         self.cost_axes.legend(fancybox=True, loc='upper right')
 
         """
@@ -1368,15 +1381,15 @@ class Simulation(utilities.Generic):
         """
         self.ctrlAxs = self.sim_fig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
             1.1 * np.min([self.f_min, self.m_min]), 1.1 * np.max([self.f_max, self.m_max])), xlabel='t [s]')
-        
+
         self.ctrlAxs.title.set_text('Control')
 
         self.ctrlAxs.plot([self.t0, self.t1], [0, 0],
                           'k--', lw=0.75)   # Help line
-        
+
         self.ctrl_lines = self.ctrlAxs.plot(
             self.t0, utilities._toColVec(self.u0).T, lw=0.5)
-        
+
         self.ctrlAxs.legend(
             iter(self.ctrl_lines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
 
@@ -1434,7 +1447,7 @@ class Simulation(utilities.Generic):
 
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
-        
+
         # Solution
         self._update_line(self.norm_line, t, self.l2_norm)
         self._update_line(self.alpha_line, t, alpha)
@@ -1527,7 +1540,7 @@ class Simulation(utilities.Generic):
             r = agent.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
             self._update_all_lines(text_time, full_state, alpha_deg,
-                                           x_coord, y_coord, t, alpha, r, icost, u)
+                                   x_coord, y_coord, t, alpha, r, icost, u)
 
     def _reset_sim(self, agent, nominal_ctrl, simulator):
         if self.is_print_sim_step:
