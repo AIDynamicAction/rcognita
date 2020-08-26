@@ -1150,11 +1150,19 @@ class Simulation(utilities.Generic):
         self.system = system
         self.controller = controller
         
-        if isinstance(self.controller, list):
+        if isinstance(self.controller, list) and len(self.controller) > 1:
             self.num_controllers = len(self.controller)
+            
+            # initial value of control
+            self.u0 = np.zeros((self.num_controllers, system.dim_input))
+
+            # initial value of disturbance
+            self.q0 = np.zeros((self.num_controllers, system.dim_disturb))
 
         else: 
             self.num_controllers = 1
+            self.u0 = np.zeros(system.dim_input)
+            self.q0 = np.zeros(system.dim_disturb)
 
         self.nominal_ctrl = nominal_ctrl
 
@@ -1182,11 +1190,7 @@ class Simulation(utilities.Generic):
         # control bounds for constraints above
         self.control_bounds = system.control_bounds
 
-        # initial value of control
-        self.u0 = np.zeros(system.dim_input)
 
-        # initial value of disturbance
-        self.q0 = np.zeros(system.dim_disturb)
 
         # the variables below could be either scalars or vectors (lists, truly), depending on if there are multiple controllers in the simulation
         self.initial_x, self.initial_y, self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
@@ -1334,7 +1338,7 @@ class Simulation(utilities.Generic):
 
         return u
 
-    def _create_figure_plots(self, controller, fig_width, fig_height):
+    def _create_figure_plots(self, agent, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
 
         y0 = System.get_curr_state(self.system_state)
@@ -1367,22 +1371,10 @@ class Simulation(utilities.Generic):
         self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],
                                 'k--', lw=0.75)   # y-axis
 
-        if self.num_controllers > 1:
-            self.robot_markers = []
-            self.traj_lines = []
+        self.traj_line, = self.xy_plane_axes.plot(
+            self.initial_x, self.initial_y, 'b--', lw=0.5)
 
-            for i in range(self.num_controllers):
-                self.traj_line, = self.xy_plane_axes.plot(
-                    self.initial_x[i], self.initial_y[i], f'{self.colors[i]}--', lw=0.5)
-
-                self.traj_lines.append(self.traj_line)
-                self.robot_markers.append(utilities._pltMarker(angle=self.alpha[i]))
-
-        else:
-            self.traj_line, = self.xy_plane_axes.plot(
-                self.initial_x, self.initial_y, 'b--', lw=0.5)
-
-            self.robot_marker = utilities._pltMarker(angle=self.alpha)
+        self.robot_marker = utilities._pltMarker(angle=self.alpha)
 
         text_time = 't = {time:2.3f}'.format(time=self.t0)
 
@@ -1407,18 +1399,11 @@ class Simulation(utilities.Generic):
         self.sol_axes.plot([self.t0, self.t1], [0, 0],
                            'k--', lw=0.75)   # Help line
 
-        # logic for multiple controllers
-        if self.num_controllers > 1:
-            self.norm_line = []
-            for i in range(self.num_controllers):
-                self.norm_line[i] = self.sol_axes.plot(self.t0, la.norm([self.initial_x[i], self.initial_y[i]]), f'{self.colors[i]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
-                
-                self.alpha_line[i] = self.sol_axes.plot(self.t0, self.alpha[i], f'{self.colors[i]}--', lw=0.5, label=r'$\alpha$ [rad]')
-        else:
-            self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_x, self.initial_y]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+        self.norm_line, = self.sol_axes.plot(self.t0, la.norm(
+            [self.initial_x, self.initial_y]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
 
-            self.alpha_line, = self.sol_axes.plot(
-                self.t0, self.alpha, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
+        self.alpha_line, = self.sol_axes.plot(
+            self.t0, self.alpha, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
 
         self.sol_axes.legend(fancybox=True, loc='upper right')
 
@@ -1430,11 +1415,11 @@ class Simulation(utilities.Generic):
         
         """
         self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
-            0, 1e4 * controller.running_cost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
+            0, 1e4 * agent.running_cost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
 
         self.cost_axes.title.set_text('Cost')
 
-        r = controller.running_cost(y0, self.u0)
+        r = agent.running_cost(y0, self.u0)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
         self.text_icost_handle = self.sim_fig.text(
@@ -1470,7 +1455,6 @@ class Simulation(utilities.Generic):
         # Pack all lines together
         cLines = namedtuple('lines', [
                             'traj_line', 'norm_line', 'alpha_line', 'r_cost_line', 'i_cost_line', 'ctrl_lines'])
-        
         self.lines = cLines(traj_line=self.traj_line,
                             norm_line=self.norm_line,
                             alpha_line=self.alpha_line,
@@ -1482,6 +1466,174 @@ class Simulation(utilities.Generic):
 
         # Enable data cursor
         for item in self.lines:
+            if isinstance(item, list):
+                for subitem in item:
+                    datacursor(subitem)
+            else:
+                datacursor(item)
+
+        return self.sim_fig
+
+    def _create_figure_plots_multi(self, controller, fig_width, fig_height):
+        """ returns a pyplot figure with 4 plots """
+
+        y0 = System.get_curr_state(self.system_state)
+        self.alpha = self.alpha / 2 / np.pi
+
+        plt.close('all')
+
+        self.sim_fig = plt.figure(figsize=(fig_width, fig_height))
+
+        """
+        
+        Simulation subplot
+        
+        """
+        self.xy_plane_axes = self.sim_fig.add_subplot(221,
+                                                      autoscale_on=False,
+                                                      xlim=(self.x_min,
+                                                            self.x_max),
+                                                      ylim=(self.y_min,
+                                                            self.y_max),
+                                                      xlabel='x [m]',
+                                                      ylabel='y [m]',
+                                                      title=' Simulation: \n Pause - space, q - quit, click - data cursor')
+
+        self.xy_plane_axes.set_aspect('equal', adjustable='box')
+
+        self.xy_plane_axes.plot([self.x_min, self.x_max], [
+            0, 0], 'k--', lw=0.75)   # x-axis
+
+        self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],
+                                'k--', lw=0.75)   # y-axis
+
+        if self.num_controllers > 1:
+            self.traj_lines = []
+            self.robot_markers = []
+            self.text_time_handles = []
+            text_time = 't = {time:2.3f}'.format(time=self.t0)
+
+            for i in range(self.num_controllers):
+                self.traj_line, = self.xy_plane_axes.plot(
+                    self.initial_x[i], self.initial_y[i], f'{self.colors[i]}--', lw=0.5)
+
+                self.robot_marker = utilities._pltMarker(angle=self.alpha)
+
+                self.text_time_handle = self.xy_plane_axes.text(0.05, 0.95,
+                                                                text_time,
+                                                                horizontalalignment='left',
+                                                                verticalalignment='center',
+                                                                transform=self.xy_plane_axes.transAxes)
+                
+                
+                self.traj_lines.append(self.traj_line)
+                self.robot_markers.append(self.robot_marker)
+                self.text_time_handles.append(self.text_time_handle)
+            
+            self.xy_plane_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
+
+
+        """
+        
+        Proximity subplot
+        
+        """
+        self.sol_axes = self.sim_fig.add_subplot(222, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+            2 * np.min([self.x_min, self.y_min]), 2 * np.max([self.x_max, self.y_max])), xlabel='t [s]')
+
+        self.sol_axes.title.set_text('Proximity-to-Target')
+
+        self.sol_axes.plot([self.t0, self.t1], [0, 0],
+                           'k--', lw=0.75)   # Help line
+
+        # logic for multiple controllers
+        if self.num_controllers > 1:
+            self.norm_lines = []
+            self.alpha_lines = []
+            
+            for i in range(self.num_controllers):
+                self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_x[i], self.initial_y[i]]), f'{self.colors[i]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+                
+                self.alpha_line, = self.sol_axes.plot(self.t0, self.alpha[i], f'{self.colors[i]}--', lw=0.5, label=r'$\alpha$ [rad]')
+
+                self.norm_lines.append(self.norm_line)
+                self.alpha_lines.append(self.alpha_line)
+
+        self.sol_axes.legend(fancybox=True, loc='upper right')
+
+        self.sol_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
+
+
+        """
+        
+        Cost subplot
+        
+        """
+
+        if self.num_controllers > 1:
+            self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * controller.running_cost(y0, max(self.u0))), yscale='symlog', xlabel='t [s]')
+
+            self.cost_axes.title.set_text('Cost')
+
+            self.text_icost_handles = []
+            self.r_cost_lines = []
+            self.i_cost_lines = []
+
+            for i in range(self.num_controllers):
+                r = controller[i].running_cost(y0, self.u0[i])
+                text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
+
+                self.text_icost_handle = self.sim_fig.text(
+                    0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
+
+                self.r_cost_line, = self.cost_axes.plot(
+                    self.t0, r, 'r-', lw=0.5, label='r')
+
+                self.i_cost_line, = self.cost_axes.plot(
+                    self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+
+                self.text_icost_handles.append(self.text_icost_handle)
+                self.r_cost_lines.append(self.r_cost_line)
+                self.i_cost_lines.append(self.i_cost_line)
+
+        self.cost_axes.legend(fancybox=True, loc='upper right')
+
+        """
+        
+        Control subplot
+        
+        """
+        self.ctrlAxs = self.sim_fig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+            1.1 * np.min([self.f_min, self.m_min]), 1.1 * np.max([self.f_max, self.m_max])), xlabel='t [s]')
+
+        self.ctrlAxs.title.set_text('Control')
+
+        self.ctrlAxs.plot([self.t0, self.t1], [0, 0],
+                          'k--', lw=0.75)   # Help line
+
+        # Pack all lines together
+        cLines = namedtuple('lines', ['traj_line', 'norm_line', 'alpha_line', 'r_cost_line', 'i_cost_line', 'ctrl_lines'])
+
+        # logic for multiple controllers
+        if self.num_controllers > 1:
+            self.all_ctrl_lines = []
+            self.all_lines = []
+            
+            for i in range(self.num_controllers):
+                self.ctrl_lines = self.ctrlAxs.plot(self.t0, utilities._toColVec(self.u0[i]).T, lw=0.5)
+                
+                self.all_ctrl_lines.append(self.ctrl_lines)
+
+            for i in range(self.num_controllers):
+                self.all_lines.append(cLines(traj_line=self.traj_lines[i], norm_line=self.norm_lines[i], alpha_line=self.alpha_lines[i], r_cost_line=self.r_cost_lines[i],i_cost_line=self.i_cost_lines[i], ctrl_lines=self.all_ctrl_lines[i]))
+
+            self.ctrlAxs.legend(iter(self.ctrl_lines[0]), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
+
+        
+        self.current_data_file = self.data_files[0]
+
+        # Enable data cursor
+        for item in self.all_lines:
             if isinstance(item, list):
                 for subitem in item:
                     datacursor(subitem)
@@ -1541,6 +1693,38 @@ class Simulation(utilities.Generic):
         for (line, uSingle) in zip(self.ctrl_lines, u):
             self._update_line(line, t, uSingle)
 
+    def _update_all_lines_multi(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, multi_controller_id):
+        """
+        Update lines on all scatter plots
+        """
+        cid = multi_controller_id
+        self._update_text(self.text_time_handles[cid], text_time)
+
+        # Update the robot's track on the plot
+        self._update_line(self.traj_lines[cid], *full_state[:2])
+
+        self.robot_markers[cid].rotate(alpha_deg)    # Rotate the robot on the plot
+        self.sol_scatter.remove()
+        self.sol_scatter = self.xy_plane_axes.scatter(
+            x_coord, y_coord, marker=self.robot_markers[cid].marker, s=400, c='b')
+
+        # Euclidean (aka Frobenius) norm
+        self.l2_norm = la.norm([x_coord, y_coord])
+
+        # Solution
+        self._update_line(self.norm_lines[cid], t, self.l2_norm)
+        self._update_line(self.alpha_lines[cid], t, alpha)
+
+        # Cost
+        self._update_line(self.r_cost_lines[cid], t, r)
+        self._update_line(self.i_cost_lines[cid], t, icost)
+        text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
+        self._update_text(self.text_icost_handles[cid], text_icost)
+
+        # Control
+        for (line, uSingle) in zip(self.all_ctrl_lines[cid], u):
+            self._update_line(line, t, uSingle)
+
     def _log_data_row(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
         with open(dataFile, 'a', newline='') as outfile:
             writer = csv.writer(outfile)
@@ -1584,7 +1768,7 @@ class Simulation(utilities.Generic):
 
         print(table)
 
-    def _take_step(self, sys, controller, nominal_ctrl, simulator, animate=False):
+    def _take_step(self, sys, controller, nominal_ctrl, simulator, animate=False, multi_controller_id=None):
         simulator.step()
 
         t = simulator.t
@@ -1607,19 +1791,25 @@ class Simulation(utilities.Generic):
         omega = full_state[4]
         icost = controller.i_cost_val
 
-        if self.is_print_sim_step:
-            self._print_sim_step(t, x_coord, y_coord,
-                                 alpha, v, omega, icost, u)
+        if multi_controller_id is None:
+            if self.is_print_sim_step:
+                self._print_sim_step(t, x_coord, y_coord,
+                                     alpha, v, omega, icost, u)
 
-        if self.is_log_data:
-            self._log_data_row(self.current_data_file, t, x_coord,
-                               y_coord, alpha, v, omega, icost.val, u)
+            if self.is_log_data:
+                self._log_data_row(self.current_data_file, t, x_coord,
+                                   y_coord, alpha, v, omega, icost.val, u)
         if animate == True:
             alpha_deg = alpha / np.pi * 180
             r = controller.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
-            self._update_all_lines(text_time, full_state, alpha_deg,
-                                   x_coord, y_coord, t, alpha, r, icost, u)
+            
+            if multi_controller_id is None:
+                self._update_all_lines(text_time, full_state, alpha_deg,
+                                       x_coord, y_coord, t, alpha, r, icost, u)
+            else:
+                self._update_all_lines_multi(text_time, full_state, alpha_deg,
+                                       x_coord, y_coord, t, alpha, r, icost, u, multi_controller_id)
 
     def _reset_sim(self, controller, nominal_ctrl, simulator):
         if self.is_print_sim_step:
@@ -1680,7 +1870,7 @@ class Simulation(utilities.Generic):
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
                         self.t_elapsed[i] = t
-                        self._take_step(system, controller, nominal_ctrl, simulator, animate)
+                        self._take_step(system, controller, nominal_ctrl, simulator, animate, multi_controller_id=i)
 
                     else:
                         self.current_run[i] += 1
@@ -1738,7 +1928,7 @@ class Simulation(utilities.Generic):
                                     self.nominal_ctrl, self.simulator)
                     icost = 0
 
-                    for item in self.lines:
+                    for item in self.all_lines:
                         if item != self.traj_line:
                             if isinstance(item, list):
                                 for subitem in item:
@@ -1752,7 +1942,10 @@ class Simulation(utilities.Generic):
                 self.graceful_exit()
 
         else:
-            self.sim_fig = self._create_figure_plots(self.controller, fig_width, fig_height)
+            if self.num_controllers > 1:
+                self.sim_fig = self._create_figure_plots_multi(self.controller, fig_width, fig_height)
+            else:
+                self.sim_fig = self._create_figure_plots(self.controller, fig_width, fig_height)
 
             animate = True
             fargs = (self.system, self.controller,
