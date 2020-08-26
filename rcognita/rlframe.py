@@ -1145,17 +1145,13 @@ class Simulation(utilities.Generic):
                  is_log_data=0,
                  is_visualization=False,
                  is_print_sim_step=False,
-                 is_dyn_ctrl=0,
-                 ctrl_mode=5):
-
+                 is_dyn_ctrl=0):
+        
         self.system = system
         self.controller = controller
         self.nominal_ctrl = nominal_ctrl
 
-        # system
-        self.dim_state = system.dim_state
-        self.dim_input = system.dim_input
-        self.dim_disturb = system.dim_disturb
+        self.alpha = np.pi / 2
 
         # start time of episode
         self.t0 = t0
@@ -1163,57 +1159,11 @@ class Simulation(utilities.Generic):
         # stop time of episode
         self.t1 = t1
 
-        self.initial_x = controller.initial_x
-        self.initial_y = controller.initial_y
-        self.alpha = np.pi / 2
-
-        # initial values of state
-        initial_state = np.zeros(system.dim_state)
-        initial_state[0] = controller.initial_x
-        initial_state[1] = controller.initial_y
-        initial_state[2] = self.alpha
-        self.system_state = initial_state
-
-        # initial value of control
-        self.u0 = np.zeros(system.dim_input)
-
-        # initial value of disturbance
-        self.q0 = np.zeros(system.dim_disturb)
-
-        # Static or dynamic controller
-        self.is_dyn_ctrl = is_dyn_ctrl
-
-        if self.is_dyn_ctrl:
-            self.full_state = np.concatenate(
-                [self.system_state, self.q0, self.u0])
-        else:
-            self.full_state = np.concatenate([self.system_state, self.q0])
-
+        # system
+        self.dim_state = system.dim_state
+        self.dim_input = system.dim_input
+        self.dim_disturb = system.dim_disturb
         closed_loop = system.closed_loop
-        sample_time = controller.sample_time
-
-        self.simulator = sp.integrate.RK45(closed_loop,
-                                           self.t0,
-                                           self.full_state,
-                                           self.t1,
-                                           max_step=sample_time / 2,
-                                           first_step=1e-6,
-                                           atol=a_tol,
-                                           rtol=r_tol)
-
-        # x and y limits of scatter plot. Used so far rather for visualization
-        # only, but may be integrated into the actor as constraints
-        self.x_min = x_min
-        self.x_max = x_max
-        self.y_min = y_min
-        self.y_max = y_max
-
-        self.ctrl_mode = controller.ctrl_mode
-
-        # manual control
-        self.f_man = f_man
-        self.n_man = n_man
-        self.u_man = np.array([f_man, n_man])
 
         # control constraints
         self.f_min = system.f_min
@@ -1224,6 +1174,37 @@ class Simulation(utilities.Generic):
         # control bounds for constraints above
         self.control_bounds = system.control_bounds
 
+        # initial value of control
+        self.u0 = np.zeros(system.dim_input)
+
+        # initial value of disturbance
+        self.q0 = np.zeros(system.dim_disturb)
+
+
+        self.initial_x, self.initial_y, self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
+
+        self.system_state, self.full_state = self._establish_system_state(self.dim_state, self.initial_x, self.initial_y, is_dyn_ctrl, self.alpha, self.u0, self.q0)
+
+        self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
+
+        """
+    
+        VISUALIZATION PARAMS
+    
+        """
+
+        # x and y limits of scatter plot. Used so far rather for visualization
+        # only, but may be integrated into the actor as constraints
+        self.x_min = x_min
+        self.x_max = x_max
+        self.y_min = y_min
+        self.y_max = y_max
+
+        # manual control
+        self.f_man = f_man
+        self.n_man = n_man
+        self.u_man = np.array([f_man, n_man])
+
         # other
         self.is_log_data = is_log_data
         self.is_visualization = is_visualization
@@ -1232,18 +1213,40 @@ class Simulation(utilities.Generic):
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
 
-    # def _get_controller_info(self, controller):
-    #     if isinstance(controller, Controller):
+    def _get_controller_info(self, controller):
+        if isinstance(controller, Controller):
+            initial_x = controller.initial_x
+            initial_y = controller.initial_y
+            sample_time = controller.sample_time
+            ctrl_mode = controller.ctrl_mode
 
-    # def set_initial_coords(self, controller, initial_x, initial_y):
-    #     self.initial_x = initial_x
-    #     self.initial_y = initial_y
-    #     self.system_state[0] = initial_x
-    #     self.system_state[1] = initial_y
-    #     self.full_state[0] = initial_x
-    #     self.full_state[1] = initial_y
-    #     controller.initial_x = initial_x
-    #     controller.initial_y = initial_y
+            return initial_x, initial_y, sample_time, ctrl_mode
+
+    def _establish_system_state(self, dim_state, initial_x, initial_y, is_dyn_ctrl, alpha, u0, q0):
+        if isinstance(initial_x, list) is False and isinstance(initial_y, list) is False:
+            system_state = np.zeros(dim_state)
+            system_state[0] = initial_x
+            system_state[1] = initial_y
+            system_state[2] = alpha
+
+            if is_dyn_ctrl:
+                full_state = np.concatenate(
+                    [system_state, q0, u0])
+            else:
+                full_state = np.concatenate([system_state, q0])
+
+            return system_state, full_state
+
+    def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
+        simulator = sp.integrate.RK45(closed_loop,
+                                           t0,
+                                           full_state,
+                                           t1,
+                                           max_step=sample_time / 2,
+                                           first_step=1e-6,
+                                           atol=a_tol,
+                                           rtol=r_tol)
+        return simulator
 
     def _ctrl_selector(self, t, y, uMan, nominal_ctrl, agent, mode):
         """
