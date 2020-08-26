@@ -1151,6 +1151,7 @@ class Simulation(utilities.Generic):
         self.controller = controller
         self.nominal_ctrl = nominal_ctrl
 
+        # degree of bot
         self.alpha = np.pi / 2
 
         # start time of episode
@@ -1180,11 +1181,13 @@ class Simulation(utilities.Generic):
         # initial value of disturbance
         self.q0 = np.zeros(system.dim_disturb)
 
-
+        # the variables below could be either scalars or vectors (lists, truly), depending on if there are multiple controllers in the simulation
         self.initial_x, self.initial_y, self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
 
+        # the states below could be 2D if their are multiple controllers
         self.system_state, self.full_state = self._establish_system_state(self.dim_state, self.initial_x, self.initial_y, is_dyn_ctrl, self.alpha, self.u0, self.q0)
 
+        # `self.simulator` could be a single simulator or a list of simulators
         self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
 
         """
@@ -1214,11 +1217,30 @@ class Simulation(utilities.Generic):
             warnings.filterwarnings('ignore')
 
     def _get_controller_info(self, controller):
+        # if we have a single controller
         if isinstance(controller, Controller):
             initial_x = controller.initial_x
             initial_y = controller.initial_y
             sample_time = controller.sample_time
             ctrl_mode = controller.ctrl_mode
+
+            return initial_x, initial_y, sample_time, ctrl_mode
+
+        # if we have multiple controllers
+        elif isinstance(controller, list):
+            controllers = controller
+            num_controllers = len(controllers)
+            
+            initial_x = []
+            initial_y = []
+            sample_time = []
+            ctrl_mode = []
+
+            for controller in controllers:
+                initial_x.append(controller.initial_x)
+                initial_y.append(controller.initial_y)
+                sample_time.append(controller.sample_time)
+                ctrl_mode.append(controller.ctrl_mode)
 
             return initial_x, initial_y, sample_time, ctrl_mode
 
@@ -1237,16 +1259,61 @@ class Simulation(utilities.Generic):
 
             return system_state, full_state
 
+        elif isinstance(initial_x, list) is True and isinstance(initial_y, list) is True:
+            num_controllers = len(initial_x)
+
+            system_state = np.zeros((num_controllers, dim_state))
+
+            u0 = np.tile(u0, (num_controllers,1))
+            q0 = np.tile(q0, (num_controllers,1))
+
+            for i in range(num_controllers):
+                system_state[i, 0] = initial_x[i]
+                system_state[i, 1] = initial_y[i]
+                system_state[i, 2] = alpha
+
+                if is_dyn_ctrl:
+                    full_state = np.concatenate((system_state, q0, u0), axis=1)
+                else:
+                    full_state = np.concatenate((system_state, q0), axis=1)
+
+            return system_state, full_state
+
+
     def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
-        simulator = sp.integrate.RK45(closed_loop,
-                                           t0,
-                                           full_state,
-                                           t1,
-                                           max_step=sample_time / 2,
-                                           first_step=1e-6,
-                                           atol=a_tol,
-                                           rtol=r_tol)
-        return simulator
+
+        if isinstance(sample_time, list):
+            num_controllers = len(sample_time)
+        else:
+            num_controllers = 1
+
+        if num_controllers > 1:
+            simulators = []
+            
+            for i in range(num_controllers):
+                simulator = sp.integrate.RK45(closed_loop,
+                                                   t0,
+                                                   full_state[i,],
+                                                   t1,
+                                                   max_step=sample_time[i] / 2,
+                                                   first_step=1e-6,
+                                                   atol=a_tol,
+                                                   rtol=r_tol)  
+
+                simulators.append(simulator)
+            return simulators
+
+
+        else:
+            simulator = sp.integrate.RK45(closed_loop,
+                                               t0,
+                                               full_state,
+                                               t1,
+                                               max_step=sample_time / 2,
+                                               first_step=1e-6,
+                                               atol=a_tol,
+                                               rtol=r_tol)
+            return simulator
 
     def _ctrl_selector(self, t, y, uMan, nominal_ctrl, agent, mode):
         """
