@@ -129,8 +129,6 @@ class _pltMarker:
         self.angle = angle
     
 
-
-
 # functions
 def _toColVec(argin):
     if argin.ndim < 2:

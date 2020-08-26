@@ -171,8 +171,8 @@ def main(args=None):
         controller2 = Controller(sys, initial_x = -5, initial_y = -5, ctrl_mode=5, n_actor=6, buffer_size=200, critic_mode=3, n_critic=50, estimator_buffer_power=8, estimator_buffer_fill=2)
         nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
 
-    sim = Simulation(sys, controller1, nominalCtrl, t1=30)
-    # sim = Simulation(sys, [controller1, controller2], nominalCtrl, t1=30)
+    # sim = Simulation(sys, controller1, nominalCtrl, t1=30)
+    sim = Simulation(sys, [controller1, controller2], nominalCtrl, t1=30)
     sim.run_simulation()
 
 

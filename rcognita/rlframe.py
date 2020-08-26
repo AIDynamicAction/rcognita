@@ -1276,9 +1276,6 @@ class Simulation(utilities.Generic):
 
             system_state = np.zeros((num_controllers, dim_state))
 
-            u0 = np.tile(u0, (num_controllers,1))
-            q0 = np.tile(q0, (num_controllers,1))
-
             for i in range(num_controllers):
                 system_state[i, 0] = initial_x[i]
                 system_state[i, 1] = initial_y[i]
@@ -1517,7 +1514,7 @@ class Simulation(utilities.Generic):
                 self.traj_line, = self.xy_plane_axes.plot(
                     self.initial_x[i], self.initial_y[i], f'{self.colors[i]}--', lw=0.5)
 
-                self.robot_marker = utilities._pltMarker(angle=self.alpha)
+                self.robot_marker = utilities._pltMarker(angle=self.alpha[i])
 
                 self.text_time_handle = self.xy_plane_axes.text(0.05, 0.95,
                                                                 text_time,
@@ -1571,7 +1568,7 @@ class Simulation(utilities.Generic):
         """
 
         if self.num_controllers > 1:
-            self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * controller.running_cost(y0, max(self.u0))), yscale='symlog', xlabel='t [s]')
+            self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * controller[0].running_cost(y0[0], self.u0[0])), yscale='symlog', xlabel='t [s]')
 
             self.cost_axes.title.set_text('Cost')
 
@@ -1580,7 +1577,7 @@ class Simulation(utilities.Generic):
             self.i_cost_lines = []
 
             for i in range(self.num_controllers):
-                r = controller[i].running_cost(y0, self.u0[i])
+                r = controller[i].running_cost(y0[i], self.u0[i])
                 text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
                 self.text_icost_handle = self.sim_fig.text(
@@ -1627,18 +1624,19 @@ class Simulation(utilities.Generic):
             for i in range(self.num_controllers):
                 self.all_lines.append(cLines(traj_line=self.traj_lines[i], norm_line=self.norm_lines[i], alpha_line=self.alpha_lines[i], r_cost_line=self.r_cost_lines[i],i_cost_line=self.i_cost_lines[i], ctrl_lines=self.all_ctrl_lines[i]))
 
-            self.ctrlAxs.legend(iter(self.ctrl_lines[0]), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
+            self.ctrlAxs.legend(iter(self.all_ctrl_lines[0]), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
 
         
         self.current_data_file = self.data_files[0]
 
         # Enable data cursor
-        for item in self.all_lines:
-            if isinstance(item, list):
-                for subitem in item:
-                    datacursor(subitem)
-            else:
-                datacursor(item)
+        for line in self.all_lines:
+            for item in line:
+                if isinstance(item, list):
+                    for subitem in item:
+                        datacursor(subitem)
+                else:
+                    datacursor(item)
 
         return self.sim_fig
 
@@ -1778,7 +1776,7 @@ class Simulation(utilities.Generic):
         y = sys.get_curr_state(x)
 
         u = self._ctrl_selector(
-            t, y, self.u_man, nominal_ctrl, controller, self.ctrl_mode)
+            t, y, self.u_man, nominal_ctrl, controller, controller.ctrl_mode)
 
         sys.get_action(u)
         controller.get_sys_state(sys._x)
@@ -1825,7 +1823,7 @@ class Simulation(utilities.Generic):
         simulator.y = self.full_state
 
         # Reset controller
-        if self.ctrl_mode > 0:
+        if controller.ctrl_mode > 0:
             controller.reset(self.t0)
         else:
             nominal_ctrl.reset(self.t0)
@@ -1856,25 +1854,34 @@ class Simulation(utilities.Generic):
 
         elif event.key == 'q':
             _, controller, nominal_ctrl, simulator, _ = args
-            self._reset_sim(controller, nominal_ctrl, simulator)
+
+            if self.num_controllers > 1:
+                for i in range(self.num_controllers):
+                    self._reset_sim(controller[i], nominal_ctrl, simulator[i])
+
+            else:
+                self._reset_sim(controller, nominal_ctrl, simulator)
+            
             self.graceful_exit()
 
     def _wrapper_take_steps(self, k, *args):
         system, controller, nominal_ctrl, simulator, animate = args
         
         if self.num_controllers > 1:
+            simulators = simulator
+            controllers = controller
+
             for i in range(self.num_controllers):
-                simulator = simulator[i]
-                t = simulator.t
+                t = simulators[i].t
 
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
                         self.t_elapsed[i] = t
-                        self._take_step(system, controller, nominal_ctrl, simulator, animate, multi_controller_id=i)
+                        self._take_step(system, controllers[i], nominal_ctrl, simulators[i], animate, multi_controller_id=i)
 
                     else:
                         self.current_run[i] += 1
-                        self._reset_sim(controller, nominal_ctrl, simulator)
+                        self._reset_sim(controllers[i], nominal_ctrl, simulators[i])
                 else:
                     if self.close_plt_on_finish is True:
                         self.graceful_exit()
@@ -1900,10 +1907,38 @@ class Simulation(utilities.Generic):
                 elif self.close_plt_on_finish is False:
                     self.graceful_exit(plt_close=False)
 
+    def run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers = False):
+            animate = True
+
+            if multi_controllers is True:
+                controllers = controller
+                simulators = simulator
+                self.sim_fig = self._create_figure_plots_multi(controllers, fig_width, fig_height)
+                fargs = (system, controllers, nominal_ctrl, simulators, animate)
+            
+            else:
+                self.sim_fig = self._create_figure_plots(controllers, fig_width, fig_height)
+                fargs = (system, controller, nominal_ctrl, simulator, animate)
+
+
+            anm = animation.FuncAnimation(self.sim_fig,
+                                          self._wrapper_take_steps,
+                                          fargs=fargs,
+                                          init_func=self._initialize_figure,
+                                          interval=1)
+
+            anm.running = True
+            self.sim_fig.canvas.mpl_connect(
+                'key_press_event', lambda event: self._on_key_press(event, anm, fargs))
+            self.sim_fig.tight_layout()
+            plt.show()
+
     def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True):
         if self.num_controllers > 1:
             self.current_run = [1, 1]
             self.t_elapsed = [0, 0]
+            self.controllers = self.controller
+            self.simulators = self.simulator
         else:
             self.current_run = 1
             self.t_elapsed = 0
@@ -1928,13 +1963,15 @@ class Simulation(utilities.Generic):
                                     self.nominal_ctrl, self.simulator)
                     icost = 0
 
-                    for item in self.all_lines:
-                        if item != self.traj_line:
-                            if isinstance(item, list):
-                                for subitem in item:
-                                    self._reset_line(subitem)
-                            else:
-                                self._reset_line(item)
+
+                    for line in self.all_lines:
+                        for item in line:
+                            if item != self.traj_line:
+                                if isinstance(item, list):
+                                    for subitem in item:
+                                        self._reset_line(subitem)
+                                else:
+                                    self._reset_line(item)
 
                     self._update_line(self.traj_line, np.nan, np.nan)
                 self.current_run += 1
@@ -1943,22 +1980,12 @@ class Simulation(utilities.Generic):
 
         else:
             if self.num_controllers > 1:
-                self.sim_fig = self._create_figure_plots_multi(self.controller, fig_width, fig_height)
+                self.run_animation(self.system, 
+                    self.controllers, 
+                    self.nominal_ctrl, 
+                    self.simulators, 
+                    fig_width, 
+                    fig_height, 
+                    multi_controllers = True)
             else:
-                self.sim_fig = self._create_figure_plots(self.controller, fig_width, fig_height)
-
-            animate = True
-            fargs = (self.system, self.controller,
-                     self.nominal_ctrl, self.simulator, animate)
-
-            anm = animation.FuncAnimation(self.sim_fig,
-                                          self._wrapper_take_steps,
-                                          fargs=fargs,
-                                          init_func=self._initialize_figure,
-                                          interval=1)
-
-            anm.running = True
-            self.sim_fig.canvas.mpl_connect(
-                'key_press_event', lambda event: self._on_key_press(event, anm, fargs))
-            self.sim_fig.tight_layout()
-            plt.show()
+                self.run_animation(self.system, self.controller, self.nominal_ctrl, self.simulator, fig_width, fig_height)
