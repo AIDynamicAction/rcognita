@@ -1187,7 +1187,11 @@ class Simulation(utilities.Generic):
         if self.num_controllers > 1:
             self.controllers = self.controller
 
-            self.systems = list(itertools.repeat(copy.deepcopy(self.system), self.num_controllers))
+            self.systems = []
+            
+            for i in range(self.num_controllers):
+                c = copy.deepcopy(system)
+                self.systems.append(c)
 
             # initial value of control
             self.u0 = np.zeros((self.num_controllers, system.dim_input))
@@ -1789,6 +1793,7 @@ class Simulation(utilities.Generic):
 
         t = simulator.t
         full_state = simulator.y
+        
 
         x = full_state[0:self.dim_state]
         y = sys.get_curr_state(x)
@@ -1897,13 +1902,10 @@ class Simulation(utilities.Generic):
 
             for i in range(self.num_controllers):
                 t = simulators[i].t
-                # full_state = simulators[i].y
-                # print(i, full_state)
-                print(self.current_run[i], self.n_runs)
 
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
-                        self.t_elapsed[i] = t
+                        print(systems)
                         self._take_step(systems[i], controllers[i], nominal_ctrl, simulators[i], animate, multi_controller_id=i)
 
                     else:
