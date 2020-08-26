@@ -1,27 +1,4 @@
-"""
-Created on Tue Apr 21 15:54:06 2020
-
-@author: Pavel Osinenko
-"""
-
-
-"""
-=============================================================================
-Reinforcement learning frame
-
-This is a skeleton for reinforcement learning (RL) methods in Python ready for implementation of custom setups, 
-e.g., value iteration, policy iteration, dual etc.
-
-=============================================================================
-
-Remark: 
-
-All vectors are trated as of type [n,]
-All buffers are trated as of type [L, n] where each row is a vector
-Buffers are updated from bottom
-"""
-
-# imports
+# general imports
 import os
 import pathlib
 import warnings
@@ -41,11 +18,12 @@ import numpy.linalg as la
 from scipy import signal
 import sippy  # Github:CPCLAB-UNIPI/SIPPY
 
-# plotting
+# matplotlib
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
+# rcognita
 from . import utilities
 
 # other
