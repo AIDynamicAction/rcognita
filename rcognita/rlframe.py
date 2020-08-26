@@ -1323,7 +1323,7 @@ class Simulation(utilities.Generic):
             for i in range(self.num_controllers):
                 simulator = sp.integrate.RK45(closed_loop,
                                                    t0,
-                                                   full_states[i,],
+                                                   full_states[i],
                                                    t1,
                                                    max_step=sample_times[i] / 2,
                                                    first_step=1e-6,
@@ -1827,7 +1827,7 @@ class Simulation(utilities.Generic):
                 self._update_all_lines_multi(text_time, full_state, alpha_deg,
                                        x_coord, y_coord, t, alpha, r, icost, u, multi_controller_id)
 
-    def _reset_sim(self, controller, nominal_ctrl, simulator):
+    def _reset_sim(self, controller, nominal_ctrl, simulator, multi_controller_id = None):
         if self.is_print_sim_step:
             print('.....................................Run {run:2d} done.....................................'.format(
                 run=self.current_run))
@@ -1838,7 +1838,12 @@ class Simulation(utilities.Generic):
         # Reset simulator
         simulator.status = 'running'
         simulator.t = self.t0
-        simulator.y = self.full_state
+
+        if multi_controller_id is not None:
+            simulator.y = self.full_states[multi_controller_id]
+
+        else:
+            simulator.y = self.full_state
 
         # Reset controller
         if controller.ctrl_mode > 0:
@@ -1875,7 +1880,7 @@ class Simulation(utilities.Generic):
 
             if self.num_controllers > 1:
                 for i in range(self.num_controllers):
-                    self._reset_sim(controller[i], nominal_ctrl, simulator[i])
+                    self._reset_sim(controller[i], nominal_ctrl, simulator[i], i)
 
             else:
                 self._reset_sim(controller, nominal_ctrl, simulator)
@@ -1888,18 +1893,23 @@ class Simulation(utilities.Generic):
         if self.num_controllers > 1:
             simulators = simulator
             controllers = controller
+            systems = system
 
             for i in range(self.num_controllers):
                 t = simulators[i].t
+                # full_state = simulators[i].y
+                # print(i, full_state)
+                print(self.current_run[i], self.n_runs)
 
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
                         self.t_elapsed[i] = t
-                        self._take_step(system, controllers[i], nominal_ctrl, simulators[i], animate, multi_controller_id=i)
+                        self._take_step(systems[i], controllers[i], nominal_ctrl, simulators[i], animate, multi_controller_id=i)
 
                     else:
                         self.current_run[i] += 1
                         self._reset_sim(controllers[i], nominal_ctrl, simulators[i])
+                
                 else:
                     if self.close_plt_on_finish is True:
                         self.graceful_exit()
@@ -1931,8 +1941,9 @@ class Simulation(utilities.Generic):
             if multi_controllers is True:
                 controllers = controller
                 simulators = simulator
+                systems = system
                 self.sim_fig = self._create_figure_plots_multi(controllers, fig_width, fig_height)
-                fargs = (system, controllers, nominal_ctrl, simulators, animate)
+                fargs = (systems, controllers, nominal_ctrl, simulators, animate)
             
             else:
                 self.sim_fig = self._create_figure_plots(controllers, fig_width, fig_height)
@@ -1997,7 +2008,7 @@ class Simulation(utilities.Generic):
 
         else:
             if self.num_controllers > 1:
-                self.run_animation(self.system, 
+                self.run_animation(self.systems, 
                     self.controllers, 
                     self.nominal_ctrl, 
                     self.simulators, 
