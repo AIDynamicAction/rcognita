@@ -1232,17 +1232,17 @@ class Simulation(utilities.Generic):
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
 
-    def set_initial_coords(self, controller, initial_x, initial_y):
-        self.initial_x = initial_x
-        self.initial_y = initial_y
-        self.system_state[0] = initial_x
-        self.system_state[1] = initial_y
-        self.full_state[0] = initial_x
-        self.full_state[1] = initial_y
-        controller.initial_x = initial_x
-        controller.initial_y = initial_y
+    # def set_initial_coords(self, controller, initial_x, initial_y):
+    #     self.initial_x = initial_x
+    #     self.initial_y = initial_y
+    #     self.system_state[0] = initial_x
+    #     self.system_state[1] = initial_y
+    #     self.full_state[0] = initial_x
+    #     self.full_state[1] = initial_y
+    #     controller.initial_x = initial_x
+    #     controller.initial_y = initial_y
 
-    def _ctrlSelector(self, t, y, uMan, nominalCtrl, agent, mode):
+    def _ctrl_selector(self, t, y, uMan, nominal_ctrl, agent, mode):
         """
         Main interface for different agents
 
@@ -1251,7 +1251,7 @@ class Simulation(utilities.Generic):
         if mode == 0:  # Manual control
             u = uMan
         elif mode == -1:  # Nominal controller
-            u = nominalCtrl.compute_action(t, y)
+            u = nominal_ctrl.compute_action(t, y)
         elif mode > 0:  # Optimal controller
             u = agent.compute_action(t, y)
 
@@ -1492,7 +1492,7 @@ class Simulation(utilities.Generic):
         x = full_state[0:self.dim_state]
         y = sys.get_curr_state(x)
 
-        u = self._ctrlSelector(
+        u = self._ctrl_selector(
             t, y, self.u_man, nominal_ctrl, agent, self.ctrl_mode)
 
         sys.get_action(u)
