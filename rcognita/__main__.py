@@ -167,8 +167,27 @@ def main(args=None):
     else:
         # environment
         sys = System()
-        controller1 = Controller(sys, ctrl_mode=5, n_actor=6, buffer_size=200, critic_mode=3, n_critic=50, estimator_buffer_power=8, estimator_buffer_fill=2)
-        controller2 = Controller(sys, initial_x = -5, initial_y = -5, ctrl_mode=5, n_actor=6, buffer_size=200, critic_mode=3, n_critic=50, estimator_buffer_power=8, estimator_buffer_fill=2)
+        controller1 = Controller(sys,
+                           sample_time=0.3,
+                           pred_step_size=2,
+                            critic_mode=3,
+                            ctrl_mode=3,
+                            buffer_size=20,
+                            n_actor=10,
+                            n_critic=10,
+                            estimator_update_time=0.3)
+        controller2 = Controller(sys,
+                            initial_x=-5,
+                            initial_y=-5,
+                           sample_time=0.3,
+                           pred_step_size=2,
+                            critic_mode=3,
+                            ctrl_mode=3,
+                            buffer_size=20,
+                            n_actor=10,
+                            n_critic=10,
+                            estimator_update_time=0.3)
+
         nominalCtrl = NominalController(ctrl_gain=0.5, sample_time=0.05)
 
     # sim = Simulation(sys, controller1, nominalCtrl, t1=30)

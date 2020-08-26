@@ -4,6 +4,8 @@ import pathlib
 import warnings
 import sys
 from collections import namedtuple
+import copy
+import itertools
 
 # scipy
 import scipy as sp
@@ -1152,17 +1154,9 @@ class Simulation(utilities.Generic):
         
         if isinstance(self.controller, list) and len(self.controller) > 1:
             self.num_controllers = len(self.controller)
-            
-            # initial value of control
-            self.u0 = np.zeros((self.num_controllers, system.dim_input))
-
-            # initial value of disturbance
-            self.q0 = np.zeros((self.num_controllers, system.dim_disturb))
 
         else: 
             self.num_controllers = 1
-            self.u0 = np.zeros(system.dim_input)
-            self.q0 = np.zeros(system.dim_disturb)
 
         self.nominal_ctrl = nominal_ctrl
 
@@ -1190,16 +1184,33 @@ class Simulation(utilities.Generic):
         # control bounds for constraints above
         self.control_bounds = system.control_bounds
 
+        if self.num_controllers > 1:
+            self.controllers = self.controller
 
+            self.systems = list(itertools.repeat(copy.deepcopy(self.system), self.num_controllers))
 
-        # the variables below could be either scalars or vectors (lists, truly), depending on if there are multiple controllers in the simulation
-        self.initial_x, self.initial_y, self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
+            # initial value of control
+            self.u0 = np.zeros((self.num_controllers, system.dim_input))
 
-        # the states below could be 2D if their are multiple controllers
-        self.system_state, self.full_state, self.alpha = self._establish_system_state(self.dim_state, self.initial_x, self.initial_y, is_dyn_ctrl, self.initial_alpha, self.u0, self.q0)
+            # initial value of disturbance
+            self.q0 = np.zeros((self.num_controllers, system.dim_disturb))
 
-        # `self.simulator` could be a single simulator or a list of simulators
-        self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
+            self.initial_xs, self.initial_ys, self.sample_times, self.ctrl_modes = self._get_controller_info(controller, multi=True)
+
+            self.system_states, self.full_states, self.alphas = self._establish_system_state(self.dim_state, self.initial_xs, self.initial_ys, is_dyn_ctrl, self.initial_alpha, self.u0, self.q0, multi=True)
+
+            self.simulators = self._create_simulator(closed_loop, self.full_states, self.t0, self.t1, self.sample_times, a_tol, r_tol, multi=True)
+
+    
+        else:
+            self.u0 = np.zeros(system.dim_input)
+            self.q0 = np.zeros(system.dim_disturb)
+
+            self.initial_x, self.initial_y, self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
+
+            self.system_state, self.full_state, self.alpha = self._establish_system_state(self.dim_state, self.initial_x, self.initial_y, is_dyn_ctrl, self.initial_alpha, self.u0, self.q0)
+
+            self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
 
         """
     
@@ -1228,9 +1239,9 @@ class Simulation(utilities.Generic):
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
 
-    def _get_controller_info(self, controller):
+    def _get_controller_info(self, controller, multi=False):
         # if we have a single controller
-        if isinstance(controller, Controller):
+        if multi is False:
             initial_x = controller.initial_x
             initial_y = controller.initial_y
             sample_time = controller.sample_time
@@ -1239,25 +1250,25 @@ class Simulation(utilities.Generic):
             return initial_x, initial_y, sample_time, ctrl_mode
 
         # if we have multiple controllers
-        elif isinstance(controller, list):
+        else:
             controllers = controller
             num_controllers = len(controllers)
             
-            initial_x = []
-            initial_y = []
-            sample_time = []
-            ctrl_mode = []
+            initial_xs = []
+            initial_ys = []
+            sample_times = []
+            ctrl_modes = []
 
             for controller in controllers:
-                initial_x.append(controller.initial_x)
-                initial_y.append(controller.initial_y)
-                sample_time.append(controller.sample_time)
-                ctrl_mode.append(controller.ctrl_mode)
+                initial_xs.append(controller.initial_x)
+                initial_ys.append(controller.initial_y)
+                sample_times.append(controller.sample_time)
+                ctrl_modes.append(controller.ctrl_mode)
 
-            return initial_x, initial_y, sample_time, ctrl_mode
+            return initial_xs, initial_ys, sample_times, ctrl_modes
 
-    def _establish_system_state(self, dim_state, initial_x, initial_y, is_dyn_ctrl, alpha, u0, q0):
-        if isinstance(initial_x, list) is False and isinstance(initial_y, list) is False:
+    def _establish_system_state(self, dim_state, initial_x, initial_y, is_dyn_ctrl, alpha, u0, q0, multi=False):
+        if multi is False:
             system_state = np.zeros(dim_state)
             system_state[0] = initial_x
             system_state[1] = initial_y
@@ -1271,45 +1282,29 @@ class Simulation(utilities.Generic):
 
             return system_state, full_state, alpha
 
-        elif isinstance(initial_x, list) is True and isinstance(initial_y, list) is True:
+        else:
             num_controllers = len(initial_x)
+            initial_xs = initial_x
+            initial_ys = initial_x
 
-            system_state = np.zeros((num_controllers, dim_state))
+            system_states = np.zeros((num_controllers, dim_state))
 
             for i in range(num_controllers):
-                system_state[i, 0] = initial_x[i]
-                system_state[i, 1] = initial_y[i]
-                system_state[i, 2] = alpha
+                system_states[i, 0] = initial_xs[i]
+                system_states[i, 1] = initial_ys[i]
+                system_states[i, 2] = alpha
 
                 if is_dyn_ctrl:
-                    full_state = np.concatenate((system_state, q0, u0), axis=1)
+                    full_states = np.concatenate((system_states, q0, u0), axis=1)
                 else:
-                    full_state = np.concatenate((system_state, q0), axis=1)
+                    full_states = np.concatenate((system_states, q0), axis=1)
 
-            alpha = system_state[:, 2]
+            alphas = system_states[:, 2]
 
-            return system_state, full_state, alpha
+            return system_states, full_states, alphas
 
-
-    def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
-        if self.num_controllers > 1:
-            simulators = []
-            
-            for i in range(self.num_controllers):
-                simulator = sp.integrate.RK45(closed_loop,
-                                                   t0,
-                                                   full_state[i,],
-                                                   t1,
-                                                   max_step=sample_time[i] / 2,
-                                                   first_step=1e-6,
-                                                   atol=a_tol,
-                                                   rtol=r_tol)  
-
-                simulators.append(simulator)
-            return simulators
-
-
-        else:
+    def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol, multi=False):
+        if multi is False:
             simulator = sp.integrate.RK45(closed_loop,
                                                t0,
                                                full_state,
@@ -1318,7 +1313,25 @@ class Simulation(utilities.Generic):
                                                first_step=1e-6,
                                                atol=a_tol,
                                                rtol=r_tol)
+
             return simulator
+        else:
+            full_states = full_state
+            sample_times = sample_time
+            simulators = []
+            
+            for i in range(self.num_controllers):
+                simulator = sp.integrate.RK45(closed_loop,
+                                                   t0,
+                                                   full_states[i,],
+                                                   t1,
+                                                   max_step=sample_times[i] / 2,
+                                                   first_step=1e-6,
+                                                   atol=a_tol,
+                                                   rtol=r_tol)  
+
+                simulators.append(simulator)
+            return simulators
 
     def _ctrl_selector(self, t, y, uMan, nominal_ctrl, agent, mode):
         """
@@ -1474,8 +1487,13 @@ class Simulation(utilities.Generic):
     def _create_figure_plots_multi(self, controller, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
 
-        y0 = System.get_curr_state(self.system_state)
-        self.alpha = self.alpha / 2 / np.pi
+        y0_list = []
+        
+        for system_state in self.system_states:
+            y0 = System.get_curr_state(system_state)
+            y0_list.append(y0)
+
+        self.alphas = self.alphas / 2 / np.pi
 
         plt.close('all')
 
@@ -1512,9 +1530,9 @@ class Simulation(utilities.Generic):
 
             for i in range(self.num_controllers):
                 self.traj_line, = self.xy_plane_axes.plot(
-                    self.initial_x[i], self.initial_y[i], f'{self.colors[i]}--', lw=0.5)
+                    self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5)
 
-                self.robot_marker = utilities._pltMarker(angle=self.alpha[i])
+                self.robot_marker = utilities._pltMarker(angle=self.alphas[i])
 
                 self.text_time_handle = self.xy_plane_axes.text(0.05, 0.95,
                                                                 text_time,
@@ -1549,9 +1567,9 @@ class Simulation(utilities.Generic):
             self.alpha_lines = []
             
             for i in range(self.num_controllers):
-                self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_x[i], self.initial_y[i]]), f'{self.colors[i]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+                self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_xs[i], self.initial_ys[i]]), f'{self.colors[i]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
                 
-                self.alpha_line, = self.sol_axes.plot(self.t0, self.alpha[i], f'{self.colors[i]}--', lw=0.5, label=r'$\alpha$ [rad]')
+                self.alpha_line, = self.sol_axes.plot(self.t0, self.alphas[i], f'{self.colors[i]}--', lw=0.5, label=r'$\alpha$ [rad]')
 
                 self.norm_lines.append(self.norm_line)
                 self.alpha_lines.append(self.alpha_line)
@@ -1568,7 +1586,7 @@ class Simulation(utilities.Generic):
         """
 
         if self.num_controllers > 1:
-            self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * controller[0].running_cost(y0[0], self.u0[0])), yscale='symlog', xlabel='t [s]')
+            self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * self.controllers[0].running_cost(y0_list[0], self.u0[0])), yscale='symlog', xlabel='t [s]')
 
             self.cost_axes.title.set_text('Cost')
 
@@ -1577,7 +1595,7 @@ class Simulation(utilities.Generic):
             self.i_cost_lines = []
 
             for i in range(self.num_controllers):
-                r = controller[i].running_cost(y0[i], self.u0[i])
+                r = controller[i].running_cost(y0_list[i], self.u0[i])
                 text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
                 self.text_icost_handle = self.sim_fig.text(
@@ -1643,7 +1661,7 @@ class Simulation(utilities.Generic):
     def _initialize_figure(self):
         if self.num_controllers > 1:
             for i in range(self.num_controllers):
-                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x[i], self.initial_y[i], marker=self.robot_markers[i].marker, s=400, c=f"{self.colors[i]}")
+                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], marker=self.robot_markers[i].marker, s=400, c=f"{self.colors[i]}")
 
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
@@ -1937,8 +1955,7 @@ class Simulation(utilities.Generic):
         if self.num_controllers > 1:
             self.current_run = [1, 1]
             self.t_elapsed = [0, 0]
-            self.controllers = self.controller
-            self.simulators = self.simulator
+
         else:
             self.current_run = 1
             self.t_elapsed = 0
