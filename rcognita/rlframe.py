@@ -1232,6 +1232,9 @@ class Simulation(utilities.Generic):
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
 
+    # def _get_controller_info(self, controller):
+    #     if isinstance(controller, Controller):
+
     # def set_initial_coords(self, controller, initial_x, initial_y):
     #     self.initial_x = initial_x
     #     self.initial_y = initial_y
