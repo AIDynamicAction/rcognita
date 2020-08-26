@@ -1143,12 +1143,19 @@ class Simulation(utilities.Generic):
                  f_man=-3,
                  n_man=-1,
                  is_log_data=0,
-                 is_visualization=False,
+                 is_visualization=True,
                  is_print_sim_step=False,
                  is_dyn_ctrl=0):
         
         self.system = system
         self.controller = controller
+        
+        if isinstance(self.controller, list):
+            self.num_controllers = len(self.controller)
+
+        else: 
+            self.num_controllers = 1
+
         self.nominal_ctrl = nominal_ctrl
 
         # degree of bot
@@ -1195,6 +1202,7 @@ class Simulation(utilities.Generic):
         VISUALIZATION PARAMS
     
         """
+        self.colors = ['b','r','g']
 
         # x and y limits of scatter plot. Used so far rather for visualization
         # only, but may be integrated into the actor as constraints
@@ -1281,13 +1289,7 @@ class Simulation(utilities.Generic):
 
 
     def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
-
-        if isinstance(sample_time, list):
-            num_controllers = len(sample_time)
-        else:
-            num_controllers = 1
-
-        if num_controllers > 1:
+        if self.num_controllers > 1:
             simulators = []
             
             for i in range(num_controllers):
@@ -1330,7 +1332,7 @@ class Simulation(utilities.Generic):
 
         return u
 
-    def _create_figure_plots(self, agent, fig_width, fig_height):
+    def _create_figure_plots(self, controller, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
 
         y0 = System.get_curr_state(self.system_state)
@@ -1363,10 +1365,22 @@ class Simulation(utilities.Generic):
         self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],
                                 'k--', lw=0.75)   # y-axis
 
-        self.traj_line, = self.xy_plane_axes.plot(
-            self.initial_x, self.initial_y, 'b--', lw=0.5)
+        if self.num_controllers > 1:
+            self.robot_markers = []
+            self.traj_lines = []
 
-        self.robot_marker = utilities._pltMarker(angle=alpha)
+            for i in range(self.num_controllers):
+                self.traj_line, = self.xy_plane_axes.plot(
+                    self.initial_x[i], self.initial_y[i], f'{self.colors[i]}--', lw=0.5)
+
+                self.traj_lines.append(self.traj_line)
+                self.robot_markers.append(utilities._pltMarker(angle=alpha))
+
+        else:
+            self.traj_line, = self.xy_plane_axes.plot(
+                self.initial_x, self.initial_y, 'b--', lw=0.5)
+
+            self.robot_marker = utilities._pltMarker(angle=alpha)
 
         text_time = 't = {time:2.3f}'.format(time=self.t0)
 
@@ -1407,11 +1421,11 @@ class Simulation(utilities.Generic):
         
         """
         self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
-            0, 1e4 * agent.running_cost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
+            0, 1e4 * controller.running_cost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
 
         self.cost_axes.title.set_text('Cost')
 
-        r = agent.running_cost(y0, self.u0)
+        r = controller.running_cost(y0, self.u0)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
         self.text_icost_handle = self.sim_fig.text(
@@ -1467,8 +1481,12 @@ class Simulation(utilities.Generic):
         return self.sim_fig
 
     def _initialize_figure(self):
-        self.sol_scatter = self.xy_plane_axes.scatter(
-            self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
+        if self.num_controllers > 1:
+            for i in range(self.num_controllers):
+                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x[i], self.initial_y[i], marker=self.robot_markers[i].marker, s=400, c=f"{self.colors[i]}")
+
+        else:
+            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
 
         return self.sol_scatter
 
@@ -1556,7 +1574,7 @@ class Simulation(utilities.Generic):
 
         print(table)
 
-    def _take_step(self, sys, agent, nominal_ctrl, simulator, animate=False):
+    def _take_step(self, sys, controller, nominal_ctrl, simulator, animate=False):
         simulator.step()
 
         t = simulator.t
@@ -1566,18 +1584,18 @@ class Simulation(utilities.Generic):
         y = sys.get_curr_state(x)
 
         u = self._ctrl_selector(
-            t, y, self.u_man, nominal_ctrl, agent, self.ctrl_mode)
+            t, y, self.u_man, nominal_ctrl, controller, self.ctrl_mode)
 
         sys.get_action(u)
-        agent.get_sys_state(sys._x)
-        agent.update_icost(y, u)
+        controller.get_sys_state(sys._x)
+        controller.update_icost(y, u)
 
         x_coord = full_state[0]
         y_coord = full_state[1]
         alpha = full_state[2]
         v = full_state[3]
         omega = full_state[4]
-        icost = agent.i_cost_val
+        icost = controller.i_cost_val
 
         if self.is_print_sim_step:
             self._print_sim_step(t, x_coord, y_coord,
@@ -1588,7 +1606,7 @@ class Simulation(utilities.Generic):
                                y_coord, alpha, v, omega, icost.val, u)
         if animate == True:
             alpha_deg = alpha / np.pi * 180
-            r = agent.running_cost(y, u)
+            r = controller.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
             self._update_all_lines(text_time, full_state, alpha_deg,
                                    x_coord, y_coord, t, alpha, r, icost, u)
@@ -1637,36 +1655,57 @@ class Simulation(utilities.Generic):
                 anm.running = True
 
         elif event.key == 'q':
-            _, agent, nominal_ctrl, simulator, _ = args
-            self._reset_sim(agent, nominal_ctrl, simulator)
+            _, controller, nominal_ctrl, simulator, _ = args
+            self._reset_sim(controller, nominal_ctrl, simulator)
             self.graceful_exit()
 
     def _wrapper_take_steps(self, k, *args):
-        _, agent, nominal_ctrl, simulator, _ = args
+        _, controller, nominal_ctrl, simulator, _ = args
         t = simulator.t
 
-        if self.current_run <= self.n_runs:
-            if t < self.t1:
-                self.t_elapsed = t
-                self._take_step(*args)
+        if self.num_controllers > 1:
+            for i in range(num_controllers):
+                if self.current_run <= self.n_runs:
+                    if t < self.t1:
+                        self.t_elapsed = t
+                        self._take_step(*args)
 
-            else:
-                self.current_run += 1
-                self._reset_sim(agent, nominal_ctrl, simulator)
+                    else:
+                        self.current_run += 1
+                        self._reset_sim(controller, nominal_ctrl, simulator)
+                else:
+                    if self.close_plt_on_finish is True:
+                        self.graceful_exit()
+
+                    elif self.close_plt_on_finish is False:
+                        self.graceful_exit(plt_close=False)
         else:
-            if self.close_plt_on_finish is True:
-                self.graceful_exit()
+            if self.current_run <= self.n_runs:
+                if t < self.t1:
+                    self.t_elapsed = t
+                    self._take_step(*args)
 
-            elif self.close_plt_on_finish is False:
-                self.graceful_exit(plt_close=False)
+                else:
+                    self.current_run += 1
+                    self._reset_sim(controller, nominal_ctrl, simulator)
+            else:
+                if self.close_plt_on_finish is True:
+                    self.graceful_exit()
+
+                elif self.close_plt_on_finish is False:
+                    self.graceful_exit(plt_close=False)
 
     def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True):
+        if self.num_controllers > 1:
+            self.current_run = [1, 1]
+        else:
+            self.current_run = 1
+
         self.close_plt_on_finish = close_plt_on_finish
-        self.current_run = 1
         self.n_runs = n_runs
         self.data_files = self._log_data(n_runs, save=self.is_log_data)
 
-        if self.is_visualization:
+        if self.is_visualization is False:
             self.current_data_file = data_files[0]
 
             t = self.simulator.t
@@ -1696,8 +1735,7 @@ class Simulation(utilities.Generic):
                 self.graceful_exit()
 
         else:
-            self.sim_fig = self._create_figure_plots(
-                self.controller, fig_width, fig_height)
+            self.sim_fig = self._create_figure_plots(self.controller, fig_width, fig_height)
 
             animate = True
             fargs = (self.system, self.controller,
