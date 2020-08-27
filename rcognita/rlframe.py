@@ -129,12 +129,30 @@ class System(utilities.Generic):
         # Current input (a.k.a. action)
         self.u = np.zeros(dim_input)
 
+        self.full_state, self._dim_full_state  = self.create_full_state(self.system_state, self.q0, self.u0, is_dyn_ctrl)
+
+    def create_full_state(self, system_state, q0, u0=None, is_dyn_ctrl=False):
         if is_dyn_ctrl:
             self._dim_full_state = self.dim_state + self.dim_disturb + self.dim_input
             self.full_state = np.concatenate([self.system_state, q0, u0])
         else:
             self._dim_full_state = self.dim_state + self.dim_disturb
             self.full_state = np.concatenate([self.system_state, q0])
+
+        return self.full_state, self._dim_full_state 
+
+    def _add_bot(self, initial_x, initial_y, is_dyn_ctrl=False):
+        self.add_state = np.zeros(self.dim_state)
+        self.add_state = initial_x
+        self.add_state = initial_y
+        self.add_state = self.initial_alpha
+        self.system_state = np.vstack((self.system_state,self.add_state))
+        
+        new_row = np.concatenate((self.add_state, u0, q0))
+        self.full_state = np.vstack((self.full_state, new_row, axis=0))
+        self.alphas = self.system_state[:,2]
+
+        return self.system_state, self.full_state, self.alphas
 
     @staticmethod
     def get_system_dynamics(t, x, u, q, m, I, dim_state):
@@ -245,7 +263,7 @@ class System(utilities.Generic):
         """ Receive control action from agent. """
         self.u = u
 
-    def closed_loop(self, t, full_state):
+    def closed_loop(self, t, full_state, i=None):
         """
         Closed loop of the system.
         This function is designed for use with ODE solvers.
@@ -1143,79 +1161,9 @@ class Simulation(utilities.Generic):
                  x_max=10,
                  y_min=-10,
                  y_max=10,
-                 f_man=-3,
-                 n_man=-1,
                  is_log_data=0,
                  is_visualization=True,
-                 is_print_sim_step=False,
-                 is_dyn_ctrl=0):
-        
-        
-        # start time of episode
-        self.t0 = t0
-
-        # stop time of episode
-        self.t1 = t1
-
-        if isinstance(self.controller, list) and len(self.controller) > 1:
-            self.num_controllers = len(self.controller)
-
-        else: 
-            self.num_controllers = 1
-
-            self.system = system
-            self.controller = controller
-            self.nominal_ctrl = nominal_ctrl
-            self.initial_alpha = system.initial_alpha
-
-
-        # system
-        self.dim_state = system.dim_state
-        self.dim_input = system.dim_input
-        self.dim_disturb = system.dim_disturb
-        closed_loop = system.closed_loop
-
-        # control constraints
-        self.f_min = system.f_min
-        self.f_max = system.f_max
-        self.m_min = system.m_min
-        self.m_max = system.m_max
-
-        # control bounds for constraints above
-        self.control_bounds = system.control_bounds
-
-        if self.num_controllers > 1:
-            self.controllers = self.controller
-
-            self.systems = []
-            
-            for i in range(self.num_controllers):
-                c = copy.deepcopy(system)
-                self.systems.append(c)
-
-            # initial value of control
-            self.u0 = np.zeros((self.num_controllers, system.dim_input))
-
-            # initial value of disturbance
-            self.q0 = np.zeros((self.num_controllers, system.dim_disturb))
-
-            self.initial_xs, self.initial_ys, self.sample_times, self.ctrl_modes = self._get_controller_info(controller, multi=True)
-
-            self.system_states, self.full_states, self.alphas = self._establish_system_state(self.dim_state, self.initial_xs, self.initial_ys, is_dyn_ctrl, self.initial_alpha, self.u0, self.q0, multi=True)
-
-            self.simulators = self._create_simulator(closed_loop, self.full_states, self.t0, self.t1, self.sample_times, a_tol, r_tol, multi=True)
-
-    
-        else:
-            self.u0 = np.zeros(system.dim_input)
-            self.q0 = np.zeros(system.dim_disturb)
-
-            self.initial_x, self.initial_y, self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
-
-            self.system_state, self.full_state, self.alpha = self._establish_system_state(self.dim_state, self.initial_x, self.initial_y, is_dyn_ctrl, self.initial_alpha, self.u0, self.q0)
-
-            self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
-
+                 is_print_sim_step=False):
         """
     
         VISUALIZATION PARAMS
@@ -1230,11 +1178,6 @@ class Simulation(utilities.Generic):
         self.y_min = y_min
         self.y_max = y_max
 
-        # manual control
-        self.f_man = f_man
-        self.n_man = n_man
-        self.u_man = np.array([f_man, n_man])
-
         # other
         self.is_log_data = is_log_data
         self.is_visualization = is_visualization
@@ -1243,99 +1186,101 @@ class Simulation(utilities.Generic):
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
 
+        """
+    
+        CONTROLLER AND SYSTEM PARAMS
+    
+        """
+        
+        # start time of episode
+        self.t0 = t0
+
+        # stop time of episode
+        self.t1 = t1
+        
+        # control constraints
+        self.f_min = system.f_min
+        self.f_max = system.f_max
+        self.f_man = system.f_man
+        self.n_man = system.n_man
+        self.m_min = system.m_min
+        self.m_max = system.m_max
+
+        self.control_bounds = system.control_bounds
+
+        closed_loop = system.closed_loop
+
+        if isinstance(self.controller, list) is False and len(self.controller) == 1:
+            self.num_controllers = 1
+
+            self.system = system
+            self.controller = controller
+            self.nominal_ctrl = nominal_ctrl
+
+            self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
+
+            self.system_state, self.full_state, self.alpha = self._get_system_info(system)
+
+            self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
+
+        else: 
+            self.num_controllers = len(self.controller)
+
+            self.controllers = controller
+            self.nominal_ctrl = nominal_ctrl
+
+            self.sample_times, self.ctrl_modes = self._get_controller_info(self.controllers, multi=True)
+
+            self.system_states, self.full_states, self.alphas = _add_bot(self, -5, -5, is_dyn_ctrl=False)
+
+            self.simulators = []
+
+            for i in self.num_controllers:
+                simulator = self._create_simulator(closed_loop, self.full_states[i], self.t0, self.t1, self.sample_times[i], a_tol, r_tol)
+                self.simulators.append(simulator)
+
+
     def _get_controller_info(self, controller, multi=False):
         # if we have a single controller
         if multi is False:
             initial_x = controller.initial_x
             initial_y = controller.initial_y
-            sample_time = controller.sample_time
-            ctrl_mode = controller.ctrl_mode
 
-            return initial_x, initial_y, sample_time, ctrl_mode
+            return sample_time, ctrl_mode
 
         # if we have multiple controllers
         else:
             controllers = controller
             num_controllers = len(controllers)
             
-            initial_xs = []
-            initial_ys = []
             sample_times = []
             ctrl_modes = []
 
             for controller in controllers:
-                initial_xs.append(controller.initial_x)
-                initial_ys.append(controller.initial_y)
                 sample_times.append(controller.sample_time)
                 ctrl_modes.append(controller.ctrl_mode)
 
-            return initial_xs, initial_ys, sample_times, ctrl_modes
+            return sample_times, ctrl_modes
 
-    def _establish_system_state(self, dim_state, initial_x, initial_y, is_dyn_ctrl, alpha, u0, q0, multi=False):
-        if multi is False:
-            system_state = np.zeros(dim_state)
-            system_state[0] = initial_x
-            system_state[1] = initial_y
-            system_state[2] = alpha
+    def _get_system_info(self, system):
+        system_state = system.system_state
+        full_state = system.full_state
+        alpha = system.initial_alpha
 
-            if is_dyn_ctrl:
-                full_state = np.concatenate(
-                    [system_state, q0, u0])
-            else:
-                full_state = np.concatenate([system_state, q0])
+        return system_state, full_state, alpha
 
-            return system_state, full_state, alpha
+    def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
+        simulator = sp.integrate.RK45(closed_loop,
+                                           t0,
+                                           full_state,
+                                           t1,
+                                           max_step=sample_time / 2,
+                                           first_step=1e-6,
+                                           atol=a_tol,
+                                           rtol=r_tol)
 
-        else:
-            num_controllers = len(initial_x)
-            initial_xs = initial_x
-            initial_ys = initial_x
+        return simulator
 
-            system_states = np.zeros((num_controllers, dim_state))
-
-            for i in range(num_controllers):
-                system_states[i, 0] = initial_xs[i]
-                system_states[i, 1] = initial_ys[i]
-                system_states[i, 2] = alpha
-
-                if is_dyn_ctrl:
-                    full_states = np.concatenate((system_states, q0, u0), axis=1)
-                else:
-                    full_states = np.concatenate((system_states, q0), axis=1)
-
-            alphas = system_states[:, 2]
-
-            return system_states, full_states, alphas
-
-    def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol, multi=False):
-        if multi is False:
-            simulator = sp.integrate.RK45(closed_loop,
-                                               t0,
-                                               full_state,
-                                               t1,
-                                               max_step=sample_time / 2,
-                                               first_step=1e-6,
-                                               atol=a_tol,
-                                               rtol=r_tol)
-
-            return simulator
-        else:
-            full_states = full_state
-            sample_times = sample_time
-            simulators = []
-            
-            for i in range(self.num_controllers):
-                simulator = sp.integrate.RK45(closed_loop,
-                                                   t0,
-                                                   full_states[i],
-                                                   t1,
-                                                   max_step=sample_times[i] / 2,
-                                                   first_step=1e-6,
-                                                   atol=a_tol,
-                                                   rtol=r_tol)  
-
-                simulators.append(simulator)
-            return simulators
 
     def _ctrl_selector(self, t, y, uMan, nominal_ctrl, agent, mode):
         """
@@ -1789,12 +1734,13 @@ class Simulation(utilities.Generic):
         print(table)
 
     def _take_step(self, sys, controller, nominal_ctrl, simulator, animate=False, multi_controller_id=None):
+        mid = multi_controller_id
         simulator.step()
 
         t = simulator.t
         full_state = simulator.y
         
-        system_state = full_state[0:self.dim_state]
+        system_state = full_state[mid, 0:self.dim_state]
         y = sys.get_curr_state(system_state)
 
         u = self._ctrl_selector(
@@ -1804,11 +1750,11 @@ class Simulation(utilities.Generic):
         controller.record_sys_state(sys.system_state)
         controller.update_icost(y, u)
 
-        x_coord = full_state[0]
-        y_coord = full_state[1]
-        alpha = full_state[2]
-        v = full_state[3]
-        omega = full_state[4]
+        x_coord = full_state[mid, 0]
+        y_coord = full_state[mid, 1]
+        alpha = full_state[mid, 2]
+        v = full_state[mid, 3]
+        omega = full_state[mid, 4]
         icost = controller.i_cost_val
 
         if multi_controller_id is None:
@@ -1897,15 +1843,13 @@ class Simulation(utilities.Generic):
         if self.num_controllers > 1:
             simulators = simulator
             controllers = controller
-            systems = system
 
             for i in range(self.num_controllers):
                 t = simulators[i].t
 
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
-                        print(systems)
-                        self._take_step(systems[i], controllers[i], nominal_ctrl, simulators[i], animate, multi_controller_id=i)
+                        self._take_step(system, controllers[i], nominal_ctrl, simulators[i], animate, multi_controller_id=i)
 
                     else:
                         self.current_run[i] += 1
@@ -1942,9 +1886,9 @@ class Simulation(utilities.Generic):
             if multi_controllers is True:
                 controllers = controller
                 simulators = simulator
-                systems = system
+
                 self.sim_fig = self._create_figure_plots_multi(controllers, fig_width, fig_height)
-                fargs = (systems, controllers, nominal_ctrl, simulators, animate)
+                fargs = (system, controllers, nominal_ctrl, simulators, animate)
             
             else:
                 self.sim_fig = self._create_figure_plots(controllers, fig_width, fig_height)
@@ -1976,6 +1920,7 @@ class Simulation(utilities.Generic):
         self.n_runs = n_runs
         self.data_files = self._log_data(n_runs, save=self.is_log_data)
 
+        # under development
         if self.is_visualization is False:
             self.current_data_file = data_files[0]
 
@@ -2009,7 +1954,7 @@ class Simulation(utilities.Generic):
 
         else:
             if self.num_controllers > 1:
-                self.run_animation(self.systems, 
+                self.run_animation(self.system, 
                     self.controllers, 
                     self.nominal_ctrl, 
                     self.simulators, 

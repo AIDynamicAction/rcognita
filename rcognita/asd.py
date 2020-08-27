@@ -19,55 +19,6 @@ class Simulation(utilities.Generic):
                  is_log_data=0,
                  is_visualization=True,
                  is_print_sim_step=False):
-        
-        
-        # start time of episode
-        self.t0 = t0
-
-        # stop time of episode
-        self.t1 = t1
-        
-        # control constraints
-        self.f_min = system.f_min
-        self.f_max = system.f_max
-        self.f_man = system.f_man
-        self.n_man = system.n_man
-        self.m_min = system.m_min
-        self.m_max = system.m_max
-
-        self.control_bounds = system.control_bounds
-
-        if isinstance(self.controller, list) and len(self.controller) > 1:
-            self.num_controllers = len(self.controller)
-
-            self.systems = system
-            self.controllers = controller
-            self.nominal_ctrl = nominal_ctrl
-
-            self.sample_times, self.ctrl_modes = self._get_controller_info(self.controllers)
-
-            self.system_states, self.full_states, self.alphas = self._get_system_info(self.systems)
-
-            self.simulators = []
-
-            for pseudo_system in self.systems:
-            	simulator = self._create_simulator(pseudo_system.closed_loop, self.full_states, self.t0, self.t1, self.sample_time, a_tol, r_tol)
-            	self.simulators.append(simulator)
-
-        else: 
-            self.num_controllers = 1
-
-            self.system = system
-            self.controller = controller
-            self.nominal_ctrl = nominal_ctrl
-
-            self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
-
-            self.system_state, self.full_state, self.alpha = self._get_system_info(system)
-
-    		closed_loop = system.closed_loop
-            self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
-
         """
     
         VISUALIZATION PARAMS
@@ -89,6 +40,60 @@ class Simulation(utilities.Generic):
 
         if self.is_print_sim_step:
             warnings.filterwarnings('ignore')
+
+        """
+    
+        CONTROLLER AND SYSTEM PARAMS
+    
+        """
+        
+        # start time of episode
+        self.t0 = t0
+
+        # stop time of episode
+        self.t1 = t1
+        
+        # control constraints
+        self.f_min = system.f_min
+        self.f_max = system.f_max
+        self.f_man = system.f_man
+        self.n_man = system.n_man
+        self.m_min = system.m_min
+        self.m_max = system.m_max
+
+        self.control_bounds = system.control_bounds
+
+        closed_loop = system.closed_loop
+
+        if isinstance(self.controller, list) is False and len(self.controller) == 1:
+            self.num_controllers = 1
+
+            self.system = system
+            self.controller = controller
+            self.nominal_ctrl = nominal_ctrl
+
+            self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
+
+            self.system_state, self.full_state, self.alpha = self._get_system_info(system)
+
+            self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
+
+        else: 
+            self.num_controllers = len(self.controller)
+
+            self.controllers = controller
+            self.nominal_ctrl = nominal_ctrl
+
+            self.sample_times, self.ctrl_modes = self._get_controller_info(self.controllers, multi=True)
+
+            self.system_states, self.full_states, self.alphas = _add_bot(self, -5, -5, is_dyn_ctrl=False)
+
+            self.simulators = []
+
+            for i in self.num_controllers:
+            	simulator = self._create_simulator(closed_loop, self.full_states[i], self.t0, self.t1, self.sample_times[i], a_tol, r_tol)
+            	self.simulators.append(simulator)
+
 
     def _get_controller_info(self, controller, multi=False):
         # if we have a single controller
@@ -112,34 +117,12 @@ class Simulation(utilities.Generic):
 
             return sample_times, ctrl_modes
 
-    def _get_system_info(self, system, multi=False):
-        if multi is False:
-            system_state = system.system_state
-            full_state = system.full_state
-            alpha = system.initial_alpha
+    def _get_system_info(self, system):
+        system_state = system.system_state
+        full_state = system.full_state
+        alpha = system.initial_alpha
 
-            return system_state, full_state, alpha
-
-        else:
-            num_controllers = len(initial_x)
-            initial_xs = initial_x
-            initial_ys = initial_x
-
-            system_states = np.zeros((num_controllers, dim_state))
-
-            for i in range(num_controllers):
-                system_states[i, 0] = initial_xs[i]
-                system_states[i, 1] = initial_ys[i]
-                system_states[i, 2] = alpha
-
-                if is_dyn_ctrl:
-                    full_states = np.concatenate((system_states, q0, u0), axis=1)
-                else:
-                    full_states = np.concatenate((system_states, q0), axis=1)
-
-            alphas = system_states[:, 2]
-
-            return system_states, full_states, alphas
+        return system_state, full_state, alpha
 
     def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
         simulator = sp.integrate.RK45(closed_loop,
@@ -606,12 +589,13 @@ class Simulation(utilities.Generic):
         print(table)
 
     def _take_step(self, sys, controller, nominal_ctrl, simulator, animate=False, multi_controller_id=None):
+    	mid = multi_controller_id
         simulator.step()
 
         t = simulator.t
         full_state = simulator.y
         
-        system_state = full_state[0:self.dim_state]
+        system_state = full_state[mid, 0:self.dim_state]
         y = sys.get_curr_state(system_state)
 
         u = self._ctrl_selector(
@@ -621,11 +605,11 @@ class Simulation(utilities.Generic):
         controller.record_sys_state(sys.system_state)
         controller.update_icost(y, u)
 
-        x_coord = full_state[0]
-        y_coord = full_state[1]
-        alpha = full_state[2]
-        v = full_state[3]
-        omega = full_state[4]
+        x_coord = full_state[mid, 0]
+        y_coord = full_state[mid, 1]
+        alpha = full_state[mid, 2]
+        v = full_state[mid, 3]
+        omega = full_state[mid, 4]
         icost = controller.i_cost_val
 
         if multi_controller_id is None:
@@ -714,15 +698,13 @@ class Simulation(utilities.Generic):
         if self.num_controllers > 1:
             simulators = simulator
             controllers = controller
-            systems = system
 
             for i in range(self.num_controllers):
                 t = simulators[i].t
 
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
-                        print(systems)
-                        self._take_step(systems[i], controllers[i], nominal_ctrl, simulators[i], animate, multi_controller_id=i)
+                        self._take_step(system, controllers[i], nominal_ctrl, simulators[i], animate, multi_controller_id=i)
 
                     else:
                         self.current_run[i] += 1
@@ -759,9 +741,9 @@ class Simulation(utilities.Generic):
             if multi_controllers is True:
                 controllers = controller
                 simulators = simulator
-                systems = system
+
                 self.sim_fig = self._create_figure_plots_multi(controllers, fig_width, fig_height)
-                fargs = (systems, controllers, nominal_ctrl, simulators, animate)
+                fargs = (system, controllers, nominal_ctrl, simulators, animate)
             
             else:
                 self.sim_fig = self._create_figure_plots(controllers, fig_width, fig_height)
@@ -793,6 +775,7 @@ class Simulation(utilities.Generic):
         self.n_runs = n_runs
         self.data_files = self._log_data(n_runs, save=self.is_log_data)
 
+        # under development
         if self.is_visualization is False:
             self.current_data_file = data_files[0]
 
@@ -826,7 +809,7 @@ class Simulation(utilities.Generic):
 
         else:
             if self.num_controllers > 1:
-                self.run_animation(self.systems, 
+                self.run_animation(self.system, 
                     self.controllers, 
                     self.nominal_ctrl, 
                     self.simulators, 
