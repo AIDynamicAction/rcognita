@@ -111,6 +111,8 @@ class System(utilities.Generic):
         self.control_bounds = np.array([[f_min, f_max], [m_min, m_max]])
         self.u0 = np.zeros(dim_input)
         self.q0 = np.zeros(dim_disturb)
+        self.initial_x = initial_x
+        self.initial_y = initial_y
 
         # initial values of the system's state
         self.initial_alpha = initial_alpha = np.pi / 2
@@ -125,6 +127,8 @@ class System(utilities.Generic):
         self.sigma_q = sigma_q
         self.mu_q = mu_q
         self.tau_q = tau_q
+
+        self.is_dyn_ctrl = is_dyn_ctrl
 
         # Current input (a.k.a. action)
         self.u = np.zeros(dim_input)
@@ -149,13 +153,13 @@ class System(utilities.Generic):
         self.system_state = np.vstack((self.system_state,self.add_state))
         
         new_row = np.concatenate((self.add_state, u0, q0))
-        self.full_state = np.vstack((self.full_state, new_row, axis=0))
+        self.full_state = np.vstack((self.full_state, new_row))
         self.alphas = self.system_state[:,2]
 
         return self.system_state, self.full_state, self.alphas
 
     @staticmethod
-    def get_system_dynamics(t, x, u, q, m, I, dim_state):
+    def get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
         """ get system internal dynamics
 
             Generalized derivative of: x_t+1 = f(x_t, u_t, q_t)
@@ -209,7 +213,7 @@ class System(utilities.Generic):
         y = v * np.sin(alpha)
         alpha = omega
 
-        if self.is_disturb:
+        if is_disturb:
             v = 1 / m * (F + q[0])
             omega = 1 / I * (M + q[1])
         else:
@@ -304,7 +308,7 @@ class System(utilities.Generic):
                 u[k] = np.clip(u[k], self.control_bounds[k, 0],
                                self.control_bounds[k, 1])
 
-        new_full_state[0:self.dim_state] = System.get_system_dynamics(
+        new_full_state[0:self.dim_state] = self.get_system_dynamics(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.is_disturb:
@@ -419,6 +423,7 @@ class Controller(utilities.Generic):
         self.dim_output = system.dim_output
         self.m = system.m
         self.I = system.I
+        self.is_disturb = system.is_disturb
         self.system_state = system.system_state
 
         self.f_min = system.f_min
@@ -710,7 +715,7 @@ class Controller(utilities.Generic):
                 # Euler scheme
                 x = x + delta * \
                     self.sys_rhs([], x, myU[k - 1, :], [], self.m,
-                                 self.I, self.dim_state)
+                                 self.I, self.dim_state, self.is_disturb)
                 
                 Y[k, :] = self.sys_out(x)
 
@@ -1210,7 +1215,7 @@ class Simulation(utilities.Generic):
 
         closed_loop = system.closed_loop
 
-        if isinstance(self.controller, list) is False and len(self.controller) == 1:
+        if hasattr(controller, '__len__') is False:
             self.num_controllers = 1
 
             self.system = system
@@ -1219,7 +1224,7 @@ class Simulation(utilities.Generic):
 
             self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
 
-            self.system_state, self.full_state, self.alpha = self._get_system_info(system)
+            self.system_state, self.full_state, self.alpha, self.initial_x, self.initial_y = self._get_system_info(system)
 
             self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
 
@@ -1243,8 +1248,8 @@ class Simulation(utilities.Generic):
     def _get_controller_info(self, controller, multi=False):
         # if we have a single controller
         if multi is False:
-            initial_x = controller.initial_x
-            initial_y = controller.initial_y
+            sample_time = controller.sample_time
+            ctrl_mode = controller.ctrl_mode
 
             return sample_time, ctrl_mode
 
@@ -1266,8 +1271,10 @@ class Simulation(utilities.Generic):
         system_state = system.system_state
         full_state = system.full_state
         alpha = system.initial_alpha
+        initial_x = system.initial_x
+        initial_y = system.initial_y
 
-        return system_state, full_state, alpha
+        return system_state, full_state, alpha, initial_x, initial_y
 
     def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
         simulator = sp.integrate.RK45(closed_loop,
@@ -1282,7 +1289,7 @@ class Simulation(utilities.Generic):
         return simulator
 
 
-    def _ctrl_selector(self, t, y, uMan, nominal_ctrl, agent, mode):
+    def _ctrl_selector(self, t, y, uMan, nominal_ctrl, controller, mode):
         """
         Main interface for different agents
 
@@ -1293,11 +1300,11 @@ class Simulation(utilities.Generic):
         elif mode == -1:  # Nominal controller
             u = nominal_ctrl.compute_action(t, y)
         elif mode > 0:  # Optimal controller
-            u = agent.compute_action(t, y)
+            u = controller.compute_action(t, y)
 
         return u
 
-    def _create_figure_plots(self, agent, fig_width, fig_height):
+    def _create_figure_plots(self, system, controller, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
 
         y0 = System.get_curr_state(self.system_state)
@@ -1374,11 +1381,11 @@ class Simulation(utilities.Generic):
         
         """
         self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
-            0, 1e4 * agent.running_cost(y0, self.u0)), yscale='symlog', xlabel='t [s]')
+            0, 1e4 * controller.running_cost(y0, system.u0)), yscale='symlog', xlabel='t [s]')
 
         self.cost_axes.title.set_text('Cost')
 
-        r = agent.running_cost(y0, self.u0)
+        r = controller.running_cost(y0, system.u0)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
         self.text_icost_handle = self.sim_fig.text(
@@ -1398,7 +1405,7 @@ class Simulation(utilities.Generic):
         
         """
         self.ctrlAxs = self.sim_fig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
-            1.1 * np.min([self.f_min, self.m_min]), 1.1 * np.max([self.f_max, self.m_max])), xlabel='t [s]')
+            1.1 * np.min([system.f_min, system.m_min]), 1.1 * np.max([system.f_max, system.m_max])), xlabel='t [s]')
 
         self.ctrlAxs.title.set_text('Control')
 
@@ -1406,7 +1413,7 @@ class Simulation(utilities.Generic):
                           'k--', lw=0.75)   # Help line
 
         self.ctrl_lines = self.ctrlAxs.plot(
-            self.t0, utilities._toColVec(self.u0).T, lw=0.5)
+            self.t0, utilities._toColVec(system.u0).T, lw=0.5)
 
         self.ctrlAxs.legend(
             iter(self.ctrl_lines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
@@ -1740,21 +1747,33 @@ class Simulation(utilities.Generic):
         t = simulator.t
         full_state = simulator.y
         
-        system_state = full_state[mid, 0:self.dim_state]
+        if multi_controller_id:
+            system_state = sys.system_state[mid]
+        else:
+            system_state = sys.system_state
+
         y = sys.get_curr_state(system_state)
 
         u = self._ctrl_selector(
-            t, y, self.u_man, nominal_ctrl, controller, controller.ctrl_mode)
+            t, y, sys.u_man, nominal_ctrl, controller, controller.ctrl_mode)
 
         sys.get_action(u)
         controller.record_sys_state(sys.system_state)
         controller.update_icost(y, u)
 
-        x_coord = full_state[mid, 0]
-        y_coord = full_state[mid, 1]
-        alpha = full_state[mid, 2]
-        v = full_state[mid, 3]
-        omega = full_state[mid, 4]
+        if multi_controller_id:
+            x_coord = full_state[mid, 0]
+            y_coord = full_state[mid, 1]
+            alpha = full_state[mid, 2]
+            v = full_state[mid, 3]
+            omega = full_state[mid, 4]
+        else:
+            x_coord = full_state[0]
+            y_coord = full_state[1]
+            alpha = full_state[2]
+            v = full_state[3]
+            omega = full_state[4]
+
         icost = controller.i_cost_val
 
         if multi_controller_id is None:
@@ -1891,7 +1910,7 @@ class Simulation(utilities.Generic):
                 fargs = (system, controllers, nominal_ctrl, simulators, animate)
             
             else:
-                self.sim_fig = self._create_figure_plots(controllers, fig_width, fig_height)
+                self.sim_fig = self._create_figure_plots(system, controller, fig_width, fig_height)
                 fargs = (system, controller, nominal_ctrl, simulator, animate)
 
 
