@@ -74,12 +74,16 @@ class System(utilities.Generic):
     """
 
     def __init__(self,
+                initial_x=5,
+                initial_y=5,
                  dim_state=5,
                  dim_input=2,
                  dim_output=5,
                  dim_disturb=2,
                  m=10,
                  I=1,
+                 f_man=-3,
+                 n_man=-1,
                  f_min=-5,
                  f_max=5,
                  m_min=-1,
@@ -97,11 +101,24 @@ class System(utilities.Generic):
         self.dim_disturb = dim_disturb
         self.m = m
         self.I = I
-        self.f_min = f_min,
-        self.f_max = f_max,
-        self.m_min = m_min,
-        self.m_max = m_max,
+        self.f_min = f_min
+        self.f_max = f_max
+        self.m_min = m_min
+        self.m_max = m_max
+        self.f_man = f_man
+        self.n_man = n_man
+        self.u_man = np.array([f_man, n_man])
         self.control_bounds = np.array([[f_min, f_max], [m_min, m_max]])
+        self.u0 = np.zeros(dim_input)
+        self.q0 = np.zeros(dim_disturb)
+
+        # initial values of the system's state
+        self.initial_alpha = initial_alpha = np.pi / 2
+        initial_state = np.zeros(dim_state)
+        initial_state[0] = initial_x
+        initial_state[1] = initial_y
+        initial_state[2] = initial_alpha
+        self.system_state = initial_state
 
         """ disturbance """
         self.is_disturb = is_disturb
@@ -109,22 +126,18 @@ class System(utilities.Generic):
         self.mu_q = mu_q
         self.tau_q = tau_q
 
-        # Track system's state
-        self._x = np.zeros(dim_state)
-
         # Current input (a.k.a. action)
         self.u = np.zeros(dim_input)
 
-        # Static or dynamic controller
-        self.is_dyn_ctrl = is_dyn_ctrl
-
         if is_dyn_ctrl:
             self._dim_full_state = self.dim_state + self.dim_disturb + self.dim_input
+            self.full_state = np.concatenate([self.system_state, q0, u0])
         else:
             self._dim_full_state = self.dim_state + self.dim_disturb
+            self.full_state = np.concatenate([self.system_state, q0])
 
     @staticmethod
-    def get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
+    def get_system_dynamics(t, x, u, q, m, I, dim_state):
         """ get system internal dynamics
 
             Generalized derivative of: x_t+1 = f(x_t, u_t, q_t)
@@ -178,7 +191,7 @@ class System(utilities.Generic):
         y = v * np.sin(alpha)
         alpha = omega
 
-        if is_disturb:
+        if self.is_disturb:
             v = 1 / m * (F + q[0])
             omega = 1 / I * (M + q[1])
         else:
@@ -280,7 +293,7 @@ class System(utilities.Generic):
             new_full_state[self.dim_state:] = self._add_disturbance(t, q)
 
         # Track system's state
-        self._x = x
+        self.system_state = x
 
         return new_full_state
 
@@ -354,8 +367,6 @@ class Controller(utilities.Generic):
         * number in (0, 1]
         * Characterizes fading of running costs along horizon
 
-    is_disturb -- use disturbance?
-
     References
     ----------
     .. [1] Osinenko, Pavel, et al. "Stacked adaptive dynamic programming with unknown system model." IFAC-PapersOnLine 50.1 (2017): 4150-4155        
@@ -365,8 +376,6 @@ class Controller(utilities.Generic):
     def __init__(self,
                  system,
                  t0=0,
-                 initial_x=5,
-                 initial_y=5,
                  n_actor=6,
                  n_critic=50,
                  buffer_size=50,
@@ -381,30 +390,33 @@ class Controller(utilities.Generic):
                  stacked_model_params=0,
                  pred_step_size=2,
                  model_order=3,
-                 gamma=1,
-                 is_disturb=0):
-        # system vars
+                 gamma=1):
+        """
+
+        EVERYTHING BELOW: SYSTEM RELATED
+
+        """
         self.dim_state = system.dim_state
         self.dim_input = system.dim_input
         self.dim_output = system.dim_output
         self.m = system.m
         self.I = system.I
+        self.system_state = system.system_state
 
-        self.initial_x = initial_x
-        self.initial_y = initial_y
+        self.f_min = system.f_min
+        self.f_max = system.f_max
+        self.m_min = system.m_min
+        self.m_max = system.m_max
+        self.ctrl_bnds = system.control_bounds
 
-        # disturbance
-        self.is_disturb = is_disturb
+        self.sys_rhs = system.get_system_dynamics
+        self.sys_out = system.get_curr_state
 
-        # initial values of the system's state
-        alpha = np.pi / 2
-        initial_state = np.zeros(self.dim_state)
-        initial_state[0] = initial_x
-        initial_state[1] = initial_y
-        initial_state[2] = alpha
-        self.system_state = initial_state
+        """
 
-        # model hyperparams
+        EVERYTHING BELOW: CONTROLLER RELATED
+
+        """
         self.est_clock = t0
         self.is_prob_noise = 1
         self.estimator_buffer_power = estimator_buffer_power
@@ -459,13 +471,6 @@ class Controller(utilities.Generic):
         self.sample_time = sample_time
         self.pred_step_size = pred_step_size * sample_time
 
-        # bounds of F and M
-        self.f_min = system.f_min
-        self.f_max = system.f_max
-        self.m_min = system.m_min
-        self.m_max = system.m_max
-        self.ctrl_bnds = system.control_bounds
-
         self.min_bounds = np.array(self.ctrl_bnds[:, 0])
         self.max_bounds = np.array(self.ctrl_bnds[:, 1])
         self.u_min = utilities._repMat(self.min_bounds, 1, n_actor)
@@ -478,10 +483,6 @@ class Controller(utilities.Generic):
 
         # buffer of previous outputs
         self.y_buffer = np.zeros([buffer_size, self.dim_output])
-
-        # other
-        self.sys_rhs = System.get_system_dynamics
-        self.sys_out = System.get_curr_state
 
         # discount factor
         self.gamma = gamma
@@ -515,7 +516,7 @@ class Controller(utilities.Generic):
 
         self.Winit = self.Wprev
 
-    def get_sys_state(self, x):
+    def record_sys_state(self, x):
         self.system_state = x
 
     def running_cost(self, y, u):
@@ -691,7 +692,7 @@ class Controller(utilities.Generic):
                 # Euler scheme
                 x = x + delta * \
                     self.sys_rhs([], x, myU[k - 1, :], [], self.m,
-                                 self.I, self.dim_state, self.is_disturb)
+                                 self.I, self.dim_state)
                 
                 Y[k, :] = self.sys_out(x)
 
@@ -1149,25 +1150,24 @@ class Simulation(utilities.Generic):
                  is_print_sim_step=False,
                  is_dyn_ctrl=0):
         
-        self.system = system
-        self.controller = controller
         
+        # start time of episode
+        self.t0 = t0
+
+        # stop time of episode
+        self.t1 = t1
+
         if isinstance(self.controller, list) and len(self.controller) > 1:
             self.num_controllers = len(self.controller)
 
         else: 
             self.num_controllers = 1
 
-        self.nominal_ctrl = nominal_ctrl
+            self.system = system
+            self.controller = controller
+            self.nominal_ctrl = nominal_ctrl
+            self.initial_alpha = system.initial_alpha
 
-        # degree of bot
-        self.initial_alpha = np.pi / 2
-
-        # start time of episode
-        self.t0 = t0
-
-        # stop time of episode
-        self.t1 = t1
 
         # system
         self.dim_state = system.dim_state
@@ -1794,15 +1794,14 @@ class Simulation(utilities.Generic):
         t = simulator.t
         full_state = simulator.y
         
-
-        x = full_state[0:self.dim_state]
-        y = sys.get_curr_state(x)
+        system_state = full_state[0:self.dim_state]
+        y = sys.get_curr_state(system_state)
 
         u = self._ctrl_selector(
             t, y, self.u_man, nominal_ctrl, controller, controller.ctrl_mode)
 
         sys.get_action(u)
-        controller.get_sys_state(sys._x)
+        controller.record_sys_state(sys.system_state)
         controller.update_icost(y, u)
 
         x_coord = full_state[0]
