@@ -135,7 +135,7 @@ class System(utilities.Generic):
 
         self.full_state, self._dim_full_state  = self.create_full_state(self.system_state, self.q0, self.u0, is_dyn_ctrl)
 
-    def create_full_state(self, system_state, q0, u0=None, is_dyn_ctrl=False):
+    def create_full_state(self, system_state, q0, u0=None, is_dyn_ctrl=0):
         if is_dyn_ctrl:
             self._dim_full_state = self.dim_state + self.dim_disturb + self.dim_input
             self.full_state = np.concatenate([self.system_state, q0, u0])
@@ -145,18 +145,23 @@ class System(utilities.Generic):
 
         return self.full_state, self._dim_full_state 
 
-    def _add_bot(self, initial_x, initial_y, is_dyn_ctrl=False):
-        self.add_state = np.zeros(self.dim_state)
-        self.add_state = initial_x
-        self.add_state = initial_y
-        self.add_state = self.initial_alpha
-        self.system_state = np.vstack((self.system_state,self.add_state))
-        
-        new_row = np.concatenate((self.add_state, u0, q0))
-        self.full_state = np.vstack((self.full_state, new_row))
+    def _add_bot(self, initial_x, initial_y):
+        self.new_state = np.zeros(self.dim_state)
+        self.new_state[0] = initial_x
+        self.new_state[1] = initial_y
+        self.new_state[2] = self.initial_alpha
+
+        self.system_state = np.vstack((self.system_state, self.new_state))
+    
+        if self.is_dyn_ctrl:
+            new_state_plus = np.concatenate((self.new_state, self.u0, self.q0))
+        else:
+            new_state_plus = np.concatenate((self.new_state, self.u0))
+
+        self.full_state = np.vstack((self.full_state, new_state_plus))
         self.alphas = self.system_state[:,2]
 
-        return self.system_state, self.full_state, self.alphas
+        # return self.system_state, self.full_state, self.alphas
 
     @staticmethod
     def get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
@@ -1196,6 +1201,7 @@ class Simulation(utilities.Generic):
         CONTROLLER AND SYSTEM PARAMS
     
         """
+        self.system = system
         
         # start time of episode
         self.t0 = t0
@@ -1218,7 +1224,6 @@ class Simulation(utilities.Generic):
         if hasattr(controller, '__len__') is False:
             self.num_controllers = 1
 
-            self.system = system
             self.controller = controller
             self.nominal_ctrl = nominal_ctrl
 
@@ -1229,19 +1234,22 @@ class Simulation(utilities.Generic):
             self.simulator = self._create_simulator(closed_loop, self.full_state, self.t0, self.t1, self.sample_time, a_tol, r_tol)
 
         else: 
-            self.num_controllers = len(self.controller)
+            self.num_controllers = len(controller)
 
             self.controllers = controller
             self.nominal_ctrl = nominal_ctrl
 
             self.sample_times, self.ctrl_modes = self._get_controller_info(self.controllers, multi=True)
 
-            self.system_states, self.full_states, self.alphas = _add_bot(self, -5, -5, is_dyn_ctrl=False)
+            self.system._add_bot(-5, -5)
+
+            self.system_states, self.full_states, self.alphas, self.initial_xs, self.initial_ys = self._get_system_info(system, multi=True)
 
             self.simulators = []
 
-            for i in self.num_controllers:
+            for i in range(self.num_controllers):
                 simulator = self._create_simulator(closed_loop, self.full_states[i], self.t0, self.t1, self.sample_times[i], a_tol, r_tol)
+                
                 self.simulators.append(simulator)
 
 
@@ -1267,14 +1275,31 @@ class Simulation(utilities.Generic):
 
             return sample_times, ctrl_modes
 
-    def _get_system_info(self, system):
-        system_state = system.system_state
-        full_state = system.full_state
-        alpha = system.initial_alpha
-        initial_x = system.initial_x
-        initial_y = system.initial_y
+    def _get_system_info(self, system, multi=False):
+        if multi is False:
+            system_state = system.system_state
+            full_state = system.full_state
+            alpha = system.initial_alpha
+            initial_x = system.initial_x
+            initial_y = system.initial_y
+            
+            return system_state, full_state, alpha, initial_x, initial_y
+        else:
+            system_states = []
+            full_states = []
+            alphas = []
+            initial_xs = []
+            initial_ys = []
 
-        return system_state, full_state, alpha, initial_x, initial_y
+            for i in range(self.num_controllers):
+                system_states.append(system.system_state[i])
+                full_states.append(system.full_state[i])
+                alphas.append(system.alphas[i])
+                initial_xs.append(system.system_state[:,0])
+                initial_ys.append(system.system_state[:,1])
+
+            return system_states, full_states, alphas, initial_xs, initial_ys
+
 
     def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
         simulator = sp.integrate.RK45(closed_loop,
