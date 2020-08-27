@@ -151,15 +151,29 @@ class System(utilities.Generic):
         self.new_state[1] = initial_y
         self.new_state[2] = self.initial_alpha
 
-        self.system_state = np.vstack((self.system_state, self.new_state))
+        self.system_states = np.vstack((self.system_state, self.new_state))
+
+        if self.u0.ndim == 1:
+            self.u0s = np.tile(self.u0, (2,1))
+        
+        elif self.u0.ndim > 1:
+            new_row = self.u0s[0,:]
+            self.u0s = np.vstack((self.u0, new_row))
+
+        if self.q0.ndim == 1:
+            self.q0s = np.tile(self.u0, (2,1))
+        
+        elif self.q0.ndim > 1:
+            new_row = self.u0s[0,:]
+            self.q0s = np.vstack((self.u0, new_row))
     
         if self.is_dyn_ctrl:
-            new_state_plus = np.concatenate((self.new_state, self.u0, self.q0))
+            self.full_states = np.concatenate((self.system_states, self.u0s, self.q0s), axis= 1)
         else:
-            new_state_plus = np.concatenate((self.new_state, self.u0))
+            self.full_states = np.concatenate((self.system_states, self.u0s), axis=1)
 
-        self.full_state = np.vstack((self.full_state, new_state_plus))
-        self.alphas = self.system_state[:,2]
+        self.alphas = self.system_states[:,2]
+
 
         # return self.system_state, self.full_state, self.alphas
 
@@ -1243,7 +1257,7 @@ class Simulation(utilities.Generic):
 
             self.system._add_bot(-5, -5)
 
-            self.system_states, self.full_states, self.alphas, self.initial_xs, self.initial_ys = self._get_system_info(system, multi=True)
+            self.system_states, self.full_states, self.alphas, self.initial_xs, self.initial_ys, self.u0s = self._get_system_info(system, multi=True)
 
             self.simulators = []
 
@@ -1284,21 +1298,20 @@ class Simulation(utilities.Generic):
             initial_y = system.initial_y
             
             return system_state, full_state, alpha, initial_x, initial_y
+        
         else:
-            system_states = []
-            full_states = []
-            alphas = []
-            initial_xs = []
-            initial_ys = []
+            system_states = system.system_states
+            full_states = system.full_states
+            alphas = system.alphas
+            initial_xs = system.system_states[:,0]
+            initial_ys = system.system_states[:,1]
+            u0s = system.u0s
+            try:
+                q0s = system.q0s
+            except:
+                pass
 
-            for i in range(self.num_controllers):
-                system_states.append(system.system_state[i])
-                full_states.append(system.full_state[i])
-                alphas.append(system.alphas[i])
-                initial_xs.append(system.system_state[:,0])
-                initial_ys.append(system.system_state[:,1])
-
-            return system_states, full_states, alphas, initial_xs, initial_ys
+            return system_states, full_states, alphas, initial_xs, initial_ys, u0s
 
 
     def _create_simulator(self, closed_loop, full_state, t0, t1, sample_time, a_tol, r_tol):
@@ -1465,7 +1478,7 @@ class Simulation(utilities.Generic):
 
         return self.sim_fig
 
-    def _create_figure_plots_multi(self, controller, fig_width, fig_height):
+    def _create_figure_plots_multi(self, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
 
         y0_list = []
@@ -1567,7 +1580,7 @@ class Simulation(utilities.Generic):
         """
 
         if self.num_controllers > 1:
-            self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * self.controllers[0].running_cost(y0_list[0], self.u0[0])), yscale='symlog', xlabel='t [s]')
+            self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * self.controllers[0].running_cost(y0_list[0], self.u0s[0])), yscale='symlog', xlabel='t [s]')
 
             self.cost_axes.title.set_text('Cost')
 
@@ -1576,7 +1589,7 @@ class Simulation(utilities.Generic):
             self.i_cost_lines = []
 
             for i in range(self.num_controllers):
-                r = controller[i].running_cost(y0_list[i], self.u0[i])
+                r = self.controllers[i].running_cost(y0_list[i], self.u0s[i])
                 text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
                 self.text_icost_handle = self.sim_fig.text(
@@ -1616,7 +1629,7 @@ class Simulation(utilities.Generic):
             self.all_lines = []
             
             for i in range(self.num_controllers):
-                self.ctrl_lines = self.ctrlAxs.plot(self.t0, utilities._toColVec(self.u0[i]).T, lw=0.5)
+                self.ctrl_lines = self.ctrlAxs.plot(self.t0, utilities._toColVec(self.u0s[i]).T, lw=0.5)
                 
                 self.all_ctrl_lines.append(self.ctrl_lines)
 
@@ -1694,32 +1707,32 @@ class Simulation(utilities.Generic):
         """
         Update lines on all scatter plots
         """
-        cid = multi_controller_id
-        self._update_text(self.text_time_handles[cid], text_time)
+        mid = multi_controller_id
+        self._update_text(self.text_time_handles[mid], text_time)
 
         # Update the robot's track on the plot
-        self._update_line(self.traj_lines[cid], *full_state[:2])
+        self._update_line(self.traj_lines[mid], *full_state[:2])
 
-        self.robot_markers[cid].rotate(alpha_deg)    # Rotate the robot on the plot
+        self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
         self.sol_scatter.remove()
         self.sol_scatter = self.xy_plane_axes.scatter(
-            x_coord, y_coord, marker=self.robot_markers[cid].marker, s=400, c='b')
+            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c='b')
 
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
 
         # Solution
-        self._update_line(self.norm_lines[cid], t, self.l2_norm)
-        self._update_line(self.alpha_lines[cid], t, alpha)
+        self._update_line(self.norm_lines[mid], t, self.l2_norm)
+        self._update_line(self.alpha_lines[mid], t, alpha)
 
         # Cost
-        self._update_line(self.r_cost_lines[cid], t, r)
-        self._update_line(self.i_cost_lines[cid], t, icost)
+        self._update_line(self.r_cost_lines[mid], t, r)
+        self._update_line(self.i_cost_lines[mid], t, icost)
         text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
-        self._update_text(self.text_icost_handles[cid], text_icost)
+        self._update_text(self.text_icost_handles[mid], text_icost)
 
         # Control
-        for (line, uSingle) in zip(self.all_ctrl_lines[cid], u):
+        for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
             self._update_line(line, t, uSingle)
 
     def _log_data_row(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
@@ -1773,7 +1786,7 @@ class Simulation(utilities.Generic):
         full_state = simulator.y
         
         if multi_controller_id:
-            system_state = sys.system_state[mid]
+            system_state = self.system_states[mid]
         else:
             system_state = sys.system_state
 
@@ -1931,7 +1944,7 @@ class Simulation(utilities.Generic):
                 controllers = controller
                 simulators = simulator
 
-                self.sim_fig = self._create_figure_plots_multi(controllers, fig_width, fig_height)
+                self.sim_fig = self._create_figure_plots_multi(fig_width, fig_height)
                 fargs = (system, controllers, nominal_ctrl, simulators, animate)
             
             else:
