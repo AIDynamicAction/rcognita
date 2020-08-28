@@ -367,60 +367,38 @@ class System(utilities.Generic):
 
         """
         # environment + disturbance
-
         if self.multi_sim is not None:
             mid = self.multi_sim
 
-            new_full_state = np.zeros(self._dim_initial_full_state)
+        new_full_state = np.zeros(self._dim_initial_full_state)
 
-            x = full_state[0:self.dim_state]
-            q = full_state[self.dim_state:]
+        x = full_state[0:self.dim_state]
+        q = full_state[self.dim_state:]
 
-            if self.is_dyn_ctrl:
-                u = full_state[-self.dim_input:]
-                new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
-            
-            else:
-                # Fetch the control action stored in the system
-                u = self.u[mid]
-
-            if self.control_bounds.any():
-                for k in range(self.dim_input):
-                    u[k] = np.clip(u[k], self.control_bounds[k, 0],
-                                   self.control_bounds[k, 1])
-
-            new_full_state[0:self.dim_state] = self.get_system_dynamics(
-                t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
-
-            if self.is_disturb:
-                new_full_state[self.dim_state:] = self._add_disturbance(t, q)
-
-            self.system_state[mid,:] = x
-        
+        if self.is_dyn_ctrl:
+            u = full_state[-self.dim_input:]
+            new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
         else:
-            new_full_state = np.zeros(self._dim_initial_full_state)
-
-            x = full_state[0:self.dim_state]
-            q = full_state[self.dim_state:]
-
-            if self.is_dyn_ctrl:
-                u = full_state[-self.dim_input:]
-                new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
+            # Fetch the control action stored in the system
+            if self.multi_sim is not None:
+                u = self.u[mid]
             else:
-                # Fetch the control action stored in the system
                 u = self.u
 
-            if self.control_bounds.any():
-                for k in range(self.dim_input):
-                    u[k] = np.clip(u[k], self.control_bounds[k, 0],
-                                   self.control_bounds[k, 1])
+        if self.control_bounds.any():
+            for k in range(self.dim_input):
+                u[k] = np.clip(u[k], self.control_bounds[k, 0],
+                               self.control_bounds[k, 1])
 
-            new_full_state[0:self.dim_state] = self.get_system_dynamics(
-                t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
+        new_full_state[0:self.dim_state] = self.get_system_dynamics(
+            t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
-            if self.is_disturb:
-                new_full_state[self.dim_state:] = self._add_disturbance(t, q)
+        if self.is_disturb:
+            new_full_state[self.dim_state:] = self._add_disturbance(t, q)
 
+        if self.multi_sim is not None:
+            self.system_state[mid,:] = x
+        else:
             self.system_state = x
 
         return new_full_state
@@ -1819,6 +1797,8 @@ class Simulation(utilities.Generic):
         for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
             self._update_line(line, t, uSingle)
 
+
+
     def _log_data_row(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
         with open(dataFile, 'a', newline='') as outfile:
             writer = csv.writer(outfile)
@@ -1889,13 +1869,14 @@ class Simulation(utilities.Generic):
 
         icost = controller.i_cost_val
 
-        # if self.is_print_sim_step:
-        #     self._print_sim_step(t, x_coord, y_coord,
-        #                          alpha, v, omega, icost, u)
+        if self.is_print_sim_step:
+            print(f"Controller #{mid}")
+            self._print_sim_step(t, x_coord, y_coord,
+                                 alpha, v, omega, icost, u)
 
-        # if self.is_log_data:
-        #     self._log_data_row(self.current_data_file, t, x_coord,
-        #                        y_coord, alpha, v, omega, icost.val, u)
+        if self.is_log_data:
+            self._log_data_row(self.current_data_file, t, x_coord,
+                               y_coord, alpha, v, omega, icost.val, u)
         
         if animate == True:
             alpha_deg = alpha / np.pi * 180
@@ -1946,10 +1927,12 @@ class Simulation(utilities.Generic):
             
             self._update_all_lines(text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u)
 
-    def _reset_sim(self, controller, nominal_ctrl, simulator, multi_controller_id = None):
+    def _reset_sim(self, controller, nominal_ctrl, simulator, mid = None):
         if self.is_print_sim_step:
-            print('.....................................Run {run:2d} done.....................................'.format(
-                run=self.current_run))
+            if mid is not None:
+                print(f'........Controller {mid}: Run #{self.current_run[mid]} done........')
+            else:
+                print(f'........Run {self.current_run} done........')
 
         if self.is_log_data:
             self.current_data_file = self.data_files[self.current_run - 1]
@@ -1958,8 +1941,8 @@ class Simulation(utilities.Generic):
         simulator.status = 'running'
         simulator.t = self.t0
 
-        if multi_controller_id is not None:
-            simulator.y = self.full_states[multi_controller_id]
+        if mid is not None:
+            simulator.y = self.full_states[mid]
 
         else:
             simulator.y = self.full_state
