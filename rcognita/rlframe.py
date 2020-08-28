@@ -2033,7 +2033,7 @@ class Simulation(utilities.Generic):
                 elif self.close_plt_on_finish is False:
                     self._graceful_exit(plt_close=False)
 
-    def run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers = False):
+    def _run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers = False):
             animate = True
 
             if multi_controllers is True:
@@ -2108,7 +2108,7 @@ class Simulation(utilities.Generic):
 
         else:
             if self.num_controllers > 1:
-                self.run_animation(self.system, 
+                self._run_animation(self.system, 
                     self.controllers, 
                     self.nominal_ctrlers, 
                     self.simulators, 
@@ -2116,4 +2116,4 @@ class Simulation(utilities.Generic):
                     fig_height, 
                     multi_controllers = True)
             else:
-                self.run_animation(self.system, self.controller, self.nominal_ctrl, self.simulator, fig_width, fig_height)
+                self._run_animation(self.system, self.controller, self.nominal_ctrl, self.simulator, fig_width, fig_height)
