@@ -162,6 +162,7 @@ class System(utilities.Generic):
         self.q0 = np.zeros(dim_disturb)
         self.u = np.zeros(dim_input)
         self.is_dyn_ctrl = is_dyn_ctrl
+        self.multi_sim = None
 
         # initial values of the system's state
         self.initial_alpha = initial_alpha = np.pi / 2
@@ -292,7 +293,10 @@ class System(utilities.Generic):
         system_dynamics[0] = x
         system_dynamics[1] = y
         system_dynamics[2] = alpha
-        system_dynamics[3] = v
+        try:
+            system_dynamics[3] = v
+        except:
+            print(m, F)
         system_dynamics[4] = omega
 
         return system_dynamics
@@ -337,7 +341,10 @@ class System(utilities.Generic):
         else:
             self.u = u
 
-    def closed_loop(self, t, full_state, mid=None):
+    def set_multi_sim(self, mid):
+        self.multi_sim = mid
+
+    def closed_loop(self, t, full_state):
         """
         Closed loop of the system.
         This function is designed for use with ODE solvers.
@@ -360,36 +367,61 @@ class System(utilities.Generic):
 
         """
         # environment + disturbance
-        new_full_state = np.zeros(self._dim_initial_full_state)
 
-        x = full_state[0:self.dim_state]
-        q = full_state[self.dim_state:]
+        if self.multi_sim is not None:
+            mid = self.multi_sim
 
-        if self.is_dyn_ctrl:
-            u = full_state[-self.dim_input:]
-            new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
-        else:
-            # Fetch the control action stored in the system
-            if mid is not None:
-                u = self.u[mid]
+            new_full_state = np.zeros(self._dim_initial_full_state)
+
+            x = full_state[0:self.dim_state]
+            q = full_state[self.dim_state:]
+
+            if self.is_dyn_ctrl:
+                u = full_state[-self.dim_input:]
+                new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
+            
             else:
+                # Fetch the control action stored in the system
+                u = self.u[mid]
+
+            if self.control_bounds.any():
+                for k in range(self.dim_input):
+                    u[k] = np.clip(u[k], self.control_bounds[k, 0],
+                                   self.control_bounds[k, 1])
+
+            new_full_state[0:self.dim_state] = self.get_system_dynamics(
+                t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
+
+            if self.is_disturb:
+                new_full_state[self.dim_state:] = self._add_disturbance(t, q)
+
+            self.system_state[mid,:] = x
+        
+        else:
+            new_full_state = np.zeros(self._dim_initial_full_state)
+
+            x = full_state[0:self.dim_state]
+            q = full_state[self.dim_state:]
+
+            if self.is_dyn_ctrl:
+                u = full_state[-self.dim_input:]
+                new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
+            else:
+                # Fetch the control action stored in the system
                 u = self.u
 
-        if self.control_bounds.any():
-            for k in range(self.dim_input):
-                u[k] = np.clip(u[k], self.control_bounds[k, 0],
-                               self.control_bounds[k, 1])
+            if self.control_bounds.any():
+                for k in range(self.dim_input):
+                    u[k] = np.clip(u[k], self.control_bounds[k, 0],
+                                   self.control_bounds[k, 1])
 
-        new_full_state[0:self.dim_state] = self.get_system_dynamics(
-            t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
+            new_full_state[0:self.dim_state] = self.get_system_dynamics(
+                t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
-        if self.is_disturb:
-            new_full_state[self.dim_state:] = self._add_disturbance(t, q)
+            if self.is_disturb:
+                new_full_state[self.dim_state:] = self._add_disturbance(t, q)
 
-        if mid is None:
             self.system_state = x
-        else:
-            self.system_state[mid,:] = x
 
         return new_full_state
 
@@ -1290,9 +1322,9 @@ class Simulation(utilities.Generic):
 
         self.control_bounds = system.control_bounds
 
+        closed_loop = system.closed_loop
 
         if hasattr(controller, '__len__') is False:
-            closed_loop = system.closed_loop
             self.num_controllers = 1
 
             self.controller = controller
@@ -1324,10 +1356,11 @@ class Simulation(utilities.Generic):
             self.simulators = []
 
             for i in range(self.num_controllers):
-                cl_wrapper = cl_wrap(i, self.system)
-                closed_loop_wrapped = cl_wrapper.closed_loop
+                # cl_wrapper = cl_wrap(i, self.system)
+                # closed_loop_wrapped = cl_wrapper.closed_loop
+                self.system.set_multi_sim(i)
 
-                simulator = sp.integrate.RK45(closed_loop_wrapped,
+                simulator = sp.integrate.RK45(closed_loop,
                                                self.t0,
                                                self.full_states[i],
                                                self.t1,
@@ -1761,11 +1794,10 @@ class Simulation(utilities.Generic):
         for (line, uSingle) in zip(self.ctrl_lines, u):
             self._update_line(line, t, uSingle)
 
-    def _update_all_lines_multi(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, multi_controller_id):
+    def _update_all_lines_multi(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, mid):
         """
         Update lines on all scatter plots
         """
-        mid = multi_controller_id
         self._update_text(self.text_time_handles[mid], text_time)
 
         # Update the robot's track on the plot
@@ -1836,35 +1868,24 @@ class Simulation(utilities.Generic):
 
         print(table)
 
-    def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False, multi_controller_id=None):
-        mid = multi_controller_id
+    def _take_step_multi(self, mid, system, controller, nominal_ctrl, simulator, animate=False):
+        system.set_multi_sim(mid)
         simulator.step()
 
         t = simulator.t
         full_state = simulator.y
         
-        if multi_controller_id:
-            system_state = self.system_states[mid]
-        else:
-            system_state = system.system_state
+        system_state = self.system_states[mid]
 
-        # needs to be changed
         y = system.get_curr_state(system_state)
 
         u = self._ctrl_selector(
             t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
 
-        if multi_controller_id:
-            system.set_latest_action(u, mid)
-        else:
-            system.set_latest_action(u)
+        system.set_latest_action(u, mid)
 
         controller.record_sys_state(system_state)
-        
-        try:
-            controller.update_icost(y, u)
-        except:
-            print(y, u)
+        controller.update_icost(y, u)
 
         x_coord = full_state[0]
         y_coord = full_state[1]
@@ -1874,25 +1895,62 @@ class Simulation(utilities.Generic):
 
         icost = controller.i_cost_val
 
-        if multi_controller_id is None:
-            if self.is_print_sim_step:
-                self._print_sim_step(t, x_coord, y_coord,
-                                     alpha, v, omega, icost, u)
+        # if self.is_print_sim_step:
+        #     self._print_sim_step(t, x_coord, y_coord,
+        #                          alpha, v, omega, icost, u)
 
-            if self.is_log_data:
-                self._log_data_row(self.current_data_file, t, x_coord,
-                                   y_coord, alpha, v, omega, icost.val, u)
+        # if self.is_log_data:
+        #     self._log_data_row(self.current_data_file, t, x_coord,
+        #                        y_coord, alpha, v, omega, icost.val, u)
+        
         if animate == True:
             alpha_deg = alpha / np.pi * 180
             r = controller.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
             
-            if multi_controller_id is None:
-                self._update_all_lines(text_time, full_state, alpha_deg,
-                                       x_coord, y_coord, t, alpha, r, icost, u)
-            else:
-                self._update_all_lines_multi(text_time, full_state, alpha_deg,
-                                       x_coord, y_coord, t, alpha, r, icost, u, multi_controller_id)
+            self._update_all_lines_multi(text_time, full_state, alpha_deg,
+                                   x_coord, y_coord, t, alpha, r, icost, u, mid)
+
+
+    def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
+        simulator.step()
+
+        t = simulator.t
+        full_state = simulator.y
+        
+        system_state = system.system_state
+        y = system.get_curr_state(system_state)
+
+        u = self._ctrl_selector(
+            t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
+
+        system.set_latest_action(u)
+
+        controller.record_sys_state(system_state)
+        controller.update_icost(y, u)
+
+        x_coord = full_state[0]
+        y_coord = full_state[1]
+        alpha = full_state[2]
+        v = full_state[3]
+        omega = full_state[4]
+
+        icost = controller.i_cost_val
+
+        if self.is_print_sim_step:
+            self._print_sim_step(t, x_coord, y_coord,
+                                 alpha, v, omega, icost, u)
+
+        if self.is_log_data:
+            self._log_data_row(self.current_data_file, t, x_coord,
+                               y_coord, alpha, v, omega, icost.val, u)
+
+        if animate == True:
+            alpha_deg = alpha / np.pi * 180
+            r = controller.running_cost(y, u)
+            text_time = 't = {time:2.3f}'.format(time=t)
+            
+            self._update_all_lines(text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u)
 
     def _reset_sim(self, controller, nominal_ctrl, simulator, multi_controller_id = None):
         if self.is_print_sim_step:
@@ -1918,7 +1976,7 @@ class Simulation(utilities.Generic):
         else:
             nominal_ctrl.reset(self.t0)
 
-    def graceful_exit(self, plt_close=True):
+    def _graceful_exit(self, plt_close=True):
         if plt_close is True:
             plt.close('all')
 
@@ -1952,7 +2010,7 @@ class Simulation(utilities.Generic):
             else:
                 self._reset_sim(controller, nominal_ctrl, simulator)
             
-            self.graceful_exit()
+            self._graceful_exit()
 
     def _wrapper_take_steps(self, k, *args):
         system, controller, nominal_ctrl, simulator, animate = args
@@ -1967,7 +2025,7 @@ class Simulation(utilities.Generic):
 
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
-                        self._take_step(system, controllers[i], nominal_ctrlers[i], simulators[i], animate, multi_controller_id=i)
+                        self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
 
                     else:
                         self.current_run[i] += 1
@@ -1975,10 +2033,10 @@ class Simulation(utilities.Generic):
                 
                 else:
                     if self.close_plt_on_finish is True:
-                        self.graceful_exit()
+                        self._graceful_exit()
 
                     elif self.close_plt_on_finish is False:
-                        self.graceful_exit(plt_close=False)
+                        self._graceful_exit(plt_close=False)
         else:
             _, controller, nominal_ctrl, simulator, _ = args
             t = simulator.t
@@ -1993,10 +2051,10 @@ class Simulation(utilities.Generic):
                     self._reset_sim(controller, nominal_ctrl, simulator)
             else:
                 if self.close_plt_on_finish is True:
-                    self.graceful_exit()
+                    self._graceful_exit()
 
                 elif self.close_plt_on_finish is False:
-                    self.graceful_exit(plt_close=False)
+                    self._graceful_exit(plt_close=False)
 
     def run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers = False):
             animate = True
@@ -2069,7 +2127,7 @@ class Simulation(utilities.Generic):
                     self._update_line(self.traj_line, np.nan, np.nan)
                 self.current_run += 1
             else:
-                self.graceful_exit()
+                self._graceful_exit()
 
         else:
             if self.num_controllers > 1:
