@@ -1334,6 +1334,9 @@ class Simulation(utilities.Generic):
 
             self.system_states, self.full_states, self.alphas, self.initial_xs, self.initial_ys, self.u0s = self._get_system_info(system, multi=True)
 
+            self.latest_x_coords = self.initial_xs
+            self.latest_y_coords = self.initial_ys
+
             self.simulators = []
 
             for i in range(self.num_controllers):
@@ -1553,7 +1556,9 @@ class Simulation(utilities.Generic):
     def _create_figure_plots_multi(self, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
 
-        self.colors = ['b','r','g']
+        self.colors = ['b','r']
+        self.test_colors = np.array(range(self.num_controllers))
+        self.cmarkers = ["v","+", "<"]
 
         y0_list = []
         
@@ -1594,7 +1599,7 @@ class Simulation(utilities.Generic):
 
         for i in range(self.num_controllers):
             self.traj_line, = self.xy_plane_axes.plot(
-                self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5, markerfacecolor=self.colors[i])
+                self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5, c=self.colors[i])
 
             self.robot_marker = utilities._pltMarker(angle=self.alphas[i])
 
@@ -1717,13 +1722,12 @@ class Simulation(utilities.Generic):
 
     def _initialize_figure(self):
         if self.num_controllers > 1:
-            for i in range(self.num_controllers):
-                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], marker=self.robot_markers[i].marker, s=400, c=self.colors[i])
+            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors, marker=self.robot_marker.marker)
 
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
 
-        return self.sol_scatter
+        return self.sol_scatter,
 
     def _update_line(self, line, new_x, new_y):
         line.set_xdata(np.append(line.get_xdata(), new_x))
@@ -1773,12 +1777,16 @@ class Simulation(utilities.Generic):
         self._update_text(self.text_time_handles[mid], text_time)
 
         # Update the robot's track on the plot
-        self._update_line(self.traj_lines[mid], *full_state[:2])
+        self._update_line(self.traj_lines[mid], x_coord, y_coord)
 
         self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
-        self.sol_scatter.remove()
-        self.sol_scatter = self.xy_plane_axes.scatter(
-            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid])
+
+        m_num = mid + 1
+
+        # self.sol_scatter.remove()
+        data = np.c_[self.latest_x_coords, self.latest_x_coords]
+        self.sol_scatter.set_offsets(data)
+        self.sol_scatter.set_array(self.test_colors)
 
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
@@ -1882,6 +1890,14 @@ class Simulation(utilities.Generic):
             alpha_deg = alpha / np.pi * 180
             r = controller.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
+
+            m_num = mid + 1
+
+            self.latest_x_coords[mid] = x_coord 
+            self.latest_y_coords[mid] = y_coord
+
+            #     for i in range(self.num_controllers):
+            #         self.sol_scatter = self.xy_plane_axes.scatter(self.latest_x_coords[i], self.latest_y_coords[i], marker=self.robot_markers[i].marker, s=400, c=self.colors[i])
             
             self._update_all_lines_multi(text_time, full_state, alpha_deg,
                                    x_coord, y_coord, t, alpha, r, icost, u, mid)
@@ -2053,7 +2069,8 @@ class Simulation(utilities.Generic):
                                           self._wrapper_take_steps,
                                           fargs=fargs,
                                           init_func=self._initialize_figure,
-                                          interval=1)
+                                          interval=1,
+                                          blit=False)
 
             anm.running = True
             self.sim_fig.canvas.mpl_connect(
