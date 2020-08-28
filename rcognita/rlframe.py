@@ -24,6 +24,7 @@ import sippy  # Github:CPCLAB-UNIPI/SIPPY
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from matplotlib import cm
 
 # rcognita
 from . import utilities
@@ -1290,6 +1291,7 @@ class Simulation(utilities.Generic):
         self.t1 = t1
         
         # control constraints
+        self.dim_input = system.dim_input
         self.f_min = system.f_min
         self.f_max = system.f_max
         self.f_man = system.f_man
@@ -1555,10 +1557,11 @@ class Simulation(utilities.Generic):
 
     def _create_figure_plots_multi(self, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
-
-        self.colors = ['b','r']
-        self.test_colors = np.array(range(self.num_controllers))
-        self.cmarkers = ["v","+", "<"]
+        
+        # self.colors = np.linspace(0,1,self.num_controllers)
+        self.colors = ['b','r','g','o']
+        self.color_pairs = [['b','r'],['g','m']]
+        # self.test_colors = np.linspace(0,1,self.num_controllers)
 
         y0_list = []
         
@@ -1655,18 +1658,19 @@ class Simulation(utilities.Generic):
         self.r_cost_lines = []
         self.i_cost_lines = []
 
+        text_positions = [[0.05, 0.50],[0.05, 0.48],[0.50, 0.50],[0.50, 0.48]]
+
         for i in range(self.num_controllers):
             r = self.controllers[i].running_cost(y0_list[i], self.u0s[i])
             text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
-            self.text_icost_handle = self.sim_fig.text(
-                0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
+            self.text_icost_handle = self.sim_fig.text(text_positions[i][0], text_positions[i][1], text_icost, horizontalalignment='left', verticalalignment='center')
 
             self.r_cost_line, = self.cost_axes.plot(
-                self.t0, r, 'r-', lw=0.5, label='r')
+                self.t0, r, f'{self.color_pairs[i][0]}-', lw=0.5, label='r')
 
             self.i_cost_line, = self.cost_axes.plot(
-                self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+                self.t0, 0, f'{self.color_pairs[i][1]}-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
 
             self.text_icost_handles.append(self.text_icost_handle)
             self.r_cost_lines.append(self.r_cost_line)
@@ -1684,8 +1688,7 @@ class Simulation(utilities.Generic):
 
         self.ctrlAxs.title.set_text('Control')
 
-        self.ctrlAxs.plot([self.t0, self.t1], [0, 0],
-                          'k--', lw=0.75)   # Help line
+        self.ctrlAxs.plot([self.t0, self.t1], [0, 0], 'k--', lw=0.75)   # Help line
 
         # Pack all lines together
         cLines = namedtuple('lines', ['traj_line', 'norm_line', 'alpha_line', 'r_cost_line', 'i_cost_line', 'ctrl_lines'])
@@ -1693,18 +1696,19 @@ class Simulation(utilities.Generic):
         # logic for multiple controllers
         self.all_ctrl_lines = []
         self.all_lines = []
+
+        control_labels = ('F [N]', 'M [Nm]')
         
         for i in range(self.num_controllers):
-            self.ctrl_lines = self.ctrlAxs.plot(self.t0, utilities._toColVec(self.u0s[i]).T, lw=0.5)
-            
-            self.all_ctrl_lines.append(self.ctrl_lines)
+            for j in range(self.dim_input):
+                self.ctrl_lines = self.ctrlAxs.plot(self.t0, self.u0s[i][j], lw=0.5, label=control_labels[j])
+                self.all_ctrl_lines.append(self.ctrl_lines)
+
+            self.ctrlAxs.legend(fancybox=True, loc='upper right')
 
         for i in range(self.num_controllers):
             self.all_lines.append(cLines(traj_line=self.traj_lines[i], norm_line=self.norm_lines[i], alpha_line=self.alpha_lines[i], r_cost_line=self.r_cost_lines[i],i_cost_line=self.i_cost_lines[i], ctrl_lines=self.all_ctrl_lines[i]))
 
-        self.ctrlAxs.legend(iter(self.all_ctrl_lines[0]), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
-
-        
         self.current_data_file = self.data_files[0]
 
         # Enable data cursor
@@ -1720,7 +1724,7 @@ class Simulation(utilities.Generic):
 
     def _initialize_figure(self):
         if self.num_controllers > 1:
-            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors, marker=self.robot_marker.marker)
+            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker="o")
 
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
@@ -1778,12 +1782,8 @@ class Simulation(utilities.Generic):
         self._update_line(self.traj_lines[mid], x_coord, y_coord)
 
         self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
-        
-        self.sol_scatter.remove()
-        self.sol_scatter = self.xy_plane_axes.scatter(x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400)
 
         combined_coords = np.c_[self.latest_x_coords, self.latest_x_coords]
-        self.sol_scatter.set_array(self.test_colors)
         self.sol_scatter.set_offsets(combined_coords)
 
         # Euclidean (aka Frobenius) norm
