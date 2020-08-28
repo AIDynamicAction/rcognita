@@ -1870,7 +1870,7 @@ class Simulation(utilities.Generic):
         icost = controller.i_cost_val
 
         if self.is_print_sim_step:
-            print(f"Controller #{mid}")
+            print(f"Controller\t{mid}")
             self._print_sim_step(t, x_coord, y_coord,
                                  alpha, v, omega, icost, u)
 
