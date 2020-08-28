@@ -99,7 +99,7 @@ class System(utilities.Generic):
     
     system_state
 
-    _dim_full_state
+    _dim_initial_full_state
         * dimensions of full state
     
     full_state
@@ -141,9 +141,9 @@ class System(utilities.Generic):
         self.dim_disturb = dim_disturb
 
         if is_dyn_ctrl:
-            self._dim_full_state = self.dim_state + self.dim_disturb + self.dim_input
+            self._dim_initial_full_state = self.dim_state + self.dim_disturb + self.dim_input
         else:
-            self._dim_full_state = self.dim_state + self.dim_disturb
+            self._dim_initial_full_state = self.dim_state + self.dim_disturb
 
         self.m = m
         self.I = I
@@ -159,10 +159,9 @@ class System(utilities.Generic):
         self.initial_y = initial_y
         self.num_controllers = 1
         self.u0 = np.zeros(dim_input)
-        self.u = np.zeros(dim_input)
         self.q0 = np.zeros(dim_disturb)
+        self.u = np.zeros(dim_input)
         self.is_dyn_ctrl = is_dyn_ctrl
-
 
         # initial values of the system's state
         self.initial_alpha = initial_alpha = np.pi / 2
@@ -171,11 +170,8 @@ class System(utilities.Generic):
         initial_state[1] = initial_y
         initial_state[2] = initial_alpha
         self.system_state = initial_state
-
-        # self._add_bot(-5, -5)
             
-        self.full_state, self._dim_full_state  = self.create_full_state(self.system_state, self.q0, self.u0, is_dyn_ctrl)
-
+        self.full_state = self.create_full_state(self.system_state, self.q0, self.u0, is_dyn_ctrl)
 
         """ disturbance """
         self.is_disturb = is_disturb
@@ -196,40 +192,39 @@ class System(utilities.Generic):
         else:
             self.full_state = np.concatenate([self.system_state, u0])
 
-        return self.full_state, self._dim_full_state 
+        return self.full_state
 
-    def _add_bot(self, initial_x, initial_y):
-        # self.u = np.zeros((num_controllers,dim_input))
+    def add_bots(self, initial_x, initial_y, number=1):
         self.new_state = np.zeros(self.dim_state)
         self.new_state[0] = initial_x
         self.new_state[1] = initial_y
         self.new_state[2] = self.initial_alpha
 
-        self.system_states = np.vstack((self.system_state, self.new_state))
+        self.system_state = np.vstack((self.system_state, self.new_state))
 
         if self.u0.ndim == 1:
-            self.u0s = np.tile(self.u0, (2,1))
+            self.u0 = np.tile(self.u0, (2,1))
         
         elif self.u0.ndim > 1:
-            new_row = self.u0s[0,:]
-            self.u0s = np.vstack((self.u0, new_row))
+            new_row = self.u0[0,:]
+            self.u0 = np.vstack((self.u0, new_row))
 
         if self.q0.ndim == 1:
-            self.q0s = np.tile(self.u0, (2,1))
+            self.q0 = np.tile(self.q0, (2,1))
         
         elif self.q0.ndim > 1:
-            new_row = self.u0s[0,:]
-            self.q0s = np.vstack((self.u0, new_row))
+            new_row = self.u0[0,:]
+            self.q0 = np.vstack((self.q0, new_row))
     
         if self.is_dyn_ctrl:
-            self.full_states = np.concatenate((self.system_states, self.u0s, self.q0s), axis= 1)
+            self.full_state = np.concatenate((self.system_state, self.q0, self.u0), axis= 1)
         else:
-            self.full_states = np.concatenate((self.system_states, self.u0s), axis=1)
+            self.full_state = np.concatenate((self.system_state, self.q0), axis=1)
 
-        self.alphas = self.system_states[:,2]
+        self.alpha = self.system_state[:,2]
 
-
-        # return self.system_state, self.full_state, self.alphas
+        self.num_controllers += 1
+        self.u = np.zeros((self.num_controllers, self.dim_input))
 
     @staticmethod
     def get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
@@ -302,6 +297,12 @@ class System(utilities.Generic):
 
         return system_dynamics
 
+    @staticmethod
+    def get_curr_state(x, u=[]):
+        """ Return current state of system """
+        y = x
+        return y
+
     def _add_disturbance(self, t, q):
         """ Dynamical disturbance model """
 
@@ -329,12 +330,6 @@ class System(utilities.Generic):
         Du = np.zeros(self.dim_input)
 
         return Du
-
-    @staticmethod
-    def get_curr_state(x, u=[]):
-        """ Return current state of system """
-        y = x
-        return y
 
     def set_latest_action(self, u, mid=None):
         if self.num_controllers > 1:
@@ -365,15 +360,14 @@ class System(utilities.Generic):
 
         """
         # environment + disturbance
-        new_full_state = np.zeros(self._dim_full_state)
+        new_full_state = np.zeros(self._dim_initial_full_state)
 
         x = full_state[0:self.dim_state]
         q = full_state[self.dim_state:]
 
         if self.is_dyn_ctrl:
             u = full_state[-self.dim_input:]
-            new_full_state[-self.dim_input:
-                           ] = self._create_dyn_controller(t, u, y)
+            new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
         else:
             # Fetch the control action stored in the system
             if mid is not None:
@@ -395,7 +389,7 @@ class System(utilities.Generic):
         if mid is None:
             self.system_state = x
         else:
-            self.system_states[mid,:] = x
+            self.system_state[mid,:] = x
 
         return new_full_state
 
@@ -1378,14 +1372,14 @@ class Simulation(utilities.Generic):
             return system_state, full_state, alpha, initial_x, initial_y
         
         else:
-            system_states = system.system_states
-            full_states = system.full_states
-            alphas = system.alphas
-            initial_xs = system.system_states[:,0]
-            initial_ys = system.system_states[:,1]
-            u0s = system.u0s
+            system_states = system.system_state
+            full_states = system.full_state
+            alphas = system.alpha
+            initial_xs = system.system_state[:,0]
+            initial_ys = system.system_state[:,1]
+            u0s = system.u0
             try:
-                q0s = system.q0s
+                q0s = system.q0
             except:
                 pass
 
@@ -1866,7 +1860,11 @@ class Simulation(utilities.Generic):
             system.set_latest_action(u)
 
         controller.record_sys_state(system_state)
-        controller.update_icost(y, u)
+        
+        try:
+            controller.update_icost(y, u)
+        except:
+            print(y, u)
 
         x_coord = full_state[0]
         y_coord = full_state[1]

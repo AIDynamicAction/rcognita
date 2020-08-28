@@ -166,7 +166,8 @@ def main(args=None):
 
     else:
         # environment
-        sys1 = System(num_controllers=1)
+        sys1 = System()
+        sys1.add_bots(-5,-5)
         controller1 = Controller(sys1,
                            sample_time=0.3,
                            pred_step_size=2,
@@ -176,6 +177,7 @@ def main(args=None):
                             n_actor=10,
                             n_critic=10,
                             estimator_update_time=0.3)
+        
         controller2 = Controller(sys1,
                            sample_time=0.6,
                            pred_step_size=2,
@@ -189,8 +191,8 @@ def main(args=None):
         nominal_ctrl1 = NominalController()
         nominal_ctrl2 = NominalController()
 
-    sim = Simulation(sys1, controller1, nominal_ctrl1, t1=30)
-    # sim = Simulation(sys1, [controller1, controller2], [nominal_ctrl1,nominal_ctrl2], t1=30)
+    # sim = Simulation(sys1, controller1, nominal_ctrl1, t1=30)
+    sim = Simulation(sys1, [controller1, controller2], [nominal_ctrl1,nominal_ctrl2], t1=30)
     sim.run_simulation()
 
 
