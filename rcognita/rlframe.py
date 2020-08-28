@@ -1325,6 +1325,10 @@ class Simulation(utilities.Generic):
         closed_loop = system.closed_loop
 
         if hasattr(controller, '__len__') is False:
+            if system.num_controllers > 1:
+                print("You called system.add_bots() but did not add controllers to Simulation")
+                sys.exit()
+
             self.num_controllers = 1
 
             self.controller = controller
