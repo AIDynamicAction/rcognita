@@ -121,7 +121,7 @@ class _pltMarker:
         h 2.23862 v 2.73989 h -5.37899 l -1e-5,-2.73989 h 2.23863 v -1.43159 h -3.68556 v -3.8513 h -1.65573 l 1e-5,0.91881 h -5.379 z"""
         self.path = parse_path( self.pathString )
         self.path.vertices -= self.path.vertices.mean( axis=0 )
-        self.marker = mpl.markers.MarkerStyle( marker=self.path )
+        self.marker = mpl.markers.MarkerStyle( marker=self.path)
         self.marker._transform = self.marker.get_transform().rotate_deg(angle)
 
     def rotate(self, angle=0):

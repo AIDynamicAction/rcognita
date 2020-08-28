@@ -1282,7 +1282,6 @@ class Simulation(utilities.Generic):
         VISUALIZATION PARAMS
     
         """
-        self.colors = ['b','r','g']
 
         # x and y limits of scatter plot. Used so far rather for visualization
         # only, but may be integrated into the actor as constraints
@@ -1576,6 +1575,8 @@ class Simulation(utilities.Generic):
     def _create_figure_plots_multi(self, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
 
+        self.colors = ['b','r','g']
+
         y0_list = []
         
         for system_state in self.system_states:
@@ -1604,37 +1605,29 @@ class Simulation(utilities.Generic):
                                                       title=' Simulation: \n Pause - space, q - quit, click - data cursor')
 
         self.xy_plane_axes.set_aspect('equal', adjustable='box')
+        self.xy_plane_axes.plot([self.x_min, self.x_max], [0, 0], 'k--', lw=0.75)   # x-axis
+        self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],'k--', lw=0.75)   # y-axis
 
-        self.xy_plane_axes.plot([self.x_min, self.x_max], [
-            0, 0], 'k--', lw=0.75)   # x-axis
+        self.traj_lines = []
+        self.robot_markers = []
+        self.text_time_handles = []
+        text_time = 't = {time:2.3f}'.format(time=self.t0)
+        time_positions = [[0.05, 0.95],[0.70, 0.95],[0.05, 0.10],[0.70, 0.10]]
 
-        self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],
-                                'k--', lw=0.75)   # y-axis
+        for i in range(self.num_controllers):
+            self.traj_line, = self.xy_plane_axes.plot(
+                self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5, markerfacecolor=self.colors[i])
 
-        if self.num_controllers > 1:
-            self.traj_lines = []
-            self.robot_markers = []
-            self.text_time_handles = []
-            text_time = 't = {time:2.3f}'.format(time=self.t0)
+            self.robot_marker = utilities._pltMarker(angle=self.alphas[i])
 
-            for i in range(self.num_controllers):
-                self.traj_line, = self.xy_plane_axes.plot(
-                    self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5)
-
-                self.robot_marker = utilities._pltMarker(angle=self.alphas[i])
-
-                self.text_time_handle = self.xy_plane_axes.text(0.05, 0.95,
-                                                                text_time,
-                                                                horizontalalignment='left',
-                                                                verticalalignment='center',
-                                                                transform=self.xy_plane_axes.transAxes)
-                
-                
-                self.traj_lines.append(self.traj_line)
-                self.robot_markers.append(self.robot_marker)
-                self.text_time_handles.append(self.text_time_handle)
+            self.text_time_handle = self.xy_plane_axes.text(time_positions[i][0], time_positions[i][1], text_time, horizontalalignment='left', verticalalignment='center', transform=self.xy_plane_axes.transAxes)
             
-            self.xy_plane_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
+            
+            self.traj_lines.append(self.traj_line)
+            self.robot_markers.append(self.robot_marker)
+            self.text_time_handles.append(self.text_time_handle)
+        
+        self.xy_plane_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
 
         """
@@ -1651,17 +1644,16 @@ class Simulation(utilities.Generic):
                            'k--', lw=0.75)   # Help line
 
         # logic for multiple controllers
-        if self.num_controllers > 1:
-            self.norm_lines = []
-            self.alpha_lines = []
+        self.norm_lines = []
+        self.alpha_lines = []
+        
+        for i in range(self.num_controllers):
+            self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_xs[i], self.initial_ys[i]]), f'{self.colors[i]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
             
-            for i in range(self.num_controllers):
-                self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_xs[i], self.initial_ys[i]]), f'{self.colors[i]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
-                
-                self.alpha_line, = self.sol_axes.plot(self.t0, self.alphas[i], f'{self.colors[i]}--', lw=0.5, label=r'$\alpha$ [rad]')
+            self.alpha_line, = self.sol_axes.plot(self.t0, self.alphas[i], f'{self.colors[i]}--', lw=0.5, label=r'$\alpha$ [rad]')
 
-                self.norm_lines.append(self.norm_line)
-                self.alpha_lines.append(self.alpha_line)
+            self.norm_lines.append(self.norm_line)
+            self.alpha_lines.append(self.alpha_line)
 
         self.sol_axes.legend(fancybox=True, loc='upper right')
 
@@ -1674,33 +1666,32 @@ class Simulation(utilities.Generic):
         
         """
 
-        if self.num_controllers > 1:
-            self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * self.controllers[0].running_cost(y0_list[0], self.u0s[0])), yscale='symlog', xlabel='t [s]')
+        self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * self.controllers[0].running_cost(y0_list[0], self.u0s[0])), yscale='symlog', xlabel='t [s]')
 
-            self.cost_axes.title.set_text('Cost')
+        self.cost_axes.title.set_text('Cost')
 
-            self.text_icost_handles = []
-            self.r_cost_lines = []
-            self.i_cost_lines = []
+        self.text_icost_handles = []
+        self.r_cost_lines = []
+        self.i_cost_lines = []
 
-            for i in range(self.num_controllers):
-                r = self.controllers[i].running_cost(y0_list[i], self.u0s[i])
-                text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
+        for i in range(self.num_controllers):
+            r = self.controllers[i].running_cost(y0_list[i], self.u0s[i])
+            text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost=0)
 
-                self.text_icost_handle = self.sim_fig.text(
-                    0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
+            self.text_icost_handle = self.sim_fig.text(
+                0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
 
-                self.r_cost_line, = self.cost_axes.plot(
-                    self.t0, r, 'r-', lw=0.5, label='r')
+            self.r_cost_line, = self.cost_axes.plot(
+                self.t0, r, 'r-', lw=0.5, label='r')
 
-                self.i_cost_line, = self.cost_axes.plot(
-                    self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+            self.i_cost_line, = self.cost_axes.plot(
+                self.t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
 
-                self.text_icost_handles.append(self.text_icost_handle)
-                self.r_cost_lines.append(self.r_cost_line)
-                self.i_cost_lines.append(self.i_cost_line)
+            self.text_icost_handles.append(self.text_icost_handle)
+            self.r_cost_lines.append(self.r_cost_line)
+            self.i_cost_lines.append(self.i_cost_line)
 
-        self.cost_axes.legend(fancybox=True, loc='upper right')
+            self.cost_axes.legend(fancybox=True, loc='upper right')
 
         """
         
@@ -1719,19 +1710,18 @@ class Simulation(utilities.Generic):
         cLines = namedtuple('lines', ['traj_line', 'norm_line', 'alpha_line', 'r_cost_line', 'i_cost_line', 'ctrl_lines'])
 
         # logic for multiple controllers
-        if self.num_controllers > 1:
-            self.all_ctrl_lines = []
-            self.all_lines = []
+        self.all_ctrl_lines = []
+        self.all_lines = []
+        
+        for i in range(self.num_controllers):
+            self.ctrl_lines = self.ctrlAxs.plot(self.t0, utilities._toColVec(self.u0s[i]).T, lw=0.5)
             
-            for i in range(self.num_controllers):
-                self.ctrl_lines = self.ctrlAxs.plot(self.t0, utilities._toColVec(self.u0s[i]).T, lw=0.5)
-                
-                self.all_ctrl_lines.append(self.ctrl_lines)
+            self.all_ctrl_lines.append(self.ctrl_lines)
 
-            for i in range(self.num_controllers):
-                self.all_lines.append(cLines(traj_line=self.traj_lines[i], norm_line=self.norm_lines[i], alpha_line=self.alpha_lines[i], r_cost_line=self.r_cost_lines[i],i_cost_line=self.i_cost_lines[i], ctrl_lines=self.all_ctrl_lines[i]))
+        for i in range(self.num_controllers):
+            self.all_lines.append(cLines(traj_line=self.traj_lines[i], norm_line=self.norm_lines[i], alpha_line=self.alpha_lines[i], r_cost_line=self.r_cost_lines[i],i_cost_line=self.i_cost_lines[i], ctrl_lines=self.all_ctrl_lines[i]))
 
-            self.ctrlAxs.legend(iter(self.all_ctrl_lines[0]), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
+        self.ctrlAxs.legend(iter(self.all_ctrl_lines[0]), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
 
         
         self.current_data_file = self.data_files[0]
@@ -1750,7 +1740,7 @@ class Simulation(utilities.Generic):
     def _initialize_figure(self):
         if self.num_controllers > 1:
             for i in range(self.num_controllers):
-                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], marker=self.robot_markers[i].marker, s=400, c=f"{self.colors[i]}")
+                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], marker=self.robot_markers[i].marker, s=400, c=self.colors[i])
 
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
@@ -1810,7 +1800,7 @@ class Simulation(utilities.Generic):
         self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
         self.sol_scatter.remove()
         self.sol_scatter = self.xy_plane_axes.scatter(
-            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c='b')
+            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid])
 
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
