@@ -1598,13 +1598,11 @@ class Simulation(utilities.Generic):
         time_positions = [[0.05, 0.95],[0.70, 0.95],[0.05, 0.10],[0.70, 0.10]]
 
         for i in range(self.num_controllers):
-            self.traj_line, = self.xy_plane_axes.plot(
-                self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5, c=self.colors[i])
+            self.traj_line, = self.xy_plane_axes.plot(self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5, c=self.colors[i])
 
             self.robot_marker = utilities._pltMarker(angle=self.alphas[i])
 
             self.text_time_handle = self.xy_plane_axes.text(time_positions[i][0], time_positions[i][1], text_time, horizontalalignment='left', verticalalignment='center', transform=self.xy_plane_axes.transAxes)
-            
             
             self.traj_lines.append(self.traj_line)
             self.robot_markers.append(self.robot_marker)
@@ -1780,13 +1778,13 @@ class Simulation(utilities.Generic):
         self._update_line(self.traj_lines[mid], x_coord, y_coord)
 
         self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
+        
+        self.sol_scatter.remove()
+        self.sol_scatter = self.xy_plane_axes.scatter(x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400)
 
-        m_num = mid + 1
-
-        # self.sol_scatter.remove()
-        data = np.c_[self.latest_x_coords, self.latest_x_coords]
-        self.sol_scatter.set_offsets(data)
+        combined_coords = np.c_[self.latest_x_coords, self.latest_x_coords]
         self.sol_scatter.set_array(self.test_colors)
+        self.sol_scatter.set_offsets(combined_coords)
 
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
@@ -1891,13 +1889,8 @@ class Simulation(utilities.Generic):
             r = controller.running_cost(y, u)
             text_time = 't = {time:2.3f}'.format(time=t)
 
-            m_num = mid + 1
-
             self.latest_x_coords[mid] = x_coord 
             self.latest_y_coords[mid] = y_coord
-
-            #     for i in range(self.num_controllers):
-            #         self.sol_scatter = self.xy_plane_axes.scatter(self.latest_x_coords[i], self.latest_y_coords[i], marker=self.robot_markers[i].marker, s=400, c=self.colors[i])
             
             self._update_all_lines_multi(text_time, full_state, alpha_deg,
                                    x_coord, y_coord, t, alpha, r, icost, u, mid)
