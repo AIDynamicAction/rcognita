@@ -42,45 +42,84 @@ class System(utilities.Generic):
 
     Parameters
     ----------
-    dim_state -- dimension of state vector 
-        * x_t = [x_c, y_c, alpha, upsilon, omega]
+    dim_state : int 
+        dimension of state vector 
+        x_t = [x_c, y_c, alpha, upsilon, omega]
 
-    dim_input -- dimension of action vector
+    dim_input : int
+        * dimension of action vector
         * u_t = [F, M]
 
-    dim_output -- dimension of output vector
+    dim_output : int 
+        * dimension of output vector
         * x_t+1 = [x_c, y_c, alpha, upsilon, omega]
 
-    dim_disturb -- dimension of disturbance vector
+    dim_disturb : int  
+        * dimension of disturbance vector
         * actuator disturbance that gets added to F and M
 
-    m, I -- robot hyperparameters
+    initial_x : int
+        * initial x coordinate of robot
+
+    initial_y : int
+        * initial x coordinate of robot
+
+    m : int 
         * m = robot's mass
+
+    I : int
         * I = moment of inertia about the vertical axis
 
-    f_min, f_max, m_min, m_max -- control bounds
+    f_min, f_max, m_min, m_max : all int
+        * control bounds
 
-    is_dyn_ctrl -- is dynamic control?
-        * 0 or 1
+    f_man : int
+
+    n_man: int
+
+    is_dyn_ctrl : int
+        * is dynamic control?
         * If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
 
-    is_disturb -- use disturbance?
-        * 0 or 1
+    is_disturb : int
+        * use disturbance?
         * If 0, no disturbance is fed into the system
 
-    sigma_q, mu_q, tau_q -- hyperparameters to disturbance
+    sigma_q, mu_q, tau_q : int
+        * hyperparameters to disturbance
         * Parameters of the disturbance model
+
+    Attributes
+    ----------
+
+    alpha
+
+    num_controllers : int
+        * number of controllers the environment will interact with
+    
+    system_state
+
+    _dim_full_state
+        * dimensions of full state
+    
+    full_state
+
+    u0 : float vector
+        * control input vector
+
+    q0 : float vector
+        * disturbance vector
+
 
     """
 
     def __init__(self,
-                initial_x=5,
-                initial_y=5,
-                num_controllers=1,
                  dim_state=5,
                  dim_input=2,
                  dim_output=5,
                  dim_disturb=2,
+                initial_x=5,
+                initial_y=5,
                  m=10,
                  I=1,
                  f_man=-3,
@@ -100,6 +139,12 @@ class System(utilities.Generic):
         self.dim_input = dim_input
         self.dim_output = dim_output
         self.dim_disturb = dim_disturb
+
+        if is_dyn_ctrl:
+            self._dim_full_state = self.dim_state + self.dim_disturb + self.dim_input
+        else:
+            self._dim_full_state = self.dim_state + self.dim_disturb
+
         self.m = m
         self.I = I
         self.f_min = f_min
@@ -112,15 +157,12 @@ class System(utilities.Generic):
         self.control_bounds = np.array([[f_min, f_max], [m_min, m_max]])
         self.initial_x = initial_x
         self.initial_y = initial_y
-        self.num_controllers = num_controllers
-        self.is_dyn_ctrl = is_dyn_ctrl
+        self.num_controllers = 1
         self.u0 = np.zeros(dim_input)
+        self.u = np.zeros(dim_input)
         self.q0 = np.zeros(dim_disturb)
+        self.is_dyn_ctrl = is_dyn_ctrl
 
-        if is_dyn_ctrl:
-            self._dim_full_state = self.dim_state + self.dim_disturb + self.dim_input
-        else:
-            self._dim_full_state = self.dim_state + self.dim_disturb
 
         # initial values of the system's state
         self.initial_alpha = initial_alpha = np.pi / 2
@@ -130,12 +172,9 @@ class System(utilities.Generic):
         initial_state[2] = initial_alpha
         self.system_state = initial_state
 
-        if num_controllers > 1:
-            self._add_bot(-5, -5)
-            self.u = np.zeros((num_controllers,dim_input))
-        else:
-            self.u = np.zeros(dim_input)
-            self.full_state, self._dim_full_state  = self.create_full_state(self.system_state, self.q0, self.u0, is_dyn_ctrl)
+        # self._add_bot(-5, -5)
+            
+        self.full_state, self._dim_full_state  = self.create_full_state(self.system_state, self.q0, self.u0, is_dyn_ctrl)
 
 
         """ disturbance """
@@ -145,21 +184,22 @@ class System(utilities.Generic):
         self.tau_q = tau_q
 
 
-    def get_system_state(self):
+    def set_initial_system_state(self):
         if self.num_controllers > 1:
             return self.system_states
         else:
             return self.system_state
 
-    def create_full_state(self, system_state, q0, u0=None, is_dyn_ctrl=0):
+    def create_full_state(self, system_state, u0, q0=None, is_dyn_ctrl=0):
         if is_dyn_ctrl:
-            self.full_state = np.concatenate([self.system_state, q0, u0])
+            self.full_state = np.concatenate([self.system_state, u0, q0])
         else:
-            self.full_state = np.concatenate([self.system_state, q0])
+            self.full_state = np.concatenate([self.system_state, u0])
 
         return self.full_state, self._dim_full_state 
 
     def _add_bot(self, initial_x, initial_y):
+        # self.u = np.zeros((num_controllers,dim_input))
         self.new_state = np.zeros(self.dim_state)
         self.new_state[0] = initial_x
         self.new_state[1] = initial_y
