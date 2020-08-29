@@ -1703,7 +1703,7 @@ class Simulation(utilities.Generic):
         """ returns a pyplot figure with 4 plots """
     
         self.colors = ['b','r','g','o']
-        self.color_pairs = [['b','r'],['g','m'],['c','y'],['k','teal']]
+        self.color_pairs = [['b','g'],['r','m'],['g','y'],['o','teal']]
 
         y0_list = []
         
