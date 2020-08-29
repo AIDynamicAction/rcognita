@@ -1770,10 +1770,10 @@ class Simulation(utilities.Generic):
         return self.sim_fig
 
     def _initialize_figure(self):
-        self.scats = []
+        self.scatter_plots = []
         if self.num_controllers > 1:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker=self.robot_marker.marker)
-            self.scats.append(self.sol_scatter)
+            self.scatter_plots.append(self.sol_scatter)
 
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
@@ -1832,7 +1832,7 @@ class Simulation(utilities.Generic):
 
         self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
 
-        self.scats.append(self.xy_plane_axes.scatter(
+        self.scatter_plots.append(self.xy_plane_axes.scatter(
             x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
         # combined_coords = np.c_[self.latest_x_coords, self.latest_y_coords]
         # self.sol_scatter.set_offsets(combined_coords)
@@ -2051,13 +2051,13 @@ class Simulation(utilities.Generic):
     def _wrapper_take_steps(self, k, *args):
         system, controller, nominal_ctrl, simulator, animate = args
 
-        for scat in self.scats:
+        for scat in self.scatter_plots:
             try:
                 scat.remove()
             except:
                 pass
 
-        self.scats = []
+        self.scatter_plots = []
         
         if self.num_controllers > 1:
             simulators = simulator
