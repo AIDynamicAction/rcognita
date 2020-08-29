@@ -292,10 +292,7 @@ class System(utilities.Generic):
         system_dynamics[0] = x
         system_dynamics[1] = y
         system_dynamics[2] = alpha
-        try:
-            system_dynamics[3] = v
-        except:
-            print(m, F)
+        system_dynamics[3] = v
         system_dynamics[4] = omega
 
         return system_dynamics
@@ -2060,10 +2057,7 @@ class Simulation(utilities.Generic):
 
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
-                        try:
-                            self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
-                        except:
-                            print(len(nominal_ctrlers))
+                        self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
 
                     else:
                         self.current_run[i] += 1
