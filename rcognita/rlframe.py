@@ -1845,6 +1845,7 @@ class Simulation(utilities.Generic):
 
     def _initialize_figure(self):
         self.scatter_plots = []
+        
         if self.num_controllers > 1:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker=self.robot_marker.marker)
             self.scatter_plots.append(self.sol_scatter)
@@ -1906,10 +1907,10 @@ class Simulation(utilities.Generic):
 
         self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
 
-        self.scatter_plots.append(self.xy_plane_axes.scatter(
-            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
+        self.scatter_plots.append(self.xy_plane_axes.scatter(x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
         # combined_coords = np.c_[self.latest_x_coords, self.latest_y_coords]
         # self.sol_scatter.set_offsets(combined_coords)
+
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
 
@@ -1926,8 +1927,6 @@ class Simulation(utilities.Generic):
         # Control
         for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
             self._update_line(line, t, uSingle)
-
-
 
     def _log_data_row(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
         with open(dataFile, 'a', newline='') as outfile:
@@ -2019,6 +2018,7 @@ class Simulation(utilities.Generic):
             self._update_all_lines_multi(text_time, full_state, alpha_deg,
                                    x_coord, y_coord, t, alpha, r, icost, u, mid)
 
+        return t
 
     def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
         simulator.step()
@@ -2097,8 +2097,11 @@ class Simulation(utilities.Generic):
 
         # graceful exit from terminal
         except NameError:
-            print("Program exit")
-            sys.exit()
+            if plt_close is True:
+                print("Program exit")
+                sys.exit()
+            else:
+                pass
 
     def _on_key_press(self, event, anm, args):
         if event.key == ' ':
@@ -2122,107 +2125,113 @@ class Simulation(utilities.Generic):
             
             self._graceful_exit()
 
-    def _wrapper_take_steps(self, k, *args):
-        system, controller, nominal_ctrl, simulator, animate = args
+    def _wrapper_take_steps_multi(self, k, *args):
+        system, controllers, nominal_ctrlers, simulators, animate = args
 
-        for scat in self.scatter_plots:
-            try:
-                scat.remove()
-            except:
-                pass
+        if self.current_run <= self.n_runs:
+            for scat in self.scatter_plots:
+                    scat.remove()
 
-        self.scatter_plots = []
-        
-        if self.num_controllers > 1:
-            simulators = simulator
-            controllers = controller
-            nominal_ctrlers = nominal_ctrl
+            self.scatter_plots = []
 
             for i in range(self.num_controllers):
-                t = simulators[i].t
-
-                if self.current_run[i] <= self.n_runs:
-                    if t < self.t1:
-                        self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
-
-                    else:
-                        self.current_run[i] += 1
-                        self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i])
-                
-                else:
-                    if self.close_plt_on_finish is True:
-                        self._graceful_exit()
-
-                    elif self.close_plt_on_finish is False:
-                        self._graceful_exit(plt_close=False)
-        else:
-            _, controller, nominal_ctrl, simulator, _ = args
-            t = simulator.t
-
-            if self.current_run <= self.n_runs:
-                if t < self.t1:
-                    self.t_elapsed = t
-                    self._take_step(*args)
+                if self.t_elapsed[i] < self.t1:
+                    new_t = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
+                    self.t_elapsed[i] = new_t
 
                 else:
                     self.current_run += 1
-                    self._reset_sim(controller, nominal_ctrl, simulator)
-            else:
-                if self.close_plt_on_finish is True:
-                    self._graceful_exit()
+                    self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i], i)
+            
+        else:
+            for i in range(self.num_controllers):
+                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
 
-                elif self.close_plt_on_finish is False:
-                    self._graceful_exit(plt_close=False)
+            self.init_figure = False
+            if self.close_plt_on_finish is True:
+                self._graceful_exit()
+
+            elif self.close_plt_on_finish is False:
+                self._graceful_exit(plt_close=False)
+
+    def _wrapper_take_steps(self, k, *args):
+        _, controller, nominal_ctrl, simulator, _ = args
+        t = simulator.t
+
+        if self.current_run <= self.n_runs:
+            if t < self.t1:
+                self.t_elapsed = t
+                self._take_step(*args)
+
+            else:
+                self.current_run += 1
+                self._reset_sim(controller, nominal_ctrl, simulator)
+        else:
+            if self.close_plt_on_finish is True:
+                self._graceful_exit()
+
+            elif self.close_plt_on_finish is False:
+                self._graceful_exit(plt_close=False)
 
     def _run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers = False):
             animate = True
+            self.init_figure = True
 
             if multi_controllers is True:
                 controllers = controller
                 simulators = simulator
                 nominal_ctrlers = nominal_ctrl
 
+
                 self.sim_fig = self._create_figure_plots_multi(fig_width, fig_height)
                 fargs = (system, controllers, nominal_ctrlers, simulators, animate)
+
+                self.anm = animation.FuncAnimation(self.sim_fig,
+                                                  self._wrapper_take_steps_multi,
+                                                  fargs=fargs,
+                                                  init_func=self._initialize_figure,
+                                                  interval=1,
+                                                  blit=False)
             
             else:
                 self.sim_fig = self._create_figure_plots(system, controller, fig_width, fig_height)
                 fargs = (system, controller, nominal_ctrl, simulator, animate)
 
 
-            anm = animation.FuncAnimation(self.sim_fig,
-                                          self._wrapper_take_steps,
-                                          fargs=fargs,
-                                          init_func=self._initialize_figure,
-                                          interval=1,
-                                          blit=False)
+                self.anm = animation.FuncAnimation(self.sim_fig,
+                                              self._wrapper_take_steps,
+                                              fargs=fargs,
+                                              init_func=self._initialize_figure,
+                                              interval=1,
+                                              blit=False)
 
-            anm.running = True
+            self.anm.running = True
             self.sim_fig.canvas.mpl_connect(
-                'key_press_event', lambda event: self._on_key_press(event, anm, fargs))
+                'key_press_event', lambda event: self._on_key_press(event, self.anm, fargs))
             self.sim_fig.tight_layout()
             plt.show()
 
     def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True):
+        self.current_run = 1
+        self.terminated_episode = False
+        
         if self.num_controllers > 1:
-            self.current_run = [1]*self.num_controllers
-            self.t_elapsed = [0]*self.num_controllers
+            self.t_elapsed = np.array([0]*self.num_controllers)
 
         else:
-            self.current_run = 1
             self.t_elapsed = 0
 
         self.close_plt_on_finish = close_plt_on_finish
         self.n_runs = n_runs
         self.data_files = self._log_data(n_runs, save=self.is_log_data)
 
-        # under development
+        # CODE IN THIS CONDITIONAL BLOCK IS IN DEVELOPMENT NEEDS TO BE UPDATED
         if self.is_visualization is False:
             self.current_data_file = data_files[0]
 
             t = self.simulator.t
 
-            # CODE IS INVALID - NEEDS TO BE UPDATED
+            
             while self.current_run <= self.n_runs:
                 while t < self.t1:
                     self._take_step(self.system, self.controller,
@@ -2233,7 +2242,6 @@ class Simulation(utilities.Generic):
                     self._reset_sim(self.controller,
                                     self.nominal_ctrl, self.simulator)
                     icost = 0
-
 
                     for line in self.all_lines:
                         for item in line:

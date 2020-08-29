@@ -180,8 +180,8 @@ def main(args=None):
                             estimator_update_time=0.3)
 
         controller2 = Controller(sys,
-                           sample_time=0.3,
-                           pred_step_size=2,
+                           sample_time=0.4,
+                           pred_step_size=0.8,
                             critic_mode=3,
                             ctrl_mode=3,
                             buffer_size=20,
@@ -192,8 +192,8 @@ def main(args=None):
         nominal_ctrl = NominalController()
         nominal_ctrl2 = NominalController()
 
-    sim = Simulation(sys, [controller, controller2], [nominal_ctrl, nominal_ctrl2], t1=30)
-    sim.run_simulation()
+    sim = Simulation(sys, [controller, controller2], [nominal_ctrl, nominal_ctrl2], t1=5)
+    sim.run_simulation(close_plt_on_finish=False)
 
 
 if __name__ == "__main__":
