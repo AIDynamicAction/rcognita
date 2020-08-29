@@ -469,7 +469,7 @@ class Controller(utilities.Generic):
         * 1 - quadratic chi.T @ R1 @ chi
         * 2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
 
-    sample_time : float 
+    sample_time : int or float 
         Controller's sampling time (in seconds). The system itself is continuous as a physical process while the controller is digital.
         * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
         * smaller sampling times lead to higher computation times
@@ -1060,13 +1060,19 @@ class NominalController(utilities.Generic):
 
     Parameters
     ----------
-    m, I --
-        * Mass and moment of inertia around vertical axis of the robot
-    ctrl_gain --
+    m : int
+        * mass of robot
+
+    I : int
+        * Inertia around vertical axis of the robot
+    
+    ctrl_gain : int
         * Controller gain       
-    t0 --
+    
+    t0 : int
         * Initial value of the controller's internal clock
-    sample_time --
+    
+    sample_time : int or float
         * Controller's sampling time (in seconds)        
 
     References
@@ -1275,7 +1281,48 @@ class NominalController(utilities.Generic):
 class Simulation(utilities.Generic):
     """class to create and run simulation.
 
-    a_tol, r_tol -- sensitivity of the solverxs
+    Parameters
+    ----------
+
+    system : object of type `System` class
+    
+    controller : object of type `Controller` class
+    
+    nominal_ctrl : object of type `NominalController` class
+
+    t0 : int
+        * start time of episode
+    
+    t1 : int
+        * end time of episode
+    
+    a_tol : float
+        * ODE solver sensitivity hyperparameter
+    
+    r_tol : float
+        * ODE solver sensitivity hyperparameter
+    
+    x_min : int
+        * minimum x limit of graph
+
+    x_max : int
+        * maximum x limit of graph
+
+    y_min : int
+        * minimum y limit of graph
+    
+    y_max : int
+        * minimum y limit of graph
+
+    is_log_data : bool
+        * log data to local drive?
+
+    is_visualization : bool
+        * visual simulation?
+
+    is_print_sim_step : bool
+        * print results of simulation?
+
     """
 
     def __init__(self,
@@ -1290,16 +1337,28 @@ class Simulation(utilities.Generic):
                  x_max=10,
                  y_min=-10,
                  y_max=10,
-                 is_log_data=0,
+                 is_log_data=False,
                  is_visualization=True,
                  is_print_sim_step=False):
+
+        """
+        
+        CONTROL FLOW LOGIC: IGNORE
+        
+        """
 
         if hasattr(controller, '__len__'):
             self.num_controllers = len(controller)
 
             if self.num_controllers == 0:
-                print("Please supply a controller")
-                sys.exit()
+                print("Please pass a controller to the Simulation class")
+                return None
+
+            elif self.num_controllers == 1:
+                self.controller = controller
+
+            else:
+                self.controllers = controller
 
         else:
             self.num_controllers = 1
@@ -1307,14 +1366,14 @@ class Simulation(utilities.Generic):
         if hasattr(nominal_ctrl, '__len__'):
             self.num_nom_controllers = len(nominal_ctrl)
 
-            if self.num_controllers < self.num_nom_controllers:
+            if self.num_nom_controllers < self.num_controllers:
                 if len(nominal_ctrl) == 0:
-                    self.nominal_ctrlers = [copy.deepcopy(NominalController())]*self.num_controllers
+                    self.nominal_ctrlers = [NominalController()]*self.num_controllers
                 else:
                     self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
             
             elif self.num_controllers > self.num_nom_controllers:
-                self.num_controllers = self.num_controllers[:self.num_nom_controllers]
+                self.controllers = self.controllers[:self.num_nom_controllers]
 
             else:
                 self.nominal_ctrlers = nominal_ctrl
@@ -1325,6 +1384,9 @@ class Simulation(utilities.Generic):
 
             if self.num_controllers != self.num_nom_controllers:
                 self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
+
+            else:
+                self.nominal_ctrl = nominal_ctrl
 
 
         """
