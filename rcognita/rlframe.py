@@ -1697,14 +1697,24 @@ class Simulation(utilities.Generic):
         self.all_ctrl_lines = []
         self.all_lines = []
 
-        control_labels = ('F [N]', 'M [Nm]')
-        
-        for i in range(self.num_controllers):
-            for j in range(self.dim_input):
-                self.ctrl_lines = self.ctrlAxs.plot(self.t0, self.u0s[i][j], lw=0.5, label=control_labels[j])
-                self.all_ctrl_lines.append(self.ctrl_lines)
 
-            self.ctrlAxs.legend(fancybox=True, loc='upper right')
+        clabels = ['F [N]','M [Nm]']
+
+        for i in range(self.num_controllers):
+            u = np.expand_dims(self.u0s[i],axis=0)
+            self.ctrl_lines = self.ctrlAxs.plot(self.t0, u, lw=0.5, label=clabels[i])
+
+            self.all_ctrl_lines.append(self.ctrl_lines)
+
+        handles,labels = self.ctrlAxs.get_legend_handles_labels()
+
+        clabels = clabels[::-1]
+        new_labels = [clabels]*self.num_controllers
+        new_labels = list(itertools.chain.from_iterable(new_labels))
+
+        labels = new_labels
+
+        self.ctrlAxs.legend(handles, labels, fancybox=True, loc='upper right')
 
         for i in range(self.num_controllers):
             self.all_lines.append(cLines(traj_line=self.traj_lines[i], norm_line=self.norm_lines[i], alpha_line=self.alpha_lines[i], r_cost_line=self.r_cost_lines[i],i_cost_line=self.i_cost_lines[i], ctrl_lines=self.all_ctrl_lines[i]))
