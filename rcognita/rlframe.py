@@ -1267,17 +1267,18 @@ class Simulation(utilities.Generic):
         if hasattr(nominal_ctrl, '__len__'):
             self.num_nom_controllers = len(nominal_ctrl)
 
-            if self.num_nom_controllers == 0:
-                print("Please supply a nominal controller")
-                sys.exit()
-            
-            elif self.num_nom_controllers == 1:
-                if self.num_controllers != self.num_nom_controllers:
+            if self.num_controllers < self.num_nom_controllers:
+                if len(nominal_ctrl) == 0:
+                    self.nominal_ctrlers = [copy.deepcopy(NominalController())]*self.num_controllers
+                else:
                     self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
+            
+            elif self.num_controllers > self.num_nom_controllers:
+                self.num_controllers = self.num_controllers[:self.num_nom_controllers]
 
             else:
-                if self.num_controllers != self.num_nom_controllers:
-                    self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
+                self.nominal_ctrlers = nominal_ctrl
+
         
         else:
             self.num_nom_controllers = 1
@@ -1369,7 +1370,8 @@ class Simulation(utilities.Generic):
             
             elif system.num_controllers < num_controllers_passed:
                 print(f"You passed {len(controller)} controllers to the Simulation class, which is more than are registered in the System object ({system.num_controllers}.")
-                self.controllers = self.controllers[:2]
+
+                self.controllers = self.controllers[:system.num_controllers]
                 self.num_controllers -= 1
 
             self.controllers = controller
@@ -1833,8 +1835,6 @@ class Simulation(utilities.Generic):
 
         combined_coords = np.c_[self.latest_x_coords, self.latest_y_coords]
         self.sol_scatter.set_offsets(combined_coords)
-        self.sol_scatter = self.xy_plane_axes.scatter(
-            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid])        
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
 

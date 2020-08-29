@@ -202,10 +202,10 @@ def main(args=None):
 
         nominal_ctrl1 = NominalController()
         nominal_ctrl2 = NominalController()
-        # nominal_ctrl3 = NominalController()
+        nominal_ctrl3 = NominalController()
 
     # sim = Simulation(sys1, controller1, nominal_ctrl1, t1=30)
-    sim = Simulation(sys1, [controller1, controller2, controller3], [nominal_ctrl1,nominal_ctrl2], t1=30)
+    sim = Simulation(sys1, [controller1, controller2, controller3], [nominal_ctrl1, nominal_ctrl2, nominal_ctrl3], t1=30)
     sim.run_simulation()
 
 
