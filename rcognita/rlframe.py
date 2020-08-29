@@ -159,9 +159,8 @@ class System(utilities.Generic):
         self.initial_x = initial_x
         self.initial_y = initial_y
         self.num_controllers = 1
-        self.u0 = np.zeros(dim_input)
         self.q0 = np.zeros(dim_disturb)
-        self.u = np.zeros(dim_input)
+        self.u0 = np.zeros(dim_input)
         self.is_dyn_ctrl = is_dyn_ctrl
         self.multi_sim = None
 
@@ -226,7 +225,6 @@ class System(utilities.Generic):
         self.alpha = self.system_state[:,2]
 
         self.num_controllers += 1
-        self.u = np.zeros((self.num_controllers, self.dim_input))
 
     @staticmethod
     def get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
@@ -338,9 +336,9 @@ class System(utilities.Generic):
 
     def set_latest_action(self, u, mid=None):
         if self.num_controllers > 1:
-            self.u[mid] = u
+            self.u0[mid] = u
         else:
-            self.u = u
+            self.u0 = u
 
     def set_multi_sim(self, mid):
         self.multi_sim = mid
@@ -382,9 +380,9 @@ class System(utilities.Generic):
         else:
             # Fetch the control action stored in the system
             if self.multi_sim is not None:
-                u = self.u[mid]
+                u = self.u0[mid]
             else:
-                u = self.u
+                u = self.u0
 
         if self.control_bounds.any():
             for k in range(self.dim_input):
@@ -403,7 +401,6 @@ class System(utilities.Generic):
             self.system_state = x
 
         return new_full_state
-
 
 class cl_wrap:
     def __init__(self, mid, system):
@@ -1256,6 +1253,39 @@ class Simulation(utilities.Generic):
                  is_log_data=0,
                  is_visualization=True,
                  is_print_sim_step=False):
+
+        if hasattr(controller, '__len__'):
+            self.num_controllers = len(controller)
+
+            if self.num_controllers == 0:
+                print("Please supply a controller")
+                sys.exit()
+
+        else:
+            self.num_controllers = 1
+
+        if hasattr(nominal_ctrl, '__len__'):
+            self.num_nom_controllers = len(nominal_ctrl)
+
+            if self.num_nom_controllers == 0:
+                print("Please supply a nominal controller")
+                sys.exit()
+            
+            elif self.num_nom_controllers == 1:
+                if self.num_controllers != self.num_nom_controllers:
+                    self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
+
+            else:
+                if self.num_controllers != self.num_nom_controllers:
+                    self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl[0])]*self.num_controllers
+        
+        else:
+            self.num_nom_controllers = 1
+
+            if self.num_controllers != self.num_nom_controllers:
+                self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
+
+
         """
     
         VISUALIZATION PARAMS
@@ -1303,12 +1333,13 @@ class Simulation(utilities.Generic):
 
         closed_loop = system.closed_loop
 
-        if hasattr(controller, '__len__') is False:
+        # if a list of controllers is not passed
+        if self.num_controllers == 1:
+            # then check if the system object is expecting them
             if system.num_controllers > 1:
                 print("You called system.add_bots() but did not add controllers to Simulation")
                 sys.exit()
 
-            self.num_controllers = 1
 
             self.controller = controller
             self.nominal_ctrl = nominal_ctrl
@@ -1326,8 +1357,16 @@ class Simulation(utilities.Generic):
                                            atol=a_tol,
                                            rtol=r_tol)
 
-        else: 
-            self.num_controllers = len(controller)
+        elif self.num_controllers > 1:
+            num_controllers_passed = len(controller)
+            
+            if system.num_controllers > num_controllers_passed:
+                print(f"The system is expecting {system.num_controllers} controllers; while you only passed {len(controller)} controllers to the Simulation class.")
+                sys.exit()
+            
+            elif system.num_controllers < num_controllers_passed:
+                print(f"You passed {len(controller)} controllers to the Simulation class, which is more than are registered in the System object ({system.num_controllers}.")
+                sys.exit()
 
             self.controllers = controller
             self.nominal_ctrlers = nominal_ctrl
@@ -1342,8 +1381,6 @@ class Simulation(utilities.Generic):
             self.simulators = []
 
             for i in range(self.num_controllers):
-                # cl_wrapper = cl_wrap(i, self.system)
-                # closed_loop_wrapped = cl_wrapper.closed_loop
                 self.system.set_multi_sim(i)
 
                 simulator = sp.integrate.RK45(closed_loop,
@@ -1557,11 +1594,9 @@ class Simulation(utilities.Generic):
 
     def _create_figure_plots_multi(self, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
-        
-        # self.colors = np.linspace(0,1,self.num_controllers)
+    
         self.colors = ['b','r','g','o']
-        self.color_pairs = [['b','r'],['g','m']]
-        # self.test_colors = np.linspace(0,1,self.num_controllers)
+        self.color_pairs = [['b','r'],['g','m'],['c','y'],['k','teal']]
 
         y0_list = []
         
@@ -1702,13 +1737,13 @@ class Simulation(utilities.Generic):
 
         for i in range(self.num_controllers):
             u = np.expand_dims(self.u0s[i],axis=0)
-            self.ctrl_lines = self.ctrlAxs.plot(self.t0, u, lw=0.5, label=clabels[i])
+            self.ctrl_lines = self.ctrlAxs.plot(self.t0, u, lw=0.5, label=clabels)
 
             self.all_ctrl_lines.append(self.ctrl_lines)
 
         handles,labels = self.ctrlAxs.get_legend_handles_labels()
 
-        clabels = clabels[::-1]
+        # clabels = clabels[::-1]
         new_labels = [clabels]*self.num_controllers
         new_labels = list(itertools.chain.from_iterable(new_labels))
 
@@ -1734,7 +1769,10 @@ class Simulation(utilities.Generic):
 
     def _initialize_figure(self):
         if self.num_controllers > 1:
-            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker="o")
+            try:
+                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker="o")
+            except:
+                print("AAAA", self.num_controllers)
 
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
@@ -2083,8 +2121,8 @@ class Simulation(utilities.Generic):
 
     def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True):
         if self.num_controllers > 1:
-            self.current_run = [1, 1]
-            self.t_elapsed = [0, 0]
+            self.current_run = [1]*self.num_controllers
+            self.t_elapsed = [0]*self.num_controllers
 
         else:
             self.current_run = 1
