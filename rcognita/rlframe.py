@@ -90,26 +90,39 @@ class System(utilities.Generic):
         * hyperparameters to disturbance
         * Parameters of the disturbance model
 
+    
     Attributes
     ----------
 
-    alpha
+    alpha : float
+        * turning angle
 
     num_controllers : int
         * number of controllers the environment will interact with
     
     system_state
-
-    _dim_initial_full_state
-        * dimensions of full state
-    
-    full_state
+        * state of the environment
+        * can be a vector or matrix (if there are multiple sub-states, i.e. for multiple controllers)
 
     u0 : float vector
         * control input vector
 
     q0 : float vector
         * disturbance vector
+
+    _dim_initial_full_state : int vector
+        * dimensions of full state
+    
+    full_state : int vector
+        * includes the system state vector, control input vector and disturbance vector
+        * can be a vector or matrix (if there are multiple sub-states, i.e. for multiple controllers)
+
+    num_controllers : int
+        * number of controllers to be used with the environment
+
+    multi_sim : int
+        * variable for the closed_loop function
+        * specifies that the closed_loop is being executed for a specific controller
 
 
     """
@@ -134,7 +147,6 @@ class System(utilities.Generic):
                  sigma_q=None,
                  mu_q=None,
                  tau_q=None):
-        """ system """
 
         self.dim_state = dim_state
         self.dim_input = dim_input
@@ -179,13 +191,6 @@ class System(utilities.Generic):
         self.sigma_q = sigma_q
         self.mu_q = mu_q
         self.tau_q = tau_q
-
-
-    def set_initial_system_state(self):
-        if self.num_controllers > 1:
-            return self.system_states
-        else:
-            return self.system_state
 
     def create_full_state(self, system_state, u0, q0=None, is_dyn_ctrl=0):
         if is_dyn_ctrl:
@@ -414,19 +419,29 @@ class Controller(utilities.Generic):
     Parameters and descriptions of instance attributes
     --------------------------------------------------
 
-    system -- object of type System (class)
+    system : object of type `System` class 
+        object of type System (class)
 
-    initial_x, initial_y -- starting (x,y) coordinates of controller on simulation plot
+    initial_x : int
+        * starting x coordinate of controller
 
-    t0 -- Initial value of the controller's internal clock
+    initial_y : int
+        * starting y coordinate of controller 
 
-    n_actor -- Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
+    t0 : int 
+        Initial value of the controller's internal clock
 
-    n_critic -- Critic stack size. The critic optimizes the temporal error, a.k.a. the value (of state) function. The temporal errors are stacked up using the said buffer.
+    n_actor : int 
+        Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
 
-    buffer_size -- The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
+    n_critic : int 
+        Critic stack size. The critic optimizes the temporal error, a.k.a. the value (of state) function. The temporal errors are stacked up using the said buffer.
 
-    ctrl_mode -- Modes with online model estimation are experimental 
+    buffer_size : int 
+        The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
+
+    ctrl_mode : int 
+        Modes with online model estimation are experimental 
         * 0     - manual constant control (only for basic testing)
         * -1    - nominal parking controller (for benchmarking optimal controllers)
         * 1     - model-predictive control (MPC). Prediction via discretized true model
@@ -439,42 +454,70 @@ class Controller(utilities.Generic):
         * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
         * Modes 2, 4, 6 use an estimated online
 
-    critic_mode -- Choice of the structure of the critic's feature vector
+    critic_mode : int 
+        Choice of the structure of the critic's feature vector
         * 1 - Quadratic-linear
         * 2 - Quadratic
         * 3 - Quadratic, no mixed terms
         * 4 - Quadratic, no mixed terms in input and output
 
-    critic_update_time -- Time between critic updates
+    critic_update_time : float 
+        * Time between critic updates
 
-    r_cost_struct -- choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
+    r_cost_struct : int 
+        * Choice of the running cost structure. A typical choice is quadratic of the form [y, u].T * R1 [y, u], where R1 is the (usually diagonal) parameter matrix. For different structures, R2 is also used.
         * 1 - quadratic chi.T @ R1 @ chi
         * 2 - 4th order chi**2.T @ R2 @ chi**2 + chi.T @ R2 @ chi
 
-    sample_time -- Controller's sampling time (in seconds). The system itself is continuous as a physical process while the controller is digital.
-
-        Things to note--
-
+    sample_time : float 
+        Controller's sampling time (in seconds). The system itself is continuous as a physical process while the controller is digital.
         * the higher the sampling time, the more chattering in the control might occur. It even may lead to instability and failure to park the robot
         * smaller sampling times lead to higher computation times
         * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
 
-    estimator_buffer_fill -- Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
+    estimator_buffer_fill : int 
+        * Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
 
-    estimator_buffer_power -- Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
+    estimator_buffer_power : int
+        * Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
 
-    estimator_update_time -- In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
+    estimator_update_time : float 
+        * In seconds, the time between model estimate updates. This constant determines how often the estimated parameters are updated. The more often the model is updated, the higher the computational burden is. On the other hand, more frequent updates help keep the model actual. 
 
-    stacked_model_params -- Estimated model parameters can be stored in stacks and the best among the `stacked_model_params` last ones is picked.
+    stacked_model_params : int
+        * Estimated model parameters can be stored in stacks and the best among the `stacked_model_params` last ones is picked.
         * May improve the prediction quality somewhat
 
-    pred_step_size -- Prediction step size in `J` (in seconds). Is the time between the computation of control inputs and outputs J. Should be a multiple of `sample_time`. 
+    pred_step_size : float 
+        * Prediction step size in `J` (in seconds). Is the time between the computation of control inputs and outputs J. Should be a multiple of `sample_time`. 
 
-    model_order -- The order of the state-space estimation model. We are interested in adequate predictions of y under given u's. The higher the model order, the better estimation results may be achieved, but be aware of overfitting.
+    model_order : int 
+        * The order of the state-space estimation model. We are interested in adequate predictions of y under given u's. The higher the model order, the better estimation results may be achieved, but be aware of overfitting.
 
-    gamma -- Discounting factor
+    gamma : float 
+        * Discounting factor
         * number in (0, 1]
         * Characterizes fading of running costs along horizon
+
+    Attributes
+    ----------
+
+    A, B, C, D : float vectors
+        * vectors denoting model parameters
+
+    my_model : object of type `_model` class
+
+    R1, R2 : float vectors
+        * running cost parameters
+
+    u_min, u_max : float vectors
+        * denoting the min and max control action values
+
+    u_buffer : float vector
+        * buffer of previous controls
+
+    y_buffer : float vector
+        * buffer of previous outputs
 
     References
     ----------
@@ -502,7 +545,7 @@ class Controller(utilities.Generic):
                  gamma=1):
         """
 
-        EVERYTHING BELOW: SYSTEM RELATED
+        SYSTEM-RELATED ATTRIBUTES
 
         """
         self.dim_state = system.dim_state
@@ -518,7 +561,7 @@ class Controller(utilities.Generic):
 
         """
 
-        EVERYTHING BELOW: CONTROLLER RELATED
+        CONTROLLER-RELATED ATTRIBUTES
 
         """
         self.est_clock = t0
