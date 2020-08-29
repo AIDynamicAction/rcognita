@@ -177,7 +177,7 @@ class System(utilities.Generic):
         self.multi_sim = None
 
         # initial values of the system's state
-        self.initial_alpha = initial_alpha = np.pi / 2
+        self.initial_alpha = self.alpha = initial_alpha = np.pi / 2
         initial_state = np.zeros(dim_state)
         initial_state[0] = initial_x
         initial_state[1] = initial_y
@@ -475,6 +475,9 @@ class Controller(utilities.Generic):
         * smaller sampling times lead to higher computation times
         * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
 
+    pred_step_size : float 
+        * Prediction step size in `J` (in seconds). Is the time between the computation of control inputs and outputs J. Should be a multiple of `sample_time`. 
+    
     estimator_buffer_fill : int 
         * Initial phase to fill the estimator's buffer before applying optimal control (in seconds)      
 
@@ -487,9 +490,6 @@ class Controller(utilities.Generic):
     stacked_model_params : int
         * Estimated model parameters can be stored in stacks and the best among the `stacked_model_params` last ones is picked.
         * May improve the prediction quality somewhat
-
-    pred_step_size : float 
-        * Prediction step size in `J` (in seconds). Is the time between the computation of control inputs and outputs J. Should be a multiple of `sample_time`. 
 
     model_order : int 
         * The order of the state-space estimation model. We are interested in adequate predictions of y under given u's. The higher the model order, the better estimation results may be achieved, but be aware of overfitting.
@@ -767,10 +767,8 @@ class Controller(utilities.Generic):
                     # Drop probing noise
                 self.is_prob_noise = 0
 
-    def _actor(self, y, u_init, N, W, delta, ctrl_mode):
+    def _actor(self, y, u_init, N, W, pred_step_size, ctrl_mode):
         """
-        Parameter `delta` here is a shorthand for `pred_step_size`    
-
         This method normally should not be altered. The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -802,14 +800,14 @@ class Controller(utilities.Generic):
                     'options': actor_opt_options
                 }
 
-                U = basinhopping(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode),
+                U = basinhopping(lambda U: self._get_actor_cost(U, y, N, W, pred_step_size, ctrl_mode),
                                  myu_init,
                                  minimizer_kwargs=minimizer_kwargs,
                                  niter=10).x
 
             else:
                 warnings.filterwarnings('ignore')
-                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, delta, ctrl_mode),
+                U = minimize(lambda U: self._get_actor_cost(U, y, N, W, pred_step_size, ctrl_mode),
                              myu_init,
                              method=actor_opt_method,
                              tol=1e-7,
@@ -821,11 +819,7 @@ class Controller(utilities.Generic):
 
         return U[:self.dim_input]    # Return first action
 
-    def _get_actor_cost(self, U, y, N, W, delta, ctrl_mode):
-        """
-        Parameter `delta` here is a shorthand for `pred_step_size`
-        """
-
+    def _get_actor_cost(self, U, y, N, W, pred_step_size, ctrl_mode):
         myU = np.reshape(U, [N, self.dim_input])
         Y = np.zeros([N, self.dim_output])
 
@@ -837,7 +831,7 @@ class Controller(utilities.Generic):
 
             for k in range(1, self.n_actor):
                 # Euler scheme
-                x = x + delta * \
+                x = x + pred_step_size * \
                     self.sys_rhs([], x, myU[k - 1, :], [], self.m,
                                  self.I, self.dim_state, self.is_disturb)
                 
@@ -845,10 +839,10 @@ class Controller(utilities.Generic):
 
         elif (ctrl_mode == 2) or (ctrl_mode == 4) or (ctrl_mode == 6):
             # Via estimated model
-            myU_upsampled = myU.repeat(int(delta / self.sample_time), axis=0)
+            myU_upsampled = myU.repeat(int(pred_step_size / self.sample_time), axis=0)
             Yupsampled, _ = self._dss_sim(
                 self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0_est, y)
-            Y = Yupsampled[::int(delta / self.sample_time)]
+            Y = Yupsampled[::int(pred_step_size / self.sample_time)]
 
         J = 0
 
@@ -1347,46 +1341,40 @@ class Simulation(utilities.Generic):
         
         """
 
-        if hasattr(controller, '__len__'):
+        if hasattr(controller, '__len__') and hasattr(nominal_ctrl, '__len__'):
             self.num_controllers = len(controller)
-
-            if self.num_controllers == 0:
-                print("Please pass a controller to the Simulation class")
-                return None
-
-            elif self.num_controllers == 1:
-                self.controller = controller
-
-            else:
-                self.controllers = controller
-
-        else:
-            self.num_controllers = 1
-
-        if hasattr(nominal_ctrl, '__len__'):
             self.num_nom_controllers = len(nominal_ctrl)
 
-            if self.num_nom_controllers < self.num_controllers:
-                if len(nominal_ctrl) == 0:
-                    self.nominal_ctrlers = [NominalController()]*self.num_controllers
+            if self.num_nom_controllers > 1 and self.num_controllers == 1 and system.num_controllers == 1:
+                self.nominal_ctrl = nominal_ctrl[0]
+                self.controller = controller[0]
+
+            elif self.num_nom_controllers > 1 and self.num_controllers > 1 and system.num_controllers == 1:
+                print("You forgot to call function `add_bots` on System object.")
+                return None
+
+            elif self.num_nom_controllers > 1 and self.num_controllers > 1 and system.num_controllers > 1:
+
+                if self.num_nom_controllers == self.num_controllers == system.num_controllers > 1:
+                    self.nominal_ctrlers = nominal_ctrl
+                    self.controllers = controller
+
                 else:
-                    self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
-            
-            elif self.num_controllers > self.num_nom_controllers:
-                self.controllers = self.controllers[:self.num_nom_controllers]
+                    print("Number of controllers, nominal controllers, and registered system controllers should be equal.")
+                    return None
 
-            else:
-                self.nominal_ctrlers = nominal_ctrl
+            elif self.num_nom_controllers == 1 and self.num_controllers > 1 and system.num_controllers == 1:
+                self.controller = controller[0]
+                self.nominal_ctrl = nominal_ctrl[0]
 
-        
+        elif hasattr(controller, '__len__') or hasattr(nominal_ctrl, '__len__'):
+            print("Number of controllers and nominal controllers need to be identical.")
+            return None
+
         else:
-            self.num_nom_controllers = 1
-
-            if self.num_controllers != self.num_nom_controllers:
-                self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
-
-            else:
-                self.nominal_ctrl = nominal_ctrl
+            self.controller = controller
+            self.nominal_ctrl = nominal_ctrl
+            self.num_controllers = 1
 
 
         """
@@ -1445,11 +1433,7 @@ class Simulation(utilities.Generic):
                 self.controllers = [copy.deepcopy(controller)]*system.num_controllers
                 self.num_controllers += 1
 
-
-            self.controller = controller
-            self.nominal_ctrl = nominal_ctrl
-
-            self.sample_time, self.ctrl_mode = self._get_controller_info(controller)
+            self.sample_time, self.ctrl_mode = self._get_controller_info(self.controller)
 
             self.system_state, self.full_state, self.alpha, self.initial_x, self.initial_y = self._get_system_info(system)
 
@@ -1463,21 +1447,6 @@ class Simulation(utilities.Generic):
                                            rtol=r_tol)
 
         elif self.num_controllers > 1:
-            num_controllers_passed = len(controller)
-            
-            if system.num_controllers > num_controllers_passed:
-                print(f"The system is expecting {system.num_controllers} controllers; while you only passed {len(controller)} controllers to the Simulation class.")
-                self.controllers = [copy.deepcopy(controller[0])]*system.num_controllers
-                self.num_controllers += 1
-            
-            elif system.num_controllers < num_controllers_passed:
-                print(f"You passed {len(controller)} controllers to the Simulation class, which is more than are registered in the System object ({system.num_controllers}.")
-
-                self.controllers = self.controllers[:system.num_controllers]
-                self.num_controllers -= 1
-
-            self.controllers = controller
-
             self.sample_times, self.ctrl_modes = self._get_controller_info(self.controllers, multi=True)
 
             self.system_states, self.full_states, self.alphas, self.initial_xs, self.initial_ys, self.u0s = self._get_system_info(system, multi=True)
