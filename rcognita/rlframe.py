@@ -1908,6 +1908,7 @@ class Simulation(utilities.Generic):
         self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
 
         self.scatter_plots.append(self.xy_plane_axes.scatter(x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
+        
         # combined_coords = np.c_[self.latest_x_coords, self.latest_y_coords]
         # self.sol_scatter.set_offsets(combined_coords)
 
