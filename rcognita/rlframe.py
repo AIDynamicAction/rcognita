@@ -1338,7 +1338,9 @@ class Simulation(utilities.Generic):
             # then check if the system object is expecting them
             if system.num_controllers > 1:
                 print("You called system.add_bots() but did not add controllers to Simulation")
-                sys.exit()
+                print("Calling for you.")
+                self.controllers = [copy.deepcopy(controller)]*system.num_controllers
+                self.num_controllers += 1
 
 
             self.controller = controller
@@ -1362,11 +1364,13 @@ class Simulation(utilities.Generic):
             
             if system.num_controllers > num_controllers_passed:
                 print(f"The system is expecting {system.num_controllers} controllers; while you only passed {len(controller)} controllers to the Simulation class.")
-                sys.exit()
+                self.controllers = [copy.deepcopy(controller[0])]*system.num_controllers
+                self.num_controllers += 1
             
             elif system.num_controllers < num_controllers_passed:
                 print(f"You passed {len(controller)} controllers to the Simulation class, which is more than are registered in the System object ({system.num_controllers}.")
-                sys.exit()
+                self.controllers = self.controllers[:2]
+                self.num_controllers -= 1
 
             self.controllers = controller
 
@@ -1829,7 +1833,8 @@ class Simulation(utilities.Generic):
 
         combined_coords = np.c_[self.latest_x_coords, self.latest_y_coords]
         self.sol_scatter.set_offsets(combined_coords)
-
+        self.sol_scatter = self.xy_plane_axes.scatter(
+            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid])        
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
 
