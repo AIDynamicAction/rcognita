@@ -1376,6 +1376,11 @@ class Simulation(utilities.Generic):
             self.nominal_ctrl = nominal_ctrl
             self.num_controllers = 1
 
+            if system.num_controllers > 1:
+
+                print("Warning: you called system.add_bots() but did not add controllers to Simulation")
+                system = System()
+
 
         """
     
@@ -1424,15 +1429,7 @@ class Simulation(utilities.Generic):
 
         closed_loop = system.closed_loop
 
-        # if a list of controllers is not passed
         if self.num_controllers == 1:
-            # then check if the system object is expecting them
-            if system.num_controllers > 1:
-                print("You called system.add_bots() but did not add controllers to Simulation")
-                print("Calling for you.")
-                self.controllers = [copy.deepcopy(controller)]*system.num_controllers
-                self.num_controllers += 1
-
             self.sample_time, self.ctrl_mode = self._get_controller_info(self.controller)
 
             self.system_state, self.full_state, self.alpha, self.initial_x, self.initial_y = self._get_system_info(system)
@@ -1735,17 +1732,16 @@ class Simulation(utilities.Generic):
 
         self.sol_axes.title.set_text('Proximity-to-Target')
 
-        self.sol_axes.plot([self.t0, self.t1], [0, 0],
-                           'k--', lw=0.75)   # Help line
+        self.sol_axes.plot([self.t0, self.t1], [0, 0], 'k--', lw=0.75)   # Help line
 
         # logic for multiple controllers
         self.norm_lines = []
         self.alpha_lines = []
         
         for i in range(self.num_controllers):
-            self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_xs[i], self.initial_ys[i]]), f'{self.colors[i]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+            self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_xs[i], self.initial_ys[i]]), f'{self.color_pairs[i][0]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
             
-            self.alpha_line, = self.sol_axes.plot(self.t0, self.alphas[i], f'{self.colors[i]}--', lw=0.5, label=r'$\alpha$ [rad]')
+            self.alpha_line, = self.sol_axes.plot(self.t0, self.alphas[i], f'{self.color_pairs[i][1]}--', lw=0.5, label=r'$\alpha$ [rad]')
 
             self.norm_lines.append(self.norm_line)
             self.alpha_lines.append(self.alpha_line)
