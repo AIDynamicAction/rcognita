@@ -1277,7 +1277,7 @@ class Simulation(utilities.Generic):
 
             else:
                 if self.num_controllers != self.num_nom_controllers:
-                    self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl[0])]*self.num_controllers
+                    self.nominal_ctrlers = [copy.deepcopy(nominal_ctrl)]*self.num_controllers
         
         else:
             self.num_nom_controllers = 1
@@ -1369,7 +1369,6 @@ class Simulation(utilities.Generic):
                 sys.exit()
 
             self.controllers = controller
-            self.nominal_ctrlers = nominal_ctrl
 
             self.sample_times, self.ctrl_modes = self._get_controller_info(self.controllers, multi=True)
 
@@ -1769,10 +1768,7 @@ class Simulation(utilities.Generic):
 
     def _initialize_figure(self):
         if self.num_controllers > 1:
-            try:
-                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker="o")
-            except:
-                print("AAAA", self.num_controllers)
+            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker="o")
 
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
@@ -1831,7 +1827,7 @@ class Simulation(utilities.Generic):
 
         self.robot_markers[mid].rotate(alpha_deg)    # Rotate the robot on the plot
 
-        combined_coords = np.c_[self.latest_x_coords, self.latest_x_coords]
+        combined_coords = np.c_[self.latest_x_coords, self.latest_y_coords]
         self.sol_scatter.set_offsets(combined_coords)
 
         # Euclidean (aka Frobenius) norm
@@ -2059,7 +2055,10 @@ class Simulation(utilities.Generic):
 
                 if self.current_run[i] <= self.n_runs:
                     if t < self.t1:
-                        self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
+                        try:
+                            self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
+                        except:
+                            print(len(nominal_ctrlers))
 
                     else:
                         self.current_run[i] += 1
@@ -2138,6 +2137,7 @@ class Simulation(utilities.Generic):
 
             t = self.simulator.t
 
+            # CODE IS INVALID - NEEDS TO BE UPDATED
             while self.current_run <= self.n_runs:
                 while t < self.t1:
                     self._take_step(self.system, self.controller,
