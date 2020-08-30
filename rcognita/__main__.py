@@ -168,6 +168,7 @@ def main(args=None):
         # environment
         sys = System()
         sys.add_bots(-7,-7)
+        sys.add_bots(7,-7)
         
         agent1 = Controller(sys,
                            sample_time=0.3,
@@ -191,11 +192,23 @@ def main(args=None):
                             t1=15,
                             estimator_update_time=0.3)
 
+        agent3 = Controller(sys,
+                           sample_time=0.6,
+                           pred_step_size=0.3,
+                            critic_mode=3,
+                            ctrl_mode=3,
+                            buffer_size=20,
+                            n_actor=10,
+                            n_critic=10,
+                            t1=15,
+                            estimator_update_time=0.3)
+
         nominal_ctrl = NominalController()
         nominal_ctrl2 = NominalController()
+        nominal_ctrl3 = NominalController()
 
     # sim = Simulation(sys, agent1, nominal_ctrl)
-    sim = Simulation(sys, [agent1, agent2], [nominal_ctrl, nominal_ctrl2])
+    sim = Simulation(sys, [agent1, agent2, agent3], [nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
     sim.run_simulation(n_runs=2, close_plt_on_finish=False, show_annotations=True, print_statistics=True)
 
 
