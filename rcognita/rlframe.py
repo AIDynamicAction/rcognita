@@ -1849,7 +1849,7 @@ class Simulation(utilities.Generic):
             if self.show_annotations:
                 self.annotations = []
                 for i in range(self.num_controllers):
-                    self.annotation = self.xy_plane_axes.annotate(f'{i}', xy=(self.initial_xs[i]+0.5, self.initial_ys[i]+0.5), color='k')
+                    self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i]+0.5, self.initial_ys[i]+0.5), color='k')
                     self.annotations.append(self.annotation)
 
         else:
@@ -2148,7 +2148,7 @@ class Simulation(utilities.Generic):
                     self.t_elapsed[i] = new_t
 
                     if self.show_annotations:
-                        self.annotations.append(self.xy_plane_axes.annotate(f'{i}', xy=(x_coord+0.5, y_coord+0.5), color='k'))
+                        self.annotations.append(self.xy_plane_axes.annotate(f'{i+1}', xy=(x_coord+0.5, y_coord+0.5), color='k'))
 
                 else:
                     self.current_run += 1
@@ -2159,7 +2159,7 @@ class Simulation(utilities.Generic):
                 self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
 
                 if self.show_annotations:
-                    self.annotation = self.xy_plane_axes.annotate(f'{i}', xy=(self.initial_xs[i]+0.5, self.initial_ys[i]+0.5), color='k')
+                    self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i]+0.5, self.initial_ys[i]+0.5), color='k')
 
             self.init_figure = False
             if self.close_plt_on_finish is True:
