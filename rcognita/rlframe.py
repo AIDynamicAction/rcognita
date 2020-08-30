@@ -1846,6 +1846,12 @@ class Simulation(utilities.Generic):
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker=self.robot_marker.marker)
             self.scatter_plots.append(self.sol_scatter)
 
+            if self.show_annotations:
+                self.annotations = []
+                for i in range(self.num_controllers):
+                    self.annotation = self.xy_plane_axes.annotate(f'{i}', xy=(self.initial_xs[i]+0.5, self.initial_ys[i]+0.5), color='k')
+                    self.annotations.append(self.annotation)
+
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
 
@@ -1905,9 +1911,6 @@ class Simulation(utilities.Generic):
 
         self.scatter_plots.append(self.xy_plane_axes.scatter(x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
         
-        # combined_coords = np.c_[self.latest_x_coords, self.latest_y_coords]
-        # self.sol_scatter.set_offsets(combined_coords)
-
         # Euclidean (aka Frobenius) norm
         self.l2_norm = la.norm([x_coord, y_coord])
 
@@ -1924,6 +1927,7 @@ class Simulation(utilities.Generic):
         # Control
         for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
             self._update_line(line, t, uSingle)
+
 
     def _log_data_row(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
         with open(dataFile, 'a', newline='') as outfile:
@@ -2015,7 +2019,7 @@ class Simulation(utilities.Generic):
             self._update_all_lines_multi(text_time, full_state, alpha_deg,
                                    x_coord, y_coord, t, alpha, r, icost, u, mid)
 
-        return t
+        return t, x_coord, y_coord
 
     def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
         simulator.step()
@@ -2127,14 +2131,24 @@ class Simulation(utilities.Generic):
 
         if self.current_run <= self.n_runs:
             for scat in self.scatter_plots:
-                    scat.remove()
+                scat.remove()
 
             self.scatter_plots = []
 
+            if self.show_annotations:
+                for ann in self.annotations:
+                    ann.remove()
+
+                self.annotations = []
+
             for i in range(self.num_controllers):
                 if self.t_elapsed[i] < self.t1:
-                    new_t = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
+                    new_t, x_coord, y_coord = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
+                    
                     self.t_elapsed[i] = new_t
+
+                    if self.show_annotations:
+                        self.annotations.append(self.xy_plane_axes.annotate(f'{i}', xy=(x_coord+0.5, y_coord+0.5), color='k'))
 
                 else:
                     self.current_run += 1
@@ -2143,6 +2157,9 @@ class Simulation(utilities.Generic):
         else:
             for i in range(self.num_controllers):
                 self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
+
+                if self.show_annotations:
+                    self.annotation = self.xy_plane_axes.annotate(f'{i}', xy=(self.initial_xs[i]+0.5, self.initial_ys[i]+0.5), color='k')
 
             self.init_figure = False
             if self.close_plt_on_finish is True:
@@ -2208,9 +2225,10 @@ class Simulation(utilities.Generic):
             self.sim_fig.tight_layout()
             plt.show()
 
-    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True):
+    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True, show_annotations=False):
         self.current_run = 1
         self.terminated_episode = False
+        self.show_annotations = show_annotations
         
         if self.num_controllers > 1:
             self.t_elapsed = np.array([0]*self.num_controllers)
