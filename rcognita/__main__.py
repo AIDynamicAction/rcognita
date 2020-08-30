@@ -41,8 +41,9 @@ def main(args=None):
         # controller
         parser.add_argument('-gamma', type=int, default=1,
                             help="Discounting factor gamma.")
-        
-        parser.add_argument('-estimator_buffer_power', type=int, default=8, help="Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control")
+
+        parser.add_argument('-estimator_buffer_power', type=int, default=8,
+                            help="Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control")
 
         parser.add_argument('-estimator_buffer_fill', type=int,
                             default=2, help="In seconds, an initial phase to fill the estimator's buffer before applying optimal control.")
@@ -161,18 +162,19 @@ def main(args=None):
         # environment
         sys = System(dim_state, dim_input, dim_output, dim_disturb,
                      m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
-        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, estimator_buffer_power, estimator_buffer_fill, buffer_size, model_order, stacked_model_params, estimator_update_time, gamma, n_critic, critic_mode, r_cost_struct)
+        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, estimator_buffer_power,
+                           estimator_buffer_fill, buffer_size, model_order, stacked_model_params, estimator_update_time, gamma, n_critic, critic_mode, r_cost_struct)
         nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
 
     else:
         # environment
         sys = System()
-        sys.add_bots(-7,-7)
-        sys.add_bots(7,-7)
-        
+        sys.add_bots(-7, -7)
+        sys.add_bots(7, -7)
+
         agent1 = Controller(sys,
-                           sample_time=0.3,
-                           pred_step_size=0.6,
+                            sample_time=0.3,
+                            pred_step_size=0.6,
                             critic_mode=3,
                             ctrl_mode=3,
                             buffer_size=20,
@@ -182,8 +184,8 @@ def main(args=None):
                             estimator_update_time=0.3)
 
         agent2 = Controller(sys,
-                           sample_time=0.6,
-                           pred_step_size=0.3,
+                            sample_time=0.6,
+                            pred_step_size=0.3,
                             critic_mode=3,
                             ctrl_mode=3,
                             buffer_size=20,
@@ -193,8 +195,8 @@ def main(args=None):
                             estimator_update_time=0.3)
 
         agent3 = Controller(sys,
-                           sample_time=0.6,
-                           pred_step_size=0.3,
+                            sample_time=0.6,
+                            pred_step_size=0.3,
                             critic_mode=3,
                             ctrl_mode=3,
                             buffer_size=20,
@@ -208,8 +210,10 @@ def main(args=None):
         nominal_ctrl3 = NominalController()
 
     # sim = Simulation(sys, agent1, nominal_ctrl)
-    sim = Simulation(sys, [agent1, agent2, agent3], [nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
-    sim.run_simulation(n_runs=2, close_plt_on_finish=False, show_annotations=True, print_statistics=True)
+    sim = Simulation(sys, [agent1, agent2, agent3], [
+                     nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
+    sim.run_simulation(n_runs=2, close_plt_on_finish=False,
+                       show_annotations=True, print_statistics=True)
 
 
 if __name__ == "__main__":

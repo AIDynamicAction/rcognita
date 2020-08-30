@@ -1299,12 +1299,6 @@ class Simulation(utilities.Generic):
 
     nominal_ctrl : object of type `NominalController` class
 
-    t0 : int
-        * start time of episode
-
-    t1 : int
-        * end time of episode
-
     a_tol : float
         * ODE solver sensitivity hyperparameter
 
