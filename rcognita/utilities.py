@@ -127,7 +127,15 @@ class _pltMarker:
     def rotate(self, angle=0):
         self.marker._transform = self.marker.get_transform().rotate_deg(angle-self.angle)
         self.angle = angle
-    
+
+
+class cl_wrap:
+    def __init__(self, mid, system):
+        self.mid = mid
+        self.system = system
+
+    def closed_loop(self, t, full_state):
+        return self.system.closed_loop(t, full_state, self.mid)
 
 # functions
 def _toColVec(argin):

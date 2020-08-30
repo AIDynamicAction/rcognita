@@ -409,17 +409,6 @@ class System(utilities.Generic):
 
         return new_full_state
 
-
-class cl_wrap:
-
-    def __init__(self, mid, system):
-        self.mid = mid
-        self.system = system
-
-    def closed_loop(self, t, full_state):
-        return self.system.closed_loop(t, full_state, self.mid)
-
-
 class Controller(utilities.Generic):
     """
     Optimal controller (a.k.a. agent) class.
@@ -1317,15 +1306,6 @@ class Simulation(utilities.Generic):
     y_max : int
         * minimum y limit of graph
 
-    is_log_data : bool
-        * log data to local drive?
-
-    is_visualization : bool
-        * visual simulation?
-
-    is_print_sim_step : bool
-        * print results of simulation?
-
     """
 
     def __init__(self,
@@ -1337,10 +1317,7 @@ class Simulation(utilities.Generic):
                  x_min=-10,
                  x_max=10,
                  y_min=-10,
-                 y_max=10,
-                 is_log_data=False,
-                 is_visualization=True,
-                 is_print_sim_step=False):
+                 y_max=10):
         """
 
         CONTROL FLOW LOGIC: IGNORE
@@ -1402,13 +1379,6 @@ class Simulation(utilities.Generic):
         self.y_min = y_min
         self.y_max = y_max
 
-        # other
-        self.is_log_data = is_log_data
-        self.is_visualization = is_visualization
-        self.is_print_sim_step = is_print_sim_step
-
-        if self.is_print_sim_step:
-            warnings.filterwarnings('ignore')
 
         """
 
@@ -1966,7 +1936,7 @@ class Simulation(utilities.Generic):
 
         print(f"Total runs: {n_runs}")
         for mid in range(self.num_controllers):
-            print(f"""Statistics for controller {mid}:
+            print(f"""Statistics for controller {mid+1}:
             - Mean of running cost: {self.mean_rc[mid]}
             - Variance of running cost: {self.var_rc[mid]}
             - Mean of velocity: {self.mean_velocity[mid]}
@@ -2002,7 +1972,7 @@ class Simulation(utilities.Generic):
     def _reset_sim(self, controller, nominal_ctrl, simulator, mid=None):
         if self.is_print_sim_step:
             if mid is not None:
-                print(f'........Controller {mid}: Run #{self.current_run[mid]} done........')
+                print(f'........Controller {mid+1}: Run #{self.current_runs[mid]} done........')
             else:
                 print(f'........Run {self.current_run} done........')
 
@@ -2070,9 +2040,25 @@ class Simulation(utilities.Generic):
         self.sim_fig.tight_layout()
         plt.show()
 
-    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True, show_annotations=False, print_statistics=False):
+    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True, show_annotations=False, print_statistics=False, is_log_data=False, is_visualization=True, is_print_sim_step=False):
+        """
+        is_log_data : bool
+            * log data to local drive?
+
+        is_visualization : bool
+            * visual simulation?
+
+        is_print_sim_step : bool
+            * print results of simulation?
+        """
+        self.is_log_data = is_log_data
+        self.is_visualization = is_visualization
+        self.is_print_sim_step = is_print_sim_step
         self.print_statistics = print_statistics
         self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}}
+
+        if self.is_print_sim_step:
+            warnings.filterwarnings('ignore')
 
         for i in range(self.num_controllers):
             self.statistics['running_cost'].setdefault(i, [])

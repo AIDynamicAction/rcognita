@@ -160,11 +160,12 @@ def main(args=None):
         ctrl_mode = args.ctrl_mode
 
         # environment
-        sys = System(dim_state, dim_input, dim_output, dim_disturb,
-                     m, I, f_min, f_max, m_min, m_max, is_dyn_ctrl, is_disturb)
-        agent = Controller(sys, dim_input, dim_output, dim_state, ctrl_mode, m, I, is_disturb, f_min, f_max, m_min, m_max, t0, n_actor, estimator_buffer_power,
-                           estimator_buffer_fill, buffer_size, model_order, stacked_model_params, estimator_update_time, gamma, n_critic, critic_mode, r_cost_struct)
-        nominalCtrl = NominalController(m, I, f_min, f_max, m_min, m_max, t0)
+
+        # UPDATE THIS
+
+        # sim = Simulation(sys, agent1, nominal_ctrl)
+        sim = Simulation(sys, agent, nominalCtrl)
+        sim.run_simulation(n_runs=n_runs, close_plt_on_finish=False, print_statistics=True, is_print_sim_step=is_print_sim_step)
 
     else:
         # environment
@@ -209,13 +210,11 @@ def main(args=None):
         nominal_ctrl2 = NominalController()
         nominal_ctrl3 = NominalController()
 
-    # sim = Simulation(sys, agent1, nominal_ctrl)
-    sim = Simulation(sys, [agent1, agent2, agent3], [
-                     nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
-    sim.run_simulation(n_runs=2, close_plt_on_finish=False,
-                       show_annotations=True, print_statistics=True)
-
-
+        # sim = Simulation(sys, agent1, nominal_ctrl)
+        sim = Simulation(sys, [agent1, agent2, agent3], [
+                         nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
+        sim.run_simulation(n_runs=2, close_plt_on_finish=False,
+                           show_annotations=True, print_statistics=False, is_print_sim_step=True)
 if __name__ == "__main__":
     command_line_args = sys.argv[1:]
     main(command_line_args)
