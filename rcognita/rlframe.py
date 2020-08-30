@@ -6,6 +6,7 @@ import sys
 from collections import namedtuple
 import copy
 import itertools
+import statistics
 
 # scipy
 import scipy as sp
@@ -429,7 +430,10 @@ class Controller(utilities.Generic):
         * starting y coordinate of controller 
 
     t0 : int 
-        Initial value of the controller's internal clock
+        * Initial value of the controller's internal clock
+
+    t1 : int
+        * End value of controller's internal clock
 
     n_actor : int 
         Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.
@@ -528,6 +532,7 @@ class Controller(utilities.Generic):
     def __init__(self,
                  system,
                  t0=0,
+                 t1=15,
                  n_actor=6,
                  n_critic=50,
                  buffer_size=50,
@@ -564,6 +569,8 @@ class Controller(utilities.Generic):
         CONTROLLER-RELATED ATTRIBUTES
 
         """
+        self.t0 = t0
+        self.t1 = t1
         self.est_clock = t0
         self.is_prob_noise = 1
         self.estimator_buffer_power = estimator_buffer_power
@@ -1324,7 +1331,6 @@ class Simulation(utilities.Generic):
                  controller,
                  nominal_ctrl,
                  t0=0,
-                 t1=60,
                  a_tol=1e-5,
                  r_tol=1e-3,
                  x_min=-10,
@@ -1412,9 +1418,6 @@ class Simulation(utilities.Generic):
         
         # start time of episode
         self.t0 = t0
-
-        # stop time of episode
-        self.t1 = t1
         
         # control constraints
         self.dim_input = system.dim_input
@@ -1430,7 +1433,7 @@ class Simulation(utilities.Generic):
         closed_loop = system.closed_loop
 
         if self.num_controllers == 1:
-            self.sample_time, self.ctrl_mode = self._get_controller_info(self.controller)
+            self.sample_time, self.ctrl_mode, self.t1 = self._get_controller_info(self.controller)
 
             self.system_state, self.full_state, self.alpha, self.initial_x, self.initial_y = self._get_system_info(system)
 
@@ -1444,7 +1447,7 @@ class Simulation(utilities.Generic):
                                            rtol=r_tol)
 
         elif self.num_controllers > 1:
-            self.sample_times, self.ctrl_modes = self._get_controller_info(self.controllers, multi=True)
+            self.sample_times, self.ctrl_modes, self.t1s = self._get_controller_info(self.controllers, multi=True)
 
             self.system_states, self.full_states, self.alphas, self.initial_xs, self.initial_ys, self.u0s = self._get_system_info(system, multi=True)
 
@@ -1473,8 +1476,9 @@ class Simulation(utilities.Generic):
         if multi is False:
             sample_time = controller.sample_time
             ctrl_mode = controller.ctrl_mode
+            t1 = controller.t1
 
-            return sample_time, ctrl_mode
+            return sample_time, ctrl_mode, t1
 
         # if we have multiple controllers
         else:
@@ -1483,12 +1487,14 @@ class Simulation(utilities.Generic):
             
             sample_times = []
             ctrl_modes = []
+            t1s = []
 
             for controller in controllers:
                 sample_times.append(controller.sample_time)
                 ctrl_modes.append(controller.ctrl_mode)
+                t1s.append(controller.t1)
 
-            return sample_times, ctrl_modes
+            return sample_times, ctrl_modes, t1s
 
     def _get_system_info(self, system, multi=False):
         if multi is False:
@@ -1644,14 +1650,7 @@ class Simulation(utilities.Generic):
             iter(self.ctrl_lines), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
 
         # Pack all lines together
-        cLines = namedtuple('lines', [
-                            'traj_line', 'norm_line', 'alpha_line', 'r_cost_line', 'i_cost_line', 'ctrl_lines'])
-        self.lines = cLines(traj_line=self.traj_line,
-                            norm_line=self.norm_line,
-                            alpha_line=self.alpha_line,
-                            r_cost_line=self.r_cost_line,
-                            i_cost_line=self.i_cost_line,
-                            ctrl_lines=self.ctrl_lines)
+        self.lines = [self.traj_line, self.norm_line, self.alpha_line, self.r_cost_line, self.i_cost_line, self.ctrl_lines]
 
         self.current_data_file = self.data_files[0]
 
@@ -1707,11 +1706,15 @@ class Simulation(utilities.Generic):
         self.text_time_handles = []
         text_time = 't = {time:2.3f}'.format(time=self.t0)
         time_positions = [[0.05, 0.95],[0.70, 0.95],[0.05, 0.10],[0.70, 0.10]]
+        run_positions = [[0.05, 0.85],[0.70, 0.85],[0.05, 0.20],[0.70, 0.20]]
+
 
         for i in range(self.num_controllers):
             self.traj_line, = self.xy_plane_axes.plot(self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5, c=self.colors[i])
 
             self.robot_marker = utilities._pltMarker(angle=self.alphas[i])
+
+            self.run_handles = self.xy_plane_axes.text(run_positions[i][0], run_positions[i][1], f"Run: 0", horizontalalignment='center',transform=self.xy_plane_axes.transAxes)
 
             self.text_time_handle = self.xy_plane_axes.text(time_positions[i][0], time_positions[i][1], text_time, horizontalalignment='left', verticalalignment='center', transform=self.xy_plane_axes.transAxes)
             
@@ -1797,13 +1800,9 @@ class Simulation(utilities.Generic):
 
         self.ctrlAxs.plot([self.t0, self.t1], [0, 0], 'k--', lw=0.75)   # Help line
 
-        # Pack all lines together
-        cLines = namedtuple('lines', ['traj_line', 'norm_line', 'alpha_line', 'r_cost_line', 'i_cost_line', 'ctrl_lines'])
-
         # logic for multiple controllers
         self.all_ctrl_lines = []
         self.all_lines = []
-
 
         clabels = ['F [N]','M [Nm]']
 
@@ -1823,8 +1822,10 @@ class Simulation(utilities.Generic):
 
         self.ctrlAxs.legend(handles, labels, fancybox=True, loc='upper right')
 
+        self.all_lines = [[] for i in range(self.num_controllers)]
+
         for i in range(self.num_controllers):
-            self.all_lines.append(cLines(traj_line=self.traj_lines[i], norm_line=self.norm_lines[i], alpha_line=self.alpha_lines[i], r_cost_line=self.r_cost_lines[i],i_cost_line=self.i_cost_lines[i], ctrl_lines=self.all_ctrl_lines[i]))
+            self.all_lines.append([self.traj_lines[i], self.norm_lines[i], self.alpha_lines[i], self.r_cost_lines[i], self.i_cost_lines[i], self.all_ctrl_lines[i]])
 
         self.current_data_file = self.data_files[0]
 
@@ -1838,6 +1839,23 @@ class Simulation(utilities.Generic):
                     datacursor(item)
 
         return self.sim_fig
+
+    def _graceful_exit(self, plt_close=True):
+        if plt_close is True:
+            plt.close('all')
+
+        # graceful exit from Jupyter notebook
+        try:
+            __IPYTHON__
+            return None
+
+        # graceful exit from terminal
+        except NameError:
+            if plt_close is True:
+                print("Program exit")
+                sys.exit()
+            else:
+                return None
 
     def _initialize_figure(self):
         self.scatter_plots = []
@@ -1857,12 +1875,39 @@ class Simulation(utilities.Generic):
 
         return self.sol_scatter,
 
+    def _log_data_row(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
+        with open(dataFile, 'a', newline='') as outfile:
+            writer = csv.writer(outfile)
+            writer.writerow([t, xCoord, yCoord, alpha,
+                             v, omega, icost, u[0], u[1]])
+
+    def _log_data(self, n_runs, save=False):
+        dataFiles = [None] * n_runs
+
+        if save:
+            cwd = os.getcwd()
+            datafolder = '/data'
+            dataFolder_path = cwd + datafolder
+
+            # create data dir
+            pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True)
+
+            date = datetime.now().strftime("%Y-%m-%d")
+            time = datetime.now().strftime("%Hh%Mm%Ss")
+            dataFiles = [None] * n_runs
+            for k in range(0, n_runs):
+                dataFiles[k] = dataFolder_path + '/RLsim__' + date + \
+                    '__' + time + '__run{run:02d}.csv'.format(run=k + 1)
+                with open(dataFiles[k], 'w', newline='') as outfile:
+                    writer = csv.writer(outfile)
+                    writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
+                                     'v [m/s]', 'omega [rad/s]', 'int r sample_time', 'F [N]', 'M [N m]'])
+
+        return dataFiles
+
     def _update_line(self, line, new_x, new_y):
         line.set_xdata(np.append(line.get_xdata(), new_x))
         line.set_ydata(np.append(line.get_ydata(), new_y))
-
-    def _reset_line(self, line):
-        line.set_data([], [])
 
     def _update_text(self, text_handle, new_text):
         text_handle.set_text(new_text)
@@ -1903,6 +1948,7 @@ class Simulation(utilities.Generic):
         Update lines on all scatter plots
         """
         self._update_text(self.text_time_handles[mid], text_time)
+        self._update_text(self.run_handle, f"Run: {self.current_run}")
 
         # Update the robot's track on the plot
         self._update_line(self.traj_lines[mid], x_coord, y_coord)
@@ -1928,36 +1974,52 @@ class Simulation(utilities.Generic):
         for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
             self._update_line(line, t, uSingle)
 
+    def _on_key_press(self, event, anm, args):
+        if event.key == ' ':
+            if anm.running is True:
+                anm.event_source.stop()
+                anm.running = False
 
-    def _log_data_row(self, dataFile, t, xCoord, yCoord, alpha, v, omega, icost, u):
-        with open(dataFile, 'a', newline='') as outfile:
-            writer = csv.writer(outfile)
-            writer.writerow([t, xCoord, yCoord, alpha,
-                             v, omega, icost, u[0], u[1]])
+            elif anm.running is False:
+                anm.event_source.start()
+                anm.running = True
 
-    def _log_data(self, n_runs, save=False):
-        dataFiles = [None] * n_runs
+        elif event.key == 'q':
+            _, controller, nominal_ctrl, simulator, _ = args
 
-        if save:
-            cwd = os.getcwd()
-            datafolder = '/data'
-            dataFolder_path = cwd + datafolder
+            if self.num_controllers > 1:
+                for i in range(self.num_controllers):
+                    self._reset_sim(controller[i], nominal_ctrl, simulator[i], i)
 
-            # create data dir
-            pathlib.Path(dataFolder_path).mkdir(parents=True, exist_ok=True)
+            else:
+                self._reset_sim(controller, nominal_ctrl, simulator)
+            
+            self._graceful_exit()
 
-            date = datetime.now().strftime("%Y-%m-%d")
-            time = datetime.now().strftime("%Hh%Mm%Ss")
-            dataFiles = [None] * n_runs
-            for k in range(0, n_runs):
-                dataFiles[k] = dataFolder_path + '/RLsim__' + date + \
-                    '__' + time + '__run{run:02d}.csv'.format(run=k + 1)
-                with open(dataFiles[k], 'w', newline='') as outfile:
-                    writer = csv.writer(outfile)
-                    writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
-                                     'v [m/s]', 'omega [rad/s]', 'int r sample_time', 'F [N]', 'M [N m]'])
+    def print_simu_stats(self):
+        self.mean_rc = [] # mean rc
+        self.var_rc = [] # var rc
+        self.mean_velocity = [] # mean vel
+        self.var_velocity = [] # var vel
+        self.var_alpha = [] # var alpha
 
-        return dataFiles
+        for mid in range(self.num_controllers):
+            self.mean_rc.append(round(statistics.mean(self.statistics['running_cost'][mid]),2))
+            self.var_rc.append(round(statistics.variance(self.statistics['running_cost'][mid]),2))
+            self.mean_velocity.append(round(statistics.mean(self.statistics['velocity'][mid]),2))
+            self.var_velocity.append(round(statistics.variance(self.statistics['velocity'][mid]),2))
+            self.var_alpha.append(round(statistics.variance(self.statistics['alpha'][mid]),2))
+
+        for mid in range(self.num_controllers):
+            print(f"""Statistics for controller {mid}:
+            - Mean of running cost: {self.mean_rc[mid]}
+            - Variance of running cost: {self.var_rc[mid]}
+            - Mean of velocity: {self.mean_velocity[mid]}
+            - Variance of velocity: {self.var_velocity[mid]}
+            - Variance of alpha: {self.var_alpha[mid]}
+                """)
+
+        return None
 
     def _print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
         # alphaDeg = alpha/np.pi*180
@@ -1972,94 +2034,15 @@ class Simulation(utilities.Generic):
 
         print(table)
 
-    def _take_step_multi(self, mid, system, controller, nominal_ctrl, simulator, animate=False):
-        system.set_multi_sim(mid)
-        simulator.step()
+    def _reset_all_lines(self, lines):
+        for line in lines:
+            if isinstance(line, list) is False:
+                self._reset_line(line)
+            else:
+                self._reset_all_lines(line)
 
-        t = simulator.t
-        full_state = simulator.y
-        
-        system_state = self.system_states[mid]
-
-        y = system.get_curr_state(system_state)
-
-        u = self._ctrl_selector(
-            t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
-
-        system.set_latest_action(u, mid)
-
-        controller.record_sys_state(system_state)
-        controller.update_icost(y, u)
-
-        x_coord = full_state[0]
-        y_coord = full_state[1]
-        alpha = full_state[2]
-        v = full_state[3]
-        omega = full_state[4]
-
-        icost = controller.i_cost_val
-
-        if self.is_print_sim_step:
-            print(f"Controller\t{mid}")
-            self._print_sim_step(t, x_coord, y_coord,
-                                 alpha, v, omega, icost, u)
-
-        if self.is_log_data:
-            self._log_data_row(self.current_data_file, t, x_coord,
-                               y_coord, alpha, v, omega, icost.val, u)
-        
-        if animate == True:
-            alpha_deg = alpha / np.pi * 180
-            r = controller.running_cost(y, u)
-            text_time = 't = {time:2.3f}'.format(time=t)
-
-            self.latest_x_coords[mid] = x_coord 
-            self.latest_y_coords[mid] = y_coord
-            
-            self._update_all_lines_multi(text_time, full_state, alpha_deg,
-                                   x_coord, y_coord, t, alpha, r, icost, u, mid)
-
-        return t, x_coord, y_coord
-
-    def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
-        simulator.step()
-
-        t = simulator.t
-        full_state = simulator.y
-        
-        system_state = system.system_state
-        y = system.get_curr_state(system_state)
-
-        u = self._ctrl_selector(
-            t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
-
-        system.set_latest_action(u)
-
-        controller.record_sys_state(system_state)
-        controller.update_icost(y, u)
-
-        x_coord = full_state[0]
-        y_coord = full_state[1]
-        alpha = full_state[2]
-        v = full_state[3]
-        omega = full_state[4]
-
-        icost = controller.i_cost_val
-
-        if self.is_print_sim_step:
-            self._print_sim_step(t, x_coord, y_coord,
-                                 alpha, v, omega, icost, u)
-
-        if self.is_log_data:
-            self._log_data_row(self.current_data_file, t, x_coord,
-                               y_coord, alpha, v, omega, icost.val, u)
-
-        if animate == True:
-            alpha_deg = alpha / np.pi * 180
-            r = controller.running_cost(y, u)
-            text_time = 't = {time:2.3f}'.format(time=t)
-            
-            self._update_all_lines(text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u)
+    def _reset_line(self, line):
+        line.set_data([], [])
 
     def _reset_sim(self, controller, nominal_ctrl, simulator, mid = None):
         if self.is_print_sim_step:
@@ -2087,109 +2070,16 @@ class Simulation(utilities.Generic):
         else:
             nominal_ctrl.reset(self.t0)
 
-    def _graceful_exit(self, plt_close=True):
-        if plt_close is True:
-            plt.close('all')
-
-        # graceful exit from Jupyter notebook
-        try:
-            __IPYTHON__
-            return None
-
-        # graceful exit from terminal
-        except NameError:
-            if plt_close is True:
-                print("Program exit")
-                sys.exit()
-            else:
-                pass
-
-    def _on_key_press(self, event, anm, args):
-        if event.key == ' ':
-            if anm.running is True:
-                anm.event_source.stop()
-                anm.running = False
-
-            elif anm.running is False:
-                anm.event_source.start()
-                anm.running = True
-
-        elif event.key == 'q':
-            _, controller, nominal_ctrl, simulator, _ = args
-
-            if self.num_controllers > 1:
-                for i in range(self.num_controllers):
-                    self._reset_sim(controller[i], nominal_ctrl, simulator[i], i)
-
-            else:
-                self._reset_sim(controller, nominal_ctrl, simulator)
-            
-            self._graceful_exit()
-
-    def _wrapper_take_steps_multi(self, k, *args):
-        system, controllers, nominal_ctrlers, simulators, animate = args
-
         if self.current_run <= self.n_runs:
-            for scat in self.scatter_plots:
-                scat.remove()
-
-            self.scatter_plots = []
-
-            if self.show_annotations:
-                for ann in self.annotations:
-                    ann.remove()
-
-                self.annotations = []
-
-            for i in range(self.num_controllers):
-                if self.t_elapsed[i] < self.t1:
-                    new_t, x_coord, y_coord = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
-                    
-                    self.t_elapsed[i] = new_t
-
-                    if self.show_annotations:
-                        self.annotations.append(self.xy_plane_axes.annotate(f'{i+1}', xy=(x_coord+0.5, y_coord+0.5), color='k'))
-
-                else:
-                    self.current_run += 1
-                    self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i], i)
-            
-        else:
-            for i in range(self.num_controllers):
-                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
-
-                if self.show_annotations:
-                    self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i]+0.5, self.initial_ys[i]+0.5), color='k')
-
-            self.init_figure = False
-            if self.close_plt_on_finish is True:
-                self._graceful_exit()
-
-            elif self.close_plt_on_finish is False:
-                self._graceful_exit(plt_close=False)
-
-    def _wrapper_take_steps(self, k, *args):
-        _, controller, nominal_ctrl, simulator, _ = args
-        t = simulator.t
-
-        if self.current_run <= self.n_runs:
-            if t < self.t1:
-                self.t_elapsed = t
-                self._take_step(*args)
+            if mid is None:
+                self._reset_all_lines(self.lines)
 
             else:
-                self.current_run += 1
-                self._reset_sim(controller, nominal_ctrl, simulator)
-        else:
-            if self.close_plt_on_finish is True:
-                self._graceful_exit()
-
-            elif self.close_plt_on_finish is False:
-                self._graceful_exit(plt_close=False)
+                self._reset_all_lines(self.all_lines)
 
     def _run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers = False):
             animate = True
-            self.init_figure = True
+            self.exit_animation = False
 
             if multi_controllers is True:
                 controllers = controller
@@ -2225,13 +2115,20 @@ class Simulation(utilities.Generic):
             self.sim_fig.tight_layout()
             plt.show()
 
-    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True, show_annotations=False):
+    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True, show_annotations=False, print_statistics=False):
         self.current_run = 1
-        self.terminated_episode = False
-        self.show_annotations = show_annotations
+        self.print_statistics = print_statistics
+        self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}}
         
+        for i in range(self.num_controllers):
+            self.statistics['running_cost'].setdefault(i, [])
+            self.statistics['velocity'].setdefault(i, [])
+            self.statistics['alpha'].setdefault(i, [])
+
         if self.num_controllers > 1:
+            self.show_annotations = show_annotations
             self.t_elapsed = np.array([0]*self.num_controllers)
+            
 
         else:
             self.t_elapsed = 0
@@ -2283,3 +2180,178 @@ class Simulation(utilities.Generic):
                     multi_controllers = True)
             else:
                 self._run_animation(self.system, self.controller, self.nominal_ctrl, self.simulator, fig_width, fig_height)
+
+    def _take_step_multi(self, mid, system, controller, nominal_ctrl, simulator, animate=False):
+        system.set_multi_sim(mid)
+        simulator.step()
+
+        t = simulator.t
+        full_state = simulator.y
+        
+        system_state = self.system_states[mid]
+
+        y = system.get_curr_state(system_state)
+
+        u = self._ctrl_selector(
+            t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
+
+        system.set_latest_action(u, mid)
+
+        controller.record_sys_state(system_state)
+        controller.update_icost(y, u)
+
+        x_coord = full_state[0]
+        y_coord = full_state[1]
+        alpha = full_state[2]
+        v = full_state[3]
+        omega = full_state[4]
+
+        icost = controller.i_cost_val
+
+        if self.is_print_sim_step:
+            print(f"Controller\t{mid}")
+            self._print_sim_step(t, x_coord, y_coord,
+                                 alpha, v, omega, icost, u)
+
+        if self.is_log_data:
+            self._log_data_row(self.current_data_file, t, x_coord,
+                               y_coord, alpha, v, omega, icost.val, u)
+        
+        if animate == True:
+            alpha_deg = alpha / np.pi * 180
+            r = controller.running_cost(y, u)
+            self.statistics['running_cost'][mid].append(r)
+            self.statistics['velocity'][mid].append(v)
+            self.statistics['alpha'][mid].append(alpha)
+            text_time = 't = {time:2.3f}'.format(time=t)
+
+            self.latest_x_coords[mid] = x_coord 
+            self.latest_y_coords[mid] = y_coord
+            
+            self._update_all_lines_multi(text_time, full_state, alpha_deg,
+                                   x_coord, y_coord, t, alpha, r, icost, u, mid)
+
+        return t, x_coord, y_coord
+
+    def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
+        simulator.step()
+
+        t = simulator.t
+        full_state = simulator.y
+        
+        system_state = system.system_state
+        y = system.get_curr_state(system_state)
+
+        u = self._ctrl_selector(
+            t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
+
+        system.set_latest_action(u)
+
+        controller.record_sys_state(system_state)
+        controller.update_icost(y, u)
+
+        x_coord = full_state[0]
+        y_coord = full_state[1]
+        alpha = full_state[2]
+        v = full_state[3]
+        omega = full_state[4]
+
+        icost = controller.i_cost_val
+
+        if self.is_print_sim_step:
+            self._print_sim_step(t, x_coord, y_coord,
+                                 alpha, v, omega, icost, u)
+
+        if self.is_log_data:
+            self._log_data_row(self.current_data_file, t, x_coord,
+                               y_coord, alpha, v, omega, icost.val, u)
+
+        if animate == True:
+            alpha_deg = alpha / np.pi * 180
+            r = controller.running_cost(y, u)
+            self.statistics['running_cost'][0].append(r)
+            self.statistics['velocity'][0].append(v)
+            self.statistics['alpha'][0].append(alpha)
+            text_time = 't = {time:2.3f}'.format(time=t)
+            
+            self._update_all_lines(text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u)
+
+        return t
+        
+    def _wrapper_take_steps(self, k, *args):
+        _, controller, nominal_ctrl, simulator, _ = args
+        t = simulator.t
+
+        if self.current_run <= self.n_runs:
+            if t < self.t1:
+                t = self._take_step(*args)
+
+            else:
+                self.current_run += 1
+                self._reset_sim(controller, nominal_ctrl, simulator)
+        
+        elif self.current_run > self.n_runs and self.exit_animation is False:
+            if self.print_statistics is True:
+                self.print_simu_stats()
+
+            self.anm.running = False
+            self.exit_animation = True
+
+        else:
+            if self.close_plt_on_finish is True:
+                self._graceful_exit()
+
+            elif self.close_plt_on_finish is False:
+                self._graceful_exit(plt_close=False)
+    
+    def _wrapper_take_steps_multi(self, k, *args):
+        system, controllers, nominal_ctrlers, simulators, animate = args
+
+        if self.current_run <= self.n_runs:
+            for scat in self.scatter_plots:
+                scat.remove()
+
+            self.scatter_plots = []
+
+            if self.show_annotations:
+                for ann in self.annotations:
+                    ann.remove()
+
+                self.annotations = []
+
+            for i in range(self.num_controllers):
+                t = simulators[i].t 
+
+                if t < self.t1:
+                    t, x_coord, y_coord = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
+
+                    if self.show_annotations:
+                        self.annotations.append(self.xy_plane_axes.annotate(f'{i+1}', xy=(x_coord+0.5, y_coord+0.5), color='k'))
+
+                else:
+                    self.current_run += 1
+                    self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i], i)
+            
+        elif self.current_run > self.n_runs and self.exit_animation is False:
+
+            for i in range(self.num_controllers):
+                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
+
+                if self.show_annotations:
+                    self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i]+0.5, self.initial_ys[i]+0.5), color='k')
+
+            if self.print_statistics:
+                self.print_simu_stats()
+
+            self.anm.running = False
+            self.exit_animation = True
+
+        else:
+            if self.close_plt_on_finish is True:
+                self._graceful_exit()
+
+            elif self.close_plt_on_finish is False:
+                self._graceful_exit(plt_close=False)
+
+            return None
+

@@ -192,9 +192,9 @@ def main(args=None):
         nominal_ctrl = NominalController()
         nominal_ctrl2 = NominalController()
 
-    # sim = Simulation(sys, controller, nominal_ctrl, t1=10)
-    sim = Simulation(sys, [agent1, agent2], [nominal_ctrl, nominal_ctrl2], t1=30)
-    sim.run_simulation(close_plt_on_finish=False, show_annotations=True)
+    # sim = Simulation(sys, agent1, nominal_ctrl, t1=10)
+    sim = Simulation(sys, [agent1, agent2], [nominal_ctrl, nominal_ctrl2], t1=15)
+    sim.run_simulation(n_runs=2, close_plt_on_finish=False, show_annotations=True, print_statistics=True)
 
 
 if __name__ == "__main__":
