@@ -1330,7 +1330,6 @@ class Simulation(utilities.Generic):
                  system,
                  controller,
                  nominal_ctrl,
-                 t0=0,
                  a_tol=1e-5,
                  r_tol=1e-3,
                  x_min=-10,
@@ -1416,9 +1415,6 @@ class Simulation(utilities.Generic):
         """
         self.system = system
         
-        # start time of episode
-        self.t0 = t0
-        
         # control constraints
         self.dim_input = system.dim_input
         self.f_min = system.f_min
@@ -1433,7 +1429,7 @@ class Simulation(utilities.Generic):
         closed_loop = system.closed_loop
 
         if self.num_controllers == 1:
-            self.sample_time, self.ctrl_mode, self.t1 = self._get_controller_info(self.controller)
+            self.sample_time, self.ctrl_mode, self.t1, self.t0 = self._get_controller_info(self.controller)
 
             self.system_state, self.full_state, self.alpha, self.initial_x, self.initial_y = self._get_system_info(system)
 
@@ -1447,7 +1443,7 @@ class Simulation(utilities.Generic):
                                            rtol=r_tol)
 
         elif self.num_controllers > 1:
-            self.sample_times, self.ctrl_modes, self.t1s = self._get_controller_info(self.controllers, multi=True)
+            self.sample_times, self.ctrl_modes, self.t1s, self.t0 = self._get_controller_info(self.controllers, multi=True)
 
             self.system_states, self.full_states, self.alphas, self.initial_xs, self.initial_ys, self.u0s = self._get_system_info(system, multi=True)
 
@@ -1462,7 +1458,7 @@ class Simulation(utilities.Generic):
                 simulator = sp.integrate.RK45(closed_loop,
                                                self.t0,
                                                self.full_states[i],
-                                               self.t1,
+                                               self.t1s[i],
                                                max_step=self.sample_times[i] / 2,
                                                first_step=1e-6,
                                                atol=a_tol,
@@ -1478,7 +1474,7 @@ class Simulation(utilities.Generic):
             ctrl_mode = controller.ctrl_mode
             t1 = controller.t1
 
-            return sample_time, ctrl_mode, t1
+            return sample_time, ctrl_mode, t1, 0
 
         # if we have multiple controllers
         else:
@@ -1494,7 +1490,7 @@ class Simulation(utilities.Generic):
                 ctrl_modes.append(controller.ctrl_mode)
                 t1s.append(controller.t1)
 
-            return sample_times, ctrl_modes, t1s
+            return sample_times, ctrl_modes, t1s, 0
 
     def _get_system_info(self, system, multi=False):
         if multi is False:
@@ -1704,6 +1700,7 @@ class Simulation(utilities.Generic):
         self.traj_lines = []
         self.robot_markers = []
         self.text_time_handles = []
+        self.run_handles = []
         text_time = 't = {time:2.3f}'.format(time=self.t0)
         time_positions = [[0.05, 0.95],[0.70, 0.95],[0.05, 0.10],[0.70, 0.10]]
         run_positions = [[0.05, 0.85],[0.70, 0.85],[0.05, 0.20],[0.70, 0.20]]
@@ -1714,13 +1711,14 @@ class Simulation(utilities.Generic):
 
             self.robot_marker = utilities._pltMarker(angle=self.alphas[i])
 
-            self.run_handles = self.xy_plane_axes.text(run_positions[i][0], run_positions[i][1], f"Run: 0", horizontalalignment='center',transform=self.xy_plane_axes.transAxes)
+            self.run_handle = self.xy_plane_axes.text(run_positions[i][0], run_positions[i][1], f"Run: 0", horizontalalignment='center',transform=self.xy_plane_axes.transAxes)
 
             self.text_time_handle = self.xy_plane_axes.text(time_positions[i][0], time_positions[i][1], text_time, horizontalalignment='left', verticalalignment='center', transform=self.xy_plane_axes.transAxes)
             
             self.traj_lines.append(self.traj_line)
             self.robot_markers.append(self.robot_marker)
             self.text_time_handles.append(self.text_time_handle)
+            self.run_handles.append(self.run_handle)
         
         self.xy_plane_axes.format_coord = lambda x, y: '%2.2f, %2.2f' % (x, y)
 
@@ -1730,12 +1728,12 @@ class Simulation(utilities.Generic):
         Proximity subplot
         
         """
-        self.sol_axes = self.sim_fig.add_subplot(222, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+        self.sol_axes = self.sim_fig.add_subplot(222, autoscale_on=False, xlim=(self.t0, max(self.t1s)), ylim=(
             2 * np.min([self.x_min, self.y_min]), 2 * np.max([self.x_max, self.y_max])), xlabel='t [s]')
 
         self.sol_axes.title.set_text('Proximity-to-Target')
 
-        self.sol_axes.plot([self.t0, self.t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.sol_axes.plot([self.t0, max(self.t1s)], [0, 0], 'k--', lw=0.75)   # Help line
 
         # logic for multiple controllers
         self.norm_lines = []
@@ -1760,7 +1758,7 @@ class Simulation(utilities.Generic):
         
         """
 
-        self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(0, 1e4 * self.controllers[0].running_cost(y0_list[0], self.u0s[0])), yscale='symlog', xlabel='t [s]')
+        self.cost_axes = self.sim_fig.add_subplot(223, autoscale_on=False, xlim=(self.t0, max(self.t1s)), ylim=(0, 1e4 * self.controllers[0].running_cost(y0_list[0], self.u0s[0])), yscale='symlog', xlabel='t [s]')
 
         self.cost_axes.title.set_text('Cost')
 
@@ -1793,16 +1791,15 @@ class Simulation(utilities.Generic):
         Control subplot
         
         """
-        self.ctrlAxs = self.sim_fig.add_subplot(224, autoscale_on=False, xlim=(self.t0, self.t1), ylim=(
+        self.ctrlAxs = self.sim_fig.add_subplot(224, autoscale_on=False, xlim=(self.t0, max(self.t1s)), ylim=(
             1.1 * np.min([self.f_min, self.m_min]), 1.1 * np.max([self.f_max, self.m_max])), xlabel='t [s]')
 
         self.ctrlAxs.title.set_text('Control')
 
-        self.ctrlAxs.plot([self.t0, self.t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.ctrlAxs.plot([self.t0, max(self.t1s)], [0, 0], 'k--', lw=0.75)   # Help line
 
         # logic for multiple controllers
         self.all_ctrl_lines = []
-        self.all_lines = []
 
         clabels = ['F [N]','M [Nm]']
 
@@ -1825,7 +1822,7 @@ class Simulation(utilities.Generic):
         self.all_lines = [[] for i in range(self.num_controllers)]
 
         for i in range(self.num_controllers):
-            self.all_lines.append([self.traj_lines[i], self.norm_lines[i], self.alpha_lines[i], self.r_cost_lines[i], self.i_cost_lines[i], self.all_ctrl_lines[i]])
+            self.all_lines[i].extend([self.traj_lines[i], self.norm_lines[i], self.alpha_lines[i], self.r_cost_lines[i], self.i_cost_lines[i], self.all_ctrl_lines[i]])
 
         self.current_data_file = self.data_files[0]
 
@@ -1948,7 +1945,7 @@ class Simulation(utilities.Generic):
         Update lines on all scatter plots
         """
         self._update_text(self.text_time_handles[mid], text_time)
-        self._update_text(self.run_handle, f"Run: {self.current_run}")
+        self._update_text(self.run_handles[mid], f"Run: {self.current_runs[mid]}")
 
         # Update the robot's track on the plot
         self._update_line(self.traj_lines[mid], x_coord, y_coord)
@@ -2070,12 +2067,12 @@ class Simulation(utilities.Generic):
         else:
             nominal_ctrl.reset(self.t0)
 
-        if self.current_run <= self.n_runs:
+        if self.current_runs[mid] <= self.n_runs[mid]:
             if mid is None:
                 self._reset_all_lines(self.lines)
 
             else:
-                self._reset_all_lines(self.all_lines)
+                self._reset_all_lines(self.all_lines[mid])
 
     def _run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers = False):
             animate = True
@@ -2116,7 +2113,6 @@ class Simulation(utilities.Generic):
             plt.show()
 
     def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True, show_annotations=False, print_statistics=False):
-        self.current_run = 1
         self.print_statistics = print_statistics
         self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}}
         
@@ -2126,15 +2122,16 @@ class Simulation(utilities.Generic):
             self.statistics['alpha'].setdefault(i, [])
 
         if self.num_controllers > 1:
+            self.current_runs = np.ones(self.num_controllers, dtype=np.int64)
+            self.n_runs = np.array([n_runs]*self.num_controllers)
             self.show_annotations = show_annotations
-            self.t_elapsed = np.array([0]*self.num_controllers)
-            
+            self.keep_stepping = np.ones((self.num_controllers), dtype=bool)
 
         else:
-            self.t_elapsed = 0
+            self.current_run = 1
+            self.n_runs = n_runs
 
         self.close_plt_on_finish = close_plt_on_finish
-        self.n_runs = n_runs
         self.data_files = self._log_data(n_runs, save=self.is_log_data)
 
         # CODE IN THIS CONDITIONAL BLOCK IS IN DEVELOPMENT NEEDS TO BE UPDATED
@@ -2180,6 +2177,51 @@ class Simulation(utilities.Generic):
                     multi_controllers = True)
             else:
                 self._run_animation(self.system, self.controller, self.nominal_ctrl, self.simulator, fig_width, fig_height)
+
+    def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
+        simulator.step()
+
+        t = simulator.t
+        full_state = simulator.y
+        
+        system_state = system.system_state
+        y = system.get_curr_state(system_state)
+
+        u = self._ctrl_selector(
+            t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
+
+        system.set_latest_action(u)
+
+        controller.record_sys_state(system_state)
+        controller.update_icost(y, u)
+
+        x_coord = full_state[0]
+        y_coord = full_state[1]
+        alpha = full_state[2]
+        v = full_state[3]
+        omega = full_state[4]
+
+        icost = controller.i_cost_val
+
+        if self.is_print_sim_step:
+            self._print_sim_step(t, x_coord, y_coord,
+                                 alpha, v, omega, icost, u)
+
+        if self.is_log_data:
+            self._log_data_row(self.current_data_file, t, x_coord,
+                               y_coord, alpha, v, omega, icost.val, u)
+
+        if animate == True:
+            alpha_deg = alpha / np.pi * 180
+            r = controller.running_cost(y, u)
+            self.statistics['running_cost'][0].append(r)
+            self.statistics['velocity'][0].append(v)
+            self.statistics['alpha'][0].append(alpha)
+            text_time = 't = {time:2.3f}'.format(time=t)
+            
+            self._update_all_lines(text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u)
+
+        return t
 
     def _take_step_multi(self, mid, system, controller, nominal_ctrl, simulator, animate=False):
         system.set_multi_sim(mid)
@@ -2232,51 +2274,6 @@ class Simulation(utilities.Generic):
                                    x_coord, y_coord, t, alpha, r, icost, u, mid)
 
         return t, x_coord, y_coord
-
-    def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
-        simulator.step()
-
-        t = simulator.t
-        full_state = simulator.y
-        
-        system_state = system.system_state
-        y = system.get_curr_state(system_state)
-
-        u = self._ctrl_selector(
-            t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
-
-        system.set_latest_action(u)
-
-        controller.record_sys_state(system_state)
-        controller.update_icost(y, u)
-
-        x_coord = full_state[0]
-        y_coord = full_state[1]
-        alpha = full_state[2]
-        v = full_state[3]
-        omega = full_state[4]
-
-        icost = controller.i_cost_val
-
-        if self.is_print_sim_step:
-            self._print_sim_step(t, x_coord, y_coord,
-                                 alpha, v, omega, icost, u)
-
-        if self.is_log_data:
-            self._log_data_row(self.current_data_file, t, x_coord,
-                               y_coord, alpha, v, omega, icost.val, u)
-
-        if animate == True:
-            alpha_deg = alpha / np.pi * 180
-            r = controller.running_cost(y, u)
-            self.statistics['running_cost'][0].append(r)
-            self.statistics['velocity'][0].append(v)
-            self.statistics['alpha'][0].append(alpha)
-            text_time = 't = {time:2.3f}'.format(time=t)
-            
-            self._update_all_lines(text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u)
-
-        return t
         
     def _wrapper_take_steps(self, k, *args):
         _, controller, nominal_ctrl, simulator, _ = args
@@ -2307,7 +2304,13 @@ class Simulation(utilities.Generic):
     def _wrapper_take_steps_multi(self, k, *args):
         system, controllers, nominal_ctrlers, simulators, animate = args
 
-        if self.current_run <= self.n_runs:
+        for i in range(self.num_controllers):
+            if self.current_runs[i] <= self.n_runs[i]:
+                self.keep_stepping[i] = True
+            else:
+                self.keep_stepping[i] = False
+
+        if self.keep_stepping.any() == True:
             for scat in self.scatter_plots:
                 scat.remove()
 
@@ -2320,19 +2323,22 @@ class Simulation(utilities.Generic):
                 self.annotations = []
 
             for i in range(self.num_controllers):
-                t = simulators[i].t 
+                if self.keep_stepping[i] == True:
+                    t = simulators[i].t 
 
-                if t < self.t1:
-                    t, x_coord, y_coord = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
+                    if t < self.t1s[i]:
+                        t, x_coord, y_coord = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
 
-                    if self.show_annotations:
-                        self.annotations.append(self.xy_plane_axes.annotate(f'{i+1}', xy=(x_coord+0.5, y_coord+0.5), color='k'))
+                        if self.show_annotations:
+                            self.annotations.append(self.xy_plane_axes.annotate(f'{i+1}', xy=(x_coord+0.5, y_coord+0.5), color='k'))
 
+                    else:
+                        self.current_runs[i] += 1
+                        self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i], i)
                 else:
-                    self.current_run += 1
-                    self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i], i)
+                    continue
             
-        elif self.current_run > self.n_runs and self.exit_animation is False:
+        elif self.keep_stepping.all() == False and self.exit_animation is False:
 
             for i in range(self.num_controllers):
                 self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
