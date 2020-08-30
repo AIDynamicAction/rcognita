@@ -1925,77 +1925,6 @@ class Simulation(utilities.Generic):
 
         return dataFiles
 
-    def _update_line(self, line, new_x, new_y):
-        line.set_xdata(np.append(line.get_xdata(), new_x))
-        line.set_ydata(np.append(line.get_ydata(), new_y))
-
-    def _update_text(self, text_handle, new_text):
-        text_handle.set_text(new_text)
-
-    def _update_all_lines(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
-        """
-        Update lines on all scatter plots
-        """
-        self._update_text(self.text_time_handle, text_time)
-
-        # Update the robot's track on the plot
-        self._update_line(self.traj_line, *full_state[:2])
-
-        self.robot_marker.rotate(alpha_deg)    # Rotate the robot on the plot
-        self.sol_scatter.remove()
-        self.sol_scatter = self.xy_plane_axes.scatter(
-            x_coord, y_coord, marker=self.robot_marker.marker, s=400, c='b')
-
-        # Euclidean (aka Frobenius) norm
-        self.l2_norm = la.norm([x_coord, y_coord])
-
-        # Solution
-        self._update_line(self.norm_line, t, self.l2_norm)
-        self._update_line(self.alpha_line, t, alpha)
-
-        # Cost
-        self._update_line(self.r_cost_line, t, r)
-        self._update_line(self.i_cost_line, t, icost)
-        text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
-        self._update_text(self.text_icost_handle, text_icost)
-
-        # Control
-        for (line, uSingle) in zip(self.ctrl_lines, u):
-            self._update_line(line, t, uSingle)
-
-    def _update_all_lines_multi(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, mid):
-        """
-        Update lines on all scatter plots
-        """
-        self._update_text(self.text_time_handles[mid], text_time)
-        self._update_text(self.run_handles[mid], f"A{mid+1}, run: {self.current_runs[mid]}")
-
-        # Update the robot's track on the plot
-        self._update_line(self.traj_lines[mid], x_coord, y_coord)
-
-        # Rotate the robot on the plot
-        self.robot_markers[mid].rotate(alpha_deg)
-
-        self.scatter_plots.append(self.xy_plane_axes.scatter(
-            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
-
-        # Euclidean (aka Frobenius) norm
-        self.l2_norm = la.norm([x_coord, y_coord])
-
-        # Solution
-        self._update_line(self.norm_lines[mid], t, self.l2_norm)
-        self._update_line(self.alpha_lines[mid], t, alpha)
-
-        # Cost
-        self._update_line(self.r_cost_lines[mid], t, r)
-        self._update_line(self.i_cost_lines[mid], t, icost)
-        text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
-        self._update_text(self.text_icost_handles[mid], text_icost)
-
-        # Control
-        for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
-            self._update_line(line, t, uSingle)
-
     def _on_key_press(self, event, anm, args):
         if event.key == ' ':
             if anm.running is True:
@@ -2310,6 +2239,77 @@ class Simulation(utilities.Generic):
                                          x_coord, y_coord, t, alpha, r, icost, u, mid)
 
         return t, x_coord, y_coord
+
+    def _update_line(self, line, new_x, new_y):
+        line.set_xdata(np.append(line.get_xdata(), new_x))
+        line.set_ydata(np.append(line.get_ydata(), new_y))
+
+    def _update_text(self, text_handle, new_text):
+        text_handle.set_text(new_text)
+
+    def _update_all_lines(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u):
+        """
+        Update lines on all scatter plots
+        """
+        self._update_text(self.text_time_handle, text_time)
+
+        # Update the robot's track on the plot
+        self._update_line(self.traj_line, *full_state[:2])
+
+        self.robot_marker.rotate(alpha_deg)    # Rotate the robot on the plot
+        self.sol_scatter.remove()
+        self.sol_scatter = self.xy_plane_axes.scatter(
+            x_coord, y_coord, marker=self.robot_marker.marker, s=400, c='b')
+
+        # Euclidean (aka Frobenius) norm
+        self.l2_norm = la.norm([x_coord, y_coord])
+
+        # Solution
+        self._update_line(self.norm_line, t, self.l2_norm)
+        self._update_line(self.alpha_line, t, alpha)
+
+        # Cost
+        self._update_line(self.r_cost_line, t, r)
+        self._update_line(self.i_cost_line, t, icost)
+        text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
+        self._update_text(self.text_icost_handle, text_icost)
+
+        # Control
+        for (line, uSingle) in zip(self.ctrl_lines, u):
+            self._update_line(line, t, uSingle)
+
+    def _update_all_lines_multi(self, text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, mid):
+        """
+        Update lines on all scatter plots
+        """
+        self._update_text(self.text_time_handles[mid], text_time)
+        self._update_text(self.run_handles[mid], f"A{mid+1}, run: {self.current_runs[mid]}")
+
+        # Update the robot's track on the plot
+        self._update_line(self.traj_lines[mid], x_coord, y_coord)
+
+        # Rotate the robot on the plot
+        self.robot_markers[mid].rotate(alpha_deg)
+
+        self.scatter_plots.append(self.xy_plane_axes.scatter(
+            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
+
+        # Euclidean (aka Frobenius) norm
+        self.l2_norm = la.norm([x_coord, y_coord])
+
+        # Solution
+        self._update_line(self.norm_lines[mid], t, self.l2_norm)
+        self._update_line(self.alpha_lines[mid], t, alpha)
+
+        # Cost
+        self._update_line(self.r_cost_lines[mid], t, r)
+        self._update_line(self.i_cost_lines[mid], t, icost)
+        text_icost = f'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'
+        self._update_text(self.text_icost_handles[mid], text_icost)
+
+        # Control
+        for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
+            self._update_line(line, t, uSingle)
 
     def _wrapper_take_steps(self, k, *args):
         _, controller, nominal_ctrl, simulator, _ = args
