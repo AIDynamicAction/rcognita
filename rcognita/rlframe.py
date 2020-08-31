@@ -42,8 +42,10 @@ class System(utilities.Generic):
     In RL, this is considered the *environment*.
     Normally, you should pass `closed_loop`, which represents the right-hand side, to your solver.
 
+    ----------
     Parameters
     ----------
+
     dim_state : int
         dimension of state vector
         x_t = [x_c, y_c, alpha, upsilon, omega]
@@ -92,6 +94,7 @@ class System(utilities.Generic):
         * Parameters of the disturbance model
 
 
+    ----------
     Attributes
     ----------
 
@@ -124,6 +127,30 @@ class System(utilities.Generic):
     multi_sim : int
         * variable for the closed_loop function
         * specifies that the closed_loop is being executed for a specific controller
+
+    ---------------------
+    Environment variables
+    ---------------------
+
+    x_с : x-coordinate [m]
+    
+    y_с : y-coordinate [m]
+    
+    alpha : turning angle [rad]
+    
+    v : speed [m/s]
+    
+    omega : revolution speed [rad/s]
+    
+    F : pushing force [N]
+    
+    M : steering torque [Nm]
+    
+    m : robot mass [kg]
+    
+    I : robot moment of inertia around vertical axis [kg m^2]
+    
+    q  : actuator disturbance
 
 
     """
@@ -236,7 +263,7 @@ class System(utilities.Generic):
         self.num_controllers += 1
 
     @staticmethod
-    def get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
+    def _get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
         """ get system internal dynamics
 
             Generalized derivative of: x_t+1 = f(x_t, u_t, q_t)
@@ -246,28 +273,6 @@ class System(utilities.Generic):
             u -- input
             q -- disturbance
 
-
-        System description
-        ------------------
-
-        Three-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [[1]_]
-
-        Variables:
-            * x_с -- x-coordinate [m]
-            * y_с -- y-coordinate [m]
-            * \\alpha : turning angle [rad]
-            * v -- speed [m/s]
-            * \\omega : revolution speed [rad/s]
-            * F -- pushing force [N]
-            * M -- steering torque [Nm]
-            * m -- robot mass [kg]
-            * I -- robot moment of inertia around vertical axis [kg m^2]
-            * q -- actuator disturbance (see System._add_disturbance). Is zero if is_disturb = 0
-
-            x = [x_c, y_c, \\alpha, v, \\omega]`
-            u = [F, M]
-            pars = [m, I]
-
         References
         ----------
         .. [1] W. Abbasi, F. urRehman, and I. Shah. “Backstepping based nonlinear adaptive control for the extended
@@ -275,9 +280,11 @@ class System(utilities.Generic):
 
         """
 
-        # define vars
+        # define control forces
         F = u[0]
         M = u[1]
+
+        # define environment dynamics
         alpha = x[2]
         v = x[3]
         omega = x[4]
@@ -286,23 +293,23 @@ class System(utilities.Generic):
         system_dynamics = np.zeros(dim_state)
 
         # compute new values
-        x = v * np.cos(alpha)
-        y = v * np.sin(alpha)
-        alpha = omega
+        D_x = v * np.cos(alpha)
+        D_y = v * np.sin(alpha)
+        D_alpha = omega
 
         if is_disturb:
-            v = 1 / m * (F + q[0])
-            omega = 1 / I * (M + q[1])
+            D_v = 1 / m * (F + q[0])
+            D_omega = 1 / I * (M + q[1])
         else:
-            v = 1 / m * F
-            omega = 1 / I * M
+            D_v = 1 / m * F
+            D_omega = 1 / I * M
 
-        # assign next state
-        system_dynamics[0] = x
-        system_dynamics[1] = y
-        system_dynamics[2] = alpha
-        system_dynamics[3] = v
-        system_dynamics[4] = omega
+        # assign next state dynamics
+        system_dynamics[0] = D_x
+        system_dynamics[1] = D_y
+        system_dynamics[2] = D_alpha
+        system_dynamics[3] = D_v
+        system_dynamics[4] = D_omega
 
         return system_dynamics
 
@@ -396,7 +403,7 @@ class System(utilities.Generic):
                 u[k] = np.clip(u[k], self.control_bounds[k, 0],
                                self.control_bounds[k, 1])
 
-        new_full_state[0:self.dim_state] = self.get_system_dynamics(
+        new_full_state[0:self.dim_state] = self._get_system_dynamics(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.is_disturb:
@@ -557,7 +564,7 @@ class Controller(utilities.Generic):
         self.is_disturb = system.is_disturb
         self.system_state = system.system_state
         self.ctrl_bnds = system.control_bounds
-        self.sys_rhs = system.get_system_dynamics
+        self.sys_rhs = system._get_system_dynamics
         self.sys_out = system.get_curr_state
 
         """
@@ -1486,6 +1493,15 @@ class Simulation(utilities.Generic):
 
             return system_states, full_states, alphas, initial_xs, initial_ys, u0s
 
+    def _collect_print_statistics(self, t, x_coord, y_coord, alpha, v, omega, icost, r, u, l2_norm, mid=None):
+        self.statistics['running_cost'][0].append(r)
+        self.statistics['velocity'][0].append(v)
+        self.statistics['alpha'][0].append(alpha)
+
+        if self.print_statistics_at_step:
+            print(f"Controller\t{mid+1}")
+            self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, icost, u)
+
     def _ctrl_selector(self, t, y, uMan, nominal_ctrl, controller, mode):
         """
         Main interface for different agents
@@ -1879,7 +1895,7 @@ class Simulation(utilities.Generic):
                 with open(dataFiles[k], 'w', newline='') as outfile:
                     writer = csv.writer(outfile)
                     writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
-                                     'v [m/s]', 'omega [rad/s]', 'int r sample_time', 'F [N]', 'M [N m]'])
+                                     'v [m/s]', 'omega [rad/s]', 'run_cost', 'F [N]', 'M [N m]'])
 
         return dataFiles
 
@@ -1944,7 +1960,7 @@ class Simulation(utilities.Generic):
         # alphaDeg = alpha/np.pi*180
 
         headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
-                     'v [m/s]', 'omega [rad/s]', 'int r sample_time', 'F [N]', 'M [N m]']
+                     'v [m/s]', 'omega [rad/s]', 'run_cost', 'F [N]', 'M [N m]']
         dataRow = [t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]]
         rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f',
                      '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')
@@ -2034,23 +2050,61 @@ class Simulation(utilities.Generic):
         self.sim_fig.tight_layout()
         plt.show()
 
-    def run_simulation(self, n_runs=1, fig_width=8, fig_height=8, close_plt_on_finish=True, show_annotations=False, print_summary_stats=False, is_log_data=False, is_visualization=True, print_statistics_at_step=False):
+    def run_simulation(self, 
+                        n_runs=1, 
+                        is_visualization=True, 
+                        fig_width=8, 
+                        fig_height=8, 
+                        close_plt_on_finish=True, 
+                        show_annotations=False, 
+                        print_summary_stats=False, 
+                        is_log_data=False, 
+                        print_statistics_at_step=False):
         """
-        is_log_data : bool
-            * log data to local drive?
+        n_runs : int
+            * number of episodes
 
         is_visualization : bool
-            * visual simulation?
+            * visualize simulation?
+
+        fig_width : int
+            * if visualizing: width of figure
+
+        fig_height : int
+            * if visualizing: height of figure
+
+        close_plt_on_finish : bool
+            * if visualizing: close plots automatically on finishing simulation
+
+        show_annotations : bool
+            * if visualizing: annotate controller/agent for identification
+
+        print_summary_stats : bool
+            * print summary statistics after simulation
+        
+        is_log_data : bool
+            * log data to local drive?
 
         print_statistics_at_step : bool
             * print results of simulation?
         """
+
         if hasattr(self, 'error_message') is False:
             self.is_log_data = is_log_data
             self.is_visualization = is_visualization
             self.print_statistics_at_step = print_statistics_at_step
             self.print_summary_stats = print_summary_stats
             self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}}
+            # self.current_data_file = data_files[0]
+            self.close_plt_on_finish = close_plt_on_finish
+            self.data_files = self._log_data(n_runs, save=self.is_log_data)
+            self.show_annotations = show_annotations
+
+            if self.is_visualization is False:
+                self.close_plt_on_finish = False
+                self.show_annotations = False
+                self.print_summary_stats = True
+                self.print_statistics_at_step = True
 
             if self.print_statistics_at_step:
                 warnings.filterwarnings('ignore')
@@ -2063,46 +2117,22 @@ class Simulation(utilities.Generic):
             if self.num_controllers > 1:
                 self.current_runs = np.ones(self.num_controllers, dtype=np.int64)
                 self.n_runs = np.array([n_runs] * self.num_controllers)
-                self.show_annotations = show_annotations
                 self.keep_stepping = np.ones((self.num_controllers), dtype=bool)
 
             else:
                 self.current_run = 1
                 self.n_runs = n_runs
 
-            self.close_plt_on_finish = close_plt_on_finish
-            self.data_files = self._log_data(n_runs, save=self.is_log_data)
 
-            # CODE IN THIS CONDITIONAL BLOCK IS IN DEVELOPMENT NEEDS TO BE UPDATED
+            # IF NOT VISUALIZING TRAINING
             if self.is_visualization is False:
-                self.current_data_file = data_files[0]
+                self.print_statistics_at_step = True
 
-                t = self.simulator.t
+                if self.num_controllers > 1:
+                    self._wrapper_take_steps_multi_no_viz(self.system, self.controllers, self.nominal_ctrlers, self.simulators)
 
-                while self.current_run <= self.n_runs:
-                    while t < self.t1:
-                        self._take_step(self.system, self.controller,
-                                        self.nominal_ctrl, self.simulator)
-                        t += 1
-
-                    else:
-                        self._reset_sim(self.controller,
-                                        self.nominal_ctrl, self.simulator)
-                        icost = 0
-
-                        for line in self.all_lines:
-                            for item in line:
-                                if item != self.traj_line:
-                                    if isinstance(item, list):
-                                        for subitem in item:
-                                            self._reset_line(subitem)
-                                    else:
-                                        self._reset_line(item)
-
-                        self._update_line(self.traj_line, np.nan, np.nan)
-                    self.current_run += 1
                 else:
-                    self._graceful_exit()
+                    self._wrapper_take_steps_no_viz(self.system, self.controller, self.nominal_ctrl, self.simulator)
 
             else:
                 if self.num_controllers > 1:
@@ -2208,15 +2238,6 @@ class Simulation(utilities.Generic):
 
         return t, x_coord, y_coord
 
-    def _collect_print_statistics(self, t, x_coord, y_coord, alpha, v, omega, icost, r, u, l2_norm, mid=None):
-        self.statistics['running_cost'][0].append(r)
-        self.statistics['velocity'][0].append(v)
-        self.statistics['alpha'][0].append(alpha)
-
-        if self.print_statistics_at_step:
-            print(f"Controller\t{mid}")
-            self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, icost, u)
-
     def _update_line(self, line, new_x, new_y):
         line.set_xdata(np.append(line.get_xdata(), new_x))
         line.set_ydata(np.append(line.get_ydata(), new_y))
@@ -2282,7 +2303,7 @@ class Simulation(utilities.Generic):
         for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
             self._update_line(line, t, uSingle)
 
-    def _wrapper_take_steps(self, k, *args):
+    def _wrapper_take_steps(self, *args):
         _, controller, nominal_ctrl, simulator, _ = args
         t = simulator.t
 
@@ -2308,7 +2329,7 @@ class Simulation(utilities.Generic):
             elif self.close_plt_on_finish is False:
                 self._graceful_exit(plt_close=False)
 
-    def _wrapper_take_steps_multi(self, k, *args):
+    def _wrapper_take_steps_multi(self, *args):
         system, controllers, nominal_ctrlers, simulators, animate = args
 
         for i in range(self.num_controllers):
@@ -2353,7 +2374,6 @@ class Simulation(utilities.Generic):
                     continue
 
         elif self.keep_stepping.all() == False and self.exit_animation is False:
-
             for i in range(self.num_controllers):
                 self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[
                                                               i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
@@ -2374,5 +2394,59 @@ class Simulation(utilities.Generic):
 
             elif self.close_plt_on_finish is False:
                 self._graceful_exit(plt_close=False)
+
+            return None
+
+    def _wrapper_take_steps_no_viz(self, *args):
+        system, controller, nominal_ctrl, simulator = args
+
+        if self.current_run <= self.n_runs:
+            t = simulator.t
+
+            while t < self.t1:
+                t = self._take_step(*args)
+
+            else:
+                self.current_run += 1
+
+        elif self.current_run > self.n_runs:
+            if self.print_summary_stats is True:
+                self.print_simu_stats()
+
+        else:
+            self._graceful_exit()
+
+    def _wrapper_take_steps_multi_no_viz(self, *args):
+        system, controllers, nominal_ctrlers, simulators = args
+
+        for i in range(self.num_controllers):
+            if self.current_runs[i] <= self.n_runs[i]:
+                self.keep_stepping[i] = True
+            
+            else:
+                self.keep_stepping[i] = False
+
+        if self.keep_stepping.any() == True:
+            for i in range(self.num_controllers):
+                if self.keep_stepping[i] == True:
+                    t = simulators[i].t
+
+                    while t < self.t1s[i]:
+                        t, x_coord, y_coord = self._take_step_multi(
+                            i, system, controllers[i], nominal_ctrlers[i], simulators[i])
+
+                    else:
+                        self.current_runs[i] += 1
+                
+                else:
+                    continue
+
+        else:
+            self.t_elapsed = self.t1s
+
+            if self.print_summary_stats:
+                self.print_simu_stats()
+
+            self._graceful_exit(plt_close=False)
 
             return None
