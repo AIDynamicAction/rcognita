@@ -8,6 +8,7 @@ import copy
 import itertools
 import statistics
 
+
 # scipy
 import scipy as sp
 from scipy.optimize import minimize
@@ -1498,11 +1499,14 @@ class Simulation(utilities.Generic):
             self.statistics['running_cost'][0].append(r)
             self.statistics['velocity'][0].append(v)
             self.statistics['alpha'][0].append(alpha)
+            self.statistics['l2_norm'][0] = l2_norm
         else:
             self.statistics['running_cost'][mid].append(r)
             self.statistics['velocity'][mid].append(v)
             self.statistics['alpha'][mid].append(alpha)
+            self.statistics['l2_norm'][mid] = l2_norm
 
+        self.l2_norm
         if self.print_statistics_at_step:
             if mid is not None:
                 print(f"Controller\t{mid+1}")
@@ -1955,7 +1959,8 @@ class Simulation(utilities.Generic):
             self.var_alpha.append(
                 round(statistics.variance(self.statistics['alpha'][mid]), 2))
 
-        print(f"Total runs: {n_runs}")
+        print(f"Total runs for each controller: {n_runs}")
+        
         for mid in range(self.num_controllers):
             print(f"""Statistics for controller {mid+1}:
             - Mean of running cost: {self.mean_rc[mid]}
@@ -1963,9 +1968,8 @@ class Simulation(utilities.Generic):
             - Mean of velocity: {self.mean_velocity[mid]}
             - Variance of velocity: {self.var_velocity[mid]}
             - Variance of alpha: {self.var_alpha[mid]}
+            - Final L2-norm: {round(self.statistics['l2_norm'][mid],2)}
                 """)
-
-        return None
 
     def _print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
         # alphaDeg = alpha/np.pi*180
@@ -2016,13 +2020,14 @@ class Simulation(utilities.Generic):
         else:
             nominal_ctrl.reset(self.t0)
 
-        if mid is None:
-            if self.current_run <= self.n_runs:
-                self._reset_all_lines(self.lines)
+        if self.is_visualization:
+            if mid is None:
+                if self.current_run <= self.n_runs:
+                    self._reset_all_lines(self.lines)
 
-        else:
-            if self.current_runs[mid] <= self.n_runs[mid]:
-                self._reset_all_lines(self.all_lines[mid])
+            else:
+                if self.current_runs[mid] <= self.n_runs[mid]:
+                    self._reset_all_lines(self.all_lines[mid])
 
     def _run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers=False):
         animate = True
@@ -2106,7 +2111,7 @@ class Simulation(utilities.Generic):
             self.is_visualization = is_visualization
             self.print_statistics_at_step = print_statistics_at_step
             self.print_summary_stats = print_summary_stats
-            self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}}
+            self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}, 'l2_norm': {}}
             # self.current_data_file = data_files[0]
             self.close_plt_on_finish = close_plt_on_finish
             self.data_files = self._log_data(n_runs, save=self.is_log_data)
@@ -2116,7 +2121,6 @@ class Simulation(utilities.Generic):
                 self.close_plt_on_finish = False
                 self.show_annotations = False
                 self.print_summary_stats = True
-                self.print_statistics_at_step = True
 
             if self.print_statistics_at_step:
                 warnings.filterwarnings('ignore')
@@ -2125,6 +2129,7 @@ class Simulation(utilities.Generic):
                 self.statistics['running_cost'].setdefault(i, [])
                 self.statistics['velocity'].setdefault(i, [])
                 self.statistics['alpha'].setdefault(i, [])
+                self.statistics['l2_norm'].setdefault(i, 0)
 
             if self.num_controllers > 1:
                 self.current_runs = np.ones(self.num_controllers, dtype=np.int64)
@@ -2138,8 +2143,6 @@ class Simulation(utilities.Generic):
 
             # IF NOT VISUALIZING TRAINING
             if self.is_visualization is False:
-                self.print_statistics_at_step = True
-
                 if self.num_controllers > 1:
                     self._wrapper_take_steps_multi_no_viz(self.system, self.controllers, self.nominal_ctrlers, self.simulators)
 
@@ -2412,53 +2415,41 @@ class Simulation(utilities.Generic):
     def _wrapper_take_steps_no_viz(self, *args):
         system, controller, nominal_ctrl, simulator = args
 
-        if self.current_run <= self.n_runs:
+        while self.current_run <= self.n_runs:
             t = simulator.t
+            print("... Running ...")
 
             while t < self.t1:
                 t = self._take_step(*args)
 
             else:
                 self.current_run += 1
+                self._reset_sim(controller, nominal_ctrl, simulator)
 
-        elif self.current_run > self.n_runs:
+        else:
             if self.print_summary_stats is True:
                 self.print_simu_stats()
 
-        else:
             self._graceful_exit()
 
     def _wrapper_take_steps_multi_no_viz(self, *args):
         system, controllers, nominal_ctrlers, simulators = args
 
         for i in range(self.num_controllers):
-            if self.current_runs[i] <= self.n_runs[i]:
-                self.keep_stepping[i] = True
-            
-            else:
-                self.keep_stepping[i] = False
+            t = simulators[i].t
+            print(f"... Running for controller {i+1}")
 
-        if self.keep_stepping.any() == True:
-            for i in range(self.num_controllers):
-                if self.keep_stepping[i] == True:
-                    t = simulators[i].t
+            while self.current_runs[i] <= self.n_runs[i]: 
+                while t < self.t1s[i]:
+                    t, x_coord, y_coord = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i])
 
-                    while t < self.t1s[i]:
-                        t, x_coord, y_coord = self._take_step_multi(
-                            i, system, controllers[i], nominal_ctrlers[i], simulators[i])
-
-                    else:
-                        self.current_runs[i] += 1
-                
                 else:
-                    continue
+                    self.current_runs[i] += 1
+                    self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i], i)
 
-        else:
-            self.t_elapsed = self.t1s
+        self.t_elapsed = self.t1s
 
-            if self.print_summary_stats:
-                self.print_simu_stats()
+        if self.print_summary_stats:
+            self.print_simu_stats()
 
-            self._graceful_exit(plt_close=False)
-
-            return None
+        self._graceful_exit(plt_close=False)
