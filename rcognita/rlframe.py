@@ -38,10 +38,7 @@ from tabulate import tabulate
 
 class System(utilities.Generic):
     """
-    Class of continuous-time dynamical systems with input and dynamical disturbance for use with ODE solvers.
-
-    In RL, this is considered the *environment*.
-    Normally, you should pass `closed_loop`, which represents the right-hand side, to your solver.
+    Class denoting the RL environment.
 
     ----------
     Parameters
@@ -79,8 +76,10 @@ class System(utilities.Generic):
         * control bounds
 
     f_man : int
+        * manual control variable for pushing force
 
-    n_man: int
+    m_man: int
+        * manual control variable for steering/turning torque
 
     is_dyn_ctrl : int
         * is dynamic control?
@@ -92,8 +91,6 @@ class System(utilities.Generic):
 
     sigma_q, mu_q, tau_q : int
         * hyperparameters to disturbance
-        * Parameters of the disturbance model
-
 
     ----------
     Attributes
@@ -102,18 +99,9 @@ class System(utilities.Generic):
     alpha : float
         * turning angle
 
-    num_controllers : int
-        * number of controllers the environment will interact with
-
     system_state
         * state of the environment
         * can be a vector or matrix (if there are multiple sub-states, i.e. for multiple controllers)
-
-    u0 : float vector
-        * control input vector
-
-    q0 : float vector
-        * disturbance vector
 
     _dim_initial_full_state : int vector
         * dimensions of full state
@@ -122,11 +110,18 @@ class System(utilities.Generic):
         * includes the system state vector, control input vector and disturbance vector
         * can be a vector or matrix (if there are multiple sub-states, i.e. for multiple controllers)
 
+    u0 : float vector
+        * control input vector
+
+    q0 : float vector
+        * disturbance vector
+
     num_controllers : int
         * number of controllers to be used with the environment
 
     multi_sim : int
-        * variable for the closed_loop function
+        * used with multiple controllers (num_controllers > 1)
+        * variable used for the closed_loop function
         * specifies that the closed_loop is being executed for a specific controller
 
     ---------------------
@@ -166,7 +161,7 @@ class System(utilities.Generic):
                  m=10,
                  I=1,
                  f_man=-3,
-                 n_man=-1,
+                 m_man=-1,
                  f_min=-5,
                  f_max=5,
                  m_min=-1,
@@ -194,8 +189,8 @@ class System(utilities.Generic):
         self.m_min = m_min
         self.m_max = m_max
         self.f_man = f_man
-        self.n_man = n_man
-        self.u_man = np.array([f_man, n_man])
+        self.m_man = m_man
+        self.u_man = np.array([f_man, m_man])
         self.control_bounds = np.array([[f_min, f_max], [m_min, m_max]])
         self.initial_x = initial_x
         self.initial_y = initial_y
@@ -265,7 +260,7 @@ class System(utilities.Generic):
 
     @staticmethod
     def _get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
-        """ get system internal dynamics
+        """ Get internal system dynamics
 
             Generalized derivative of: x_t+1 = f(x_t, u_t, q_t)
 
@@ -421,17 +416,12 @@ class Controller(utilities.Generic):
     """
     Optimal controller (a.k.a. agent) class.
 
-    Parameters and descriptions of instance attributes
-    --------------------------------------------------
+    ----------
+    Parameters
+    ----------
 
     system : object of type `System` class
         object of type System (class)
-
-    initial_x : int
-        * starting x coordinate of controller
-
-    initial_y : int
-        * starting y coordinate of controller
 
     t0 : int
         * Initial value of the controller's internal clock
@@ -450,14 +440,14 @@ class Controller(utilities.Generic):
 
     ctrl_mode : int
         Modes with online model estimation are experimental
-        * 0     - manual constant control (only for basic testing)
-        * -1    - nominal parking controller (for benchmarking optimal controllers)
-        * 1     - model-predictive control (MPC). Prediction via discretized true model
-        * 2     - adaptive MPC. Prediction via estimated model
-        * 3     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via discretized true model
-        * 4     - RL: Q-learning with n_critic roll-outs of running cost. Prediction via estimated model
-        * 5     - RL: stacked Q-learning. Prediction via discretized true model
-        * 6     - RL: stacked Q-learning. Prediction via estimated model
+        * 0 : manual constant control (only for basic testing)
+        * -1 : nominal parking controller (for benchmarking optimal controllers)
+        * 1 : model-predictive control (MPC). Prediction via discretized true model
+        * 2 : adaptive MPC. Prediction via estimated model
+        * 3 : RL: Q-learning with n_critic roll-outs of running cost. Prediction via discretized true model
+        * 4 : RL: Q-learning with n_critic roll-outs of running cost. Prediction via estimated model
+        * 5 : RL: stacked Q-learning. Prediction via discretized true model
+        * 6 : RL: stacked Q-learning. Prediction via estimated model
 
         * Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
         * Modes 2, 4, 6 use an estimated online
@@ -507,6 +497,7 @@ class Controller(utilities.Generic):
         * number in (0, 1]
         * Characterizes fading of running costs along horizon
 
+    ----------
     Attributes
     ----------
 
@@ -527,6 +518,7 @@ class Controller(utilities.Generic):
     y_buffer : float vector
         * buffer of previous outputs
 
+    ----------
     References
     ----------
     .. [1] Osinenko, Pavel, et al. "Stacked adaptive dynamic programming with unknown system model." IFAC-PapersOnLine 50.1 (2017): 4150-4155
@@ -544,12 +536,12 @@ class Controller(utilities.Generic):
                  critic_mode=1,
                  critic_update_time=0.1,
                  r_cost_struct=1,
-                 sample_time=0.1,
+                 sample_time=0.2,
+                 pred_step_size=2,
                  estimator_update_time=0.1,
                  estimator_buffer_fill=6,
                  estimator_buffer_power=2,
                  stacked_model_params=0,
-                 pred_step_size=2,
                  model_order=3,
                  gamma=1):
         """
@@ -1397,7 +1389,7 @@ class Simulation(utilities.Generic):
             self.f_min = system.f_min
             self.f_max = system.f_max
             self.f_man = system.f_man
-            self.n_man = system.n_man
+            self.m_man = system.m_man
             self.m_min = system.m_min
             self.m_max = system.m_max
 
@@ -2135,6 +2127,7 @@ class Simulation(utilities.Generic):
                 self.current_runs = np.ones(self.num_controllers, dtype=np.int64)
                 self.n_runs = np.array([n_runs] * self.num_controllers)
                 self.keep_stepping = np.ones((self.num_controllers), dtype=bool)
+                self.t_elapsed = np.zeros(self.num_controllers)
 
             else:
                 self.current_run = 1
@@ -2328,6 +2321,7 @@ class Simulation(utilities.Generic):
 
             else:
                 self.current_run += 1
+                self.t_elapsed = t
                 self._reset_sim(controller, nominal_ctrl, simulator)
 
         elif self.current_run > self.n_runs and self.exit_animation is False:
@@ -2378,6 +2372,7 @@ class Simulation(utilities.Generic):
 
                     else:
                         self.current_runs[i] += 1
+                        self.t_elapsed[i] = t
                         self._reset_sim(controllers[i], nominal_ctrlers[
                                         i], simulators[i], i)
                 else:
@@ -2424,6 +2419,7 @@ class Simulation(utilities.Generic):
 
             else:
                 self.current_run += 1
+                self.t_elapsed = t
                 self._reset_sim(controller, nominal_ctrl, simulator)
 
         else:
@@ -2445,9 +2441,9 @@ class Simulation(utilities.Generic):
 
                 else:
                     self.current_runs[i] += 1
+                    self.t_elapsed[i] = t
                     self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i], i)
 
-        self.t_elapsed = self.t1s
 
         if self.print_summary_stats:
             self.print_simu_stats()
