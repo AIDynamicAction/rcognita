@@ -103,7 +103,7 @@ def main(args=None):
         parser.add_argument('-is_visualization', type=bool,
                             default=True, help="Visualize data?")
 
-        parser.add_argument('-is_print_sim_step', type=bool,
+        parser.add_argument('-print_statistics_at_step', type=bool,
                             default=True, help="Print simulation steps?")
 
         parser.add_argument('-is_disturb', type=int,
@@ -154,24 +154,23 @@ def main(args=None):
         critic_mode = args.critic_mode,
         is_log_data = args.is_log_data,
         is_visualization = args.is_visualization,
-        is_print_sim_step = args.is_print_sim_step,
+        print_statistics_at_step = args.print_statistics_at_step,
         is_disturb = args.is_disturb,
         is_dyn_ctrl = args.is_dyn_ctrl,
         ctrl_mode = args.ctrl_mode
 
         # environment
 
-        # UPDATE THIS
+        # UPDATED NEEDED HERE
 
         # sim = Simulation(sys, agent1, nominal_ctrl)
         sim = Simulation(sys, agent, nominalCtrl)
-        sim.run_simulation(n_runs=n_runs, close_plt_on_finish=False, print_statistics=True, is_print_sim_step=is_print_sim_step)
+        sim.run_simulation(n_runs=n_runs, close_plt_on_finish=False, print_summary_stats=True, print_statistics_at_step=print_statistics_at_step)
 
     else:
         # environment
         sys = System()
         sys.add_bots(-7, -7)
-        sys.add_bots(7, -7)
 
         agent1 = Controller(sys,
                             sample_time=0.3,
@@ -207,14 +206,13 @@ def main(args=None):
                             estimator_update_time=0.3)
 
         nominal_ctrl = NominalController()
-        nominal_ctrl2 = NominalController()
-        nominal_ctrl3 = NominalController()
+        # nominal_ctrl2 = NominalController()
+        # nominal_ctrl3 = NominalController()
 
-        # sim = Simulation(sys, agent1, nominal_ctrl)
-        sim = Simulation(sys, [agent1, agent2, agent3], [
-                         nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
+        sim = Simulation(sys, agent1, nominal_ctrl)
+        # sim = Simulation(sys, [agent1, agent2, agent3], [nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
         sim.run_simulation(n_runs=2, close_plt_on_finish=False,
-                           show_annotations=True, print_statistics=False, is_print_sim_step=True)
+                           show_annotations=True, print_summary_stats=False, print_statistics_at_step=True)
 if __name__ == "__main__":
     command_line_args = sys.argv[1:]
     main(command_line_args)
