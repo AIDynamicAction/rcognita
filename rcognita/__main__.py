@@ -170,8 +170,6 @@ def main(args=None):
     else:
         # environment
         sys = System()
-        sys.add_bots(-7, -7)
-        sys.add_bots(7, -7)
 
         agent1 = Controller(sys,
                             sample_time=0.3,
@@ -211,8 +209,8 @@ def main(args=None):
         nominal_ctrl3 = NominalController()
 
         # sim = Simulation(sys, agent1, nominal_ctrl)
-        sim = Simulation(sys, [agent1, agent2, agent3], [nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
-        sim.run_simulation(n_runs=2, is_visualization=False, close_plt_on_finish=False, show_annotations=True, print_summary_stats=False, print_statistics_at_step=True)
+        sim = Simulation(sys, agent1, [nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
+        sim.run_simulation(n_runs=2, is_visualization=False, close_plt_on_finish=True, show_annotations=True, print_summary_stats=True, print_statistics_at_step=False)
 
 if __name__ == "__main__":
     command_line_args = sys.argv[1:]

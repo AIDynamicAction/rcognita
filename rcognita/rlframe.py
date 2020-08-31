@@ -1340,7 +1340,7 @@ class Simulation(utilities.Generic):
                 self.controller = controller[0]
 
             elif self.num_nom_controllers > 1 and self.num_controllers > 1 and system.num_controllers == 1:
-                self.error_message = "You forgot to call function `add_bots` on System object."
+                self.error_message = "You forgot to call `add_bots` method on the System object. Make sure you call add_bots for as many controllers and nominal controllers that are being passed to the Simulation class."
 
             elif self.num_nom_controllers > 1 and self.num_controllers > 1 and system.num_controllers > 1:
 
@@ -1349,14 +1349,14 @@ class Simulation(utilities.Generic):
                     self.controllers = controller
 
                 else:
-                    self.error_message = "Number of controllers, nominal controllers, and registered system controllers should be equal."
+                    self.error_message = "Please pass the same number of controllers, nominal controllers, and registered system controllers (via add_bots method) to the Simulation class."
 
             elif self.num_nom_controllers == 1 and self.num_controllers > 1 and system.num_controllers == 1:
                 self.controller = controller[0]
                 self.nominal_ctrl = nominal_ctrl[0]
 
         elif hasattr(controller, '__len__') or hasattr(nominal_ctrl, '__len__'):
-            self.error_message = "Number of controllers and nominal controllers need to be identical."
+            self.error_message = "Please create and pass the same number of controller objects and nominal controller objects to the simulation class."
 
         else:
             self.controller = controller
@@ -1364,7 +1364,7 @@ class Simulation(utilities.Generic):
             self.num_controllers = 1
 
             if system.num_controllers > 1:
-                self.error_message = "Warning: you called system.add_bots() but did not pass the same number of Controller objects when instantiating the Simulation class."
+                self.error_message = "Error: you called system.add_bots() but did not pass the same number of Controller objects when instantiating the Simulation class. Please create and pass the same number of controller objects and nominal controller objects to the simulation class as you call add_bots()."
 
         if hasattr(self, 'error_message'):
             print(self.error_message)
@@ -1494,12 +1494,21 @@ class Simulation(utilities.Generic):
             return system_states, full_states, alphas, initial_xs, initial_ys, u0s
 
     def _collect_print_statistics(self, t, x_coord, y_coord, alpha, v, omega, icost, r, u, l2_norm, mid=None):
-        self.statistics['running_cost'][0].append(r)
-        self.statistics['velocity'][0].append(v)
-        self.statistics['alpha'][0].append(alpha)
+        if mid is None:
+            self.statistics['running_cost'][0].append(r)
+            self.statistics['velocity'][0].append(v)
+            self.statistics['alpha'][0].append(alpha)
+        else:
+            self.statistics['running_cost'][mid].append(r)
+            self.statistics['velocity'][mid].append(v)
+            self.statistics['alpha'][mid].append(alpha)
 
         if self.print_statistics_at_step:
-            print(f"Controller\t{mid+1}")
+            if mid is not None:
+                print(f"Controller\t{mid+1}")
+            else:
+                print(f"Controller\t1")
+
             self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, icost, u)
 
     def _ctrl_selector(self, t, y, uMan, nominal_ctrl, controller, mode):
@@ -1931,6 +1940,8 @@ class Simulation(utilities.Generic):
 
         if self.num_controllers > 1:
             n_runs = self.n_runs[0]
+        else:
+            n_runs = self.n_runs
 
         for mid in range(self.num_controllers):
             self.mean_rc.append(round(statistics.mean(
@@ -2005,11 +2016,12 @@ class Simulation(utilities.Generic):
         else:
             nominal_ctrl.reset(self.t0)
 
-        if self.current_runs[mid] <= self.n_runs[mid]:
-            if mid is None:
+        if mid is None:
+            if self.current_run <= self.n_runs:
                 self._reset_all_lines(self.lines)
 
-            else:
+        else:
+            if self.current_runs[mid] <= self.n_runs[mid]:
                 self._reset_all_lines(self.all_lines[mid])
 
     def _run_animation(self, system, controller, nominal_ctrl, simulator, fig_width, fig_height, multi_controllers=False):
@@ -2188,7 +2200,7 @@ class Simulation(utilities.Generic):
 
         if animate:
             self._update_all_lines(
-                text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u)
+                text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, self.l2_norm)
 
         return t
 
@@ -2303,7 +2315,7 @@ class Simulation(utilities.Generic):
         for (line, uSingle) in zip(self.all_ctrl_lines[mid], u):
             self._update_line(line, t, uSingle)
 
-    def _wrapper_take_steps(self, *args):
+    def _wrapper_take_steps(self, k, *args):
         _, controller, nominal_ctrl, simulator, _ = args
         t = simulator.t
 
@@ -2329,7 +2341,7 @@ class Simulation(utilities.Generic):
             elif self.close_plt_on_finish is False:
                 self._graceful_exit(plt_close=False)
 
-    def _wrapper_take_steps_multi(self, *args):
+    def _wrapper_take_steps_multi(self, k, *args):
         system, controllers, nominal_ctrlers, simulators, animate = args
 
         for i in range(self.num_controllers):
