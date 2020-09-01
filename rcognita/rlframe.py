@@ -1988,9 +1988,9 @@ class Simulation(utilities.Generic):
     def _reset_sim(self, controller, nominal_ctrl, simulator, mid=None):
         if self.print_statistics_at_step:
             if mid is not None:
-                print(f'........Controller {mid+1}: Run #{self.current_runs[mid]} done........')
+                print(f'........Controller {mid+1}: Run #{self.current_runs[mid]-1} done........')
             else:
-                print(f'........Run {self.current_run} done........')
+                print(f'........Run {self.current_run-1} done........')
 
         if self.is_log_data:
             self.current_data_file = self.data_files[self.current_run - 1]
