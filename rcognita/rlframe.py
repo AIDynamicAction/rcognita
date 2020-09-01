@@ -1844,7 +1844,6 @@ class Simulation(utilities.Generic):
         # graceful exit from Jupyter notebook
         try:
             __IPYTHON__
-            return None
 
         # graceful exit from terminal
         except NameError:
@@ -1852,7 +1851,7 @@ class Simulation(utilities.Generic):
                 print("Program exit")
                 sys.exit()
             else:
-                return None
+                pass
 
     def _initialize_figure(self):
         self.scatter_plots = []
@@ -2154,6 +2153,7 @@ class Simulation(utilities.Generic):
                 else:
                     self._run_animation(
                         self.system, self.controller, self.nominal_ctrl, self.simulator, fig_width, fig_height)
+
         else:
             pass
 
@@ -2404,8 +2404,6 @@ class Simulation(utilities.Generic):
 
             elif self.close_plt_on_finish is False:
                 self._graceful_exit(plt_close=False)
-
-            return None
 
     def _wrapper_take_steps_no_viz(self, *args):
         system, controller, nominal_ctrl, simulator = args

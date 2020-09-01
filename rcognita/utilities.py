@@ -9,6 +9,7 @@ def check_call(func):
     def wrapper(*args):
         func(*args)
         setattr(*args, 'func_has_been_called', True)
+        return getattr(*args,'func_has_been_called')
     return wrapper
 
 # classes

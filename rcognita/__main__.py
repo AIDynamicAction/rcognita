@@ -2,7 +2,6 @@ from rcognita import System, NominalController, Controller, Simulation
 import argparse
 import sys
 
-
 def main(args=None):
     """main"""
     parser = argparse.ArgumentParser()
