@@ -749,8 +749,7 @@ class Controller(utilities.Generic):
                         # Perform check of stack of models and pick the best
                         totAbsErrCurr = 1e8
                         for k in range(self.stacked_model_params):
-                            A, B, C, D = self.model_stack[k].A, self.model_stack[
-                                k].B, self.model_stack[k].C, self.model_stack[k].D
+                            A, B, C, D = self.model_stack[k].A, self.model_stack[k].B, self.model_stack[k].C, self.model_stack[k].D
                             x0_est, _, _, _ = np.linalg.lstsq(C, y)
                             y_est, _ = self._dss_sim(
                                 A, B, C, D, self.u_buffer, x0_est, y)
@@ -784,8 +783,7 @@ class Controller(utilities.Generic):
             # 'disp': True, 'verbose': 2}
             actor_opt_options = {'maxiter': 300, 'disp': False}
         else:
-            # actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False,
-            #                      'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
+            # actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7}
             actor_opt_options = {'maxiter': 300, 'disp': False, 'ftol': 1e-7}
 
         isGlobOpt = 0
