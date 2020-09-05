@@ -276,19 +276,14 @@ class System(utilities.Generic):
 
         """
 
-        # define control forces
+        system_dynamics = np.zeros(dim_state)
+
         F = u[0]
         M = u[1]
-
-        # define environment dynamics
         alpha = x[2]
         v = x[3]
         omega = x[4]
 
-        # create state
-        system_dynamics = np.zeros(dim_state)
-
-        # compute new values
         D_x = v * np.cos(alpha)
         D_y = v * np.sin(alpha)
         D_alpha = omega
