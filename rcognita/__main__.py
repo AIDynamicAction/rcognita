@@ -1,4 +1,4 @@
-from rcognita import System, NominalController, Controller, Simulation
+from rcognita import EndiSystem, NominalController, ActorCritic, Simulation
 import argparse
 import sys
 
@@ -151,7 +151,7 @@ def main(args=None):
     initial_x = 5
     initial_y = 5
 
-    sys = System(dim_state,
+    sys = EndiSystem(dim_state,
                 dim_input,
                 dim_output,
                 dim_disturb,
@@ -162,7 +162,7 @@ def main(args=None):
                 is_dyn_ctrl,
                 is_disturb)
 
-    controller = Controller(sys,
+    controller = ActorCritic(sys,
                             t0,
                             t1,
                             actor_control_horizon,
