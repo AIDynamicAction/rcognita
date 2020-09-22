@@ -133,7 +133,6 @@ def main(args=None):
     estimator_update_time = args.estimator_update_time
     stacked_model_params = args.stacked_model_params
     actor_control_horizon = args.actor_control_horizon
-    buffer_size = args.buffer_size
     r_cost_struct = 1
     critic_buffer_size = args.critic_buffer_size
     critic_update_time = args.critic_update_time
@@ -186,9 +185,12 @@ def main(args=None):
                                     ctrl_gain,
                                     sample_time)
 
-    # sim = Simulation(sys, agent1, nominal_ctrl)
+
     sim = Simulation(sys, controller, nominal_ctrl)
-    sim.run_simulation(n_runs=n_runs, is_visualization = is_visualization, print_summary_stats=True, print_statistics_at_step=print_statistics_at_step)
+    sim.run_simulation(n_runs=n_runs, 
+        is_visualization = is_visualization, 
+        print_summary_stats=True, 
+        print_statistics_at_step=print_statistics_at_step)
 
 if __name__ == "__main__":
     main()
