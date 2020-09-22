@@ -99,9 +99,15 @@ class _dfilter:
             timeInSample = t - self.timeStep
             if timeInSample >= self.samplTime: # New sample
                 self.timeStep = t
+<<<<<<< HEAD
                 self.buffer = _pushVec(self.buffer, signalVal)
         else:
             self.buffer = _pushVec(self.buffer, signalVal)
+=======
+                self.buffer = np.vstack([self.buffer[1:,:], signalVal])
+        else:
+            self.buffer = np.vstack([self.buffer[1:,:], signalVal])
+>>>>>>> cleanup
         
         bufferFiltered = np.zeros(self.buffer.shape)
         
@@ -158,9 +164,6 @@ def _repMat(argin, n, m):
 # def pushColRight(matrix, vec):
 #     return np.hstack([matrix[:,1:], _toColVec(vec)])
 
-def _pushVec(matrix, vec):
-    return np.vstack([matrix[1:,:], vec])
-
 def _uptria2vec(mat):
     """
     Convert upper triangular square sub-matrix to column vector
@@ -168,10 +171,13 @@ def _uptria2vec(mat):
     """    
     n = mat.shape[0]
     
-    vec = np.zeros( n*(n+1)/2, 1 )
+    vec = np.zeros((int((n*(n+1)/2)), 1))
     
     k = 0
     for i in range(n):
         for j in range(n):
             vec[j] = mat[i, j]
+
             k += 1
+
+    return vec

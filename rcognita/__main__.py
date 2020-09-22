@@ -58,8 +58,8 @@ def main(args=None):
     parser.add_argument('-n_critic', type=int,
                         default=20, help="critic stack size.")
 
-    parser.add_argument('-n_actor', type=int, default=10,
-                        help="Number of prediction steps. n_actor=1 means the controller is purely data-driven and doesn't use prediction.")
+    parser.add_argument('-actor_control_horizon', type=int, default=10,
+                        help="Number of prediction steps. actor_control_horizon=1 means the controller is purely data-driven and doesn't use prediction.")
 
     # parser.add_argument('-r_cost_struct', type=int, default=1, help="Choice of the running cost structure.")
 
@@ -136,7 +136,11 @@ def main(args=None):
     estimator_buffer_power = args.estimator_buffer_power
     estimator_update_time = args.estimator_update_time
     stacked_model_params = args.stacked_model_params
+<<<<<<< HEAD
     n_actor = args.n_actor
+=======
+    actor_control_horizon = args.actor_control_horizon
+>>>>>>> cleanup
     buffer_size = args.buffer_size
     r_cost_struct = 1
     n_critic = args.n_critic
@@ -170,7 +174,11 @@ def main(args=None):
     controller = Controller(sys,
                             t0,
                             t1,
+<<<<<<< HEAD
                             n_actor,
+=======
+                            actor_control_horizon,
+>>>>>>> cleanup
                             n_critic,
                             buffer_size,
                             ctrl_mode,

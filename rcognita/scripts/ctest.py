@@ -1,4 +1,4 @@
-from rcognita import System, NominalController, Controller, Simulation
+from rcognita import EndiSystem, ActorCritic, NominalController, Simulation
 import argparse
 import sys
 
@@ -7,40 +7,37 @@ def main(args=None):
     """main"""
     
     # environment
-    sys = System() # already creates bot #1
+    sys = EndiSystem() # already creates bot #1
     sys.add_bots(-5,-5) # creates bot #2
     sys.add_bots(-7,7) # creates bot #3
 
-    agent1 = Controller(sys,
+    agent1 = ActorCritic(sys,
                         sample_time=0.3,
                         pred_step_size=0.6,
-                        critic_mode=3,
                         ctrl_mode=3,
-                        buffer_size=20,
-                        n_actor=10,
-                        n_critic=10,
-                        t1=20,
+                        critic_mode=3,
+                        critic_buffer_size=10,
+                        actor_control_horizon=10,
+                        t1=15,
                         estimator_update_time=0.3)
 
-    agent2 = Controller(sys,
-                        sample_time=0.6,
+    agent2 = ActorCritic(sys,
+                        sample_time=0.45,
                         pred_step_size=0.3,
-                        critic_mode=3,
                         ctrl_mode=3,
-                        buffer_size=20,
-                        n_actor=10,
-                        n_critic=10,
-                        t1=18,
+                        critic_mode=3,
+                        critic_buffer_size=10,
+                        actor_control_horizon=10,
+                        t1=15,
                         estimator_update_time=0.3)
 
-    agent3 = Controller(sys,
+    agent3 = ActorCritic(sys,
                         sample_time=0.6,
                         pred_step_size=0.3,
-                        critic_mode=3,
                         ctrl_mode=3,
-                        buffer_size=20,
-                        n_actor=10,
-                        n_critic=10,
+                        critic_mode=3,
+                        critic_buffer_size=10,
+                        actor_control_horizon=10,
                         t1=15,
                         estimator_update_time=0.3)
 
