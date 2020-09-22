@@ -52,17 +52,13 @@ def main(args=None):
     parser.add_argument('-stacked_model_params', type=int,
                         default=0, help="Estimated model parameters can be stored in stacks and the best among the last ones is picked")
 
-    parser.add_argument('-buffer_size', type=int,
-                        default=20, help="The size of the buffer to store data for model estimation. Is measured in numbers of periods of length dt.")
-
-    parser.add_argument('-n_critic', type=int,
+    parser.add_argument('-critic_buffer_size', type=int,
                         default=20, help="critic stack size.")
 
     parser.add_argument('-actor_control_horizon', type=int, default=10,
                         help="Number of prediction steps. actor_control_horizon=1 means the controller is purely data-driven and doesn't use prediction.")
 
     # parser.add_argument('-r_cost_struct', type=int, default=1, help="Choice of the running cost structure.")
-
 
     parser.add_argument('-sample_time', type=float,
                         default=0.3, help="Sample time")
@@ -136,15 +132,10 @@ def main(args=None):
     estimator_buffer_power = args.estimator_buffer_power
     estimator_update_time = args.estimator_update_time
     stacked_model_params = args.stacked_model_params
-<<<<<<< HEAD
-    n_actor = args.n_actor
-=======
     actor_control_horizon = args.actor_control_horizon
->>>>>>> cleanup
     buffer_size = args.buffer_size
     r_cost_struct = 1
-    n_critic = args.n_critic
-    n_critic = min(n_critic, buffer_size)
+    critic_buffer_size = args.critic_buffer_size
     critic_update_time = args.critic_update_time
     gamma = args.gamma
     critic_mode = args.critic_mode
@@ -174,13 +165,8 @@ def main(args=None):
     controller = Controller(sys,
                             t0,
                             t1,
-<<<<<<< HEAD
-                            n_actor,
-=======
                             actor_control_horizon,
->>>>>>> cleanup
-                            n_critic,
-                            buffer_size,
+                            critic_buffer_size,
                             ctrl_mode,
                             critic_mode,
                             critic_update_time,
