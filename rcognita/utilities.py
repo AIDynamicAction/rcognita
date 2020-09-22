@@ -99,15 +99,9 @@ class _dfilter:
             timeInSample = t - self.timeStep
             if timeInSample >= self.samplTime: # New sample
                 self.timeStep = t
-<<<<<<< HEAD
-                self.buffer = _pushVec(self.buffer, signalVal)
-        else:
-            self.buffer = _pushVec(self.buffer, signalVal)
-=======
                 self.buffer = np.vstack([self.buffer[1:,:], signalVal])
         else:
             self.buffer = np.vstack([self.buffer[1:,:], signalVal])
->>>>>>> cleanup
         
         bufferFiltered = np.zeros(self.buffer.shape)
         
