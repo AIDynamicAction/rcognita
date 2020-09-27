@@ -1,20 +1,20 @@
 import warnings
 
 # scipy
-import scipy as sp
+import scipy as sp, signal
 from scipy.optimize import minimize, basinhopping
 
 # numpy
 import numpy as np
 from numpy.random import rand, randn
 from numpy.matlib import repmat
-from scipy import signal
 import sippy  # Github:CPCLAB-UNIPI/SIPPY
 
 # rcognita
 from . import utilities
+from .base_classes_controllers import EndiControllerBase
 
-class ActorCritic(utilities.Generic):
+class ActorCritic(EndiControllerBase, utilities.Generic):
     """
     Optimal controller (a.k.a. agent) class. Actor-Critic model.
 
@@ -34,7 +34,7 @@ class ActorCritic(utilities.Generic):
     actor_control_horizon : int
         Number of prediction steps. actor_control_horizon=1 means the controller is purely data-driven and doesn't use prediction.
 
-    critic_buffer_size : int
+    buffer_size : int
         The size of the buffer to store data for model estimation. The bigger the buffer, the more accurate the estimation may be achieved. Using a larger buffer results in better model estimation at the expense of computational cost.
 
     ctrl_mode : int
@@ -43,8 +43,8 @@ class ActorCritic(utilities.Generic):
         * -1 : nominal parking controller (for benchmarking optimal controllers)
         * 1 : model-predictive control (MPC). Prediction via discretized true model
         * 2 : adaptive MPC. Prediction via estimated model
-        * 3 : RL: Q-learning with critic_buffer_size roll-outs of running cost. Prediction via discretized true model
-        * 4 : RL: Q-learning with critic_buffer_size roll-outs of running cost. Prediction via estimated model
+        * 3 : RL: Q-learning with buffer_size roll-outs of running cost. Prediction via discretized true model
+        * 4 : RL: Q-learning with buffer_size roll-outs of running cost. Prediction via estimated model
         * 5 : RL: stacked Q-learning. Prediction via discretized true model
         * 6 : RL: stacked Q-learning. Prediction via estimated model
 
@@ -72,7 +72,7 @@ class ActorCritic(utilities.Generic):
         * smaller sampling times lead to higher computation times
         * especially controllers that use the estimated model are sensitive to sampling time, because inaccuracies in estimation lead to problems when propagated over longer periods of time. Experiment with sample_time and try achieve a trade-off between stability and computational performance
 
-    pred_step_size : float
+    step_size : float
         * Prediction step size in `J` (in seconds). Is the time between the computation of control inputs and outputs J. Should be a multiple of `sample_time`.
 
     estimator_buffer_fill : int
@@ -125,48 +125,26 @@ class ActorCritic(utilities.Generic):
     """
 
     def __init__(self,
-                 system,
-                 t0=0,
-                 t1=15,
+                *args,
                  actor_control_horizon=10,
-                 critic_buffer_size=50,
+                 buffer_size=20,
                  ctrl_mode=3,
                  critic_mode=1,
                  critic_update_time=0.1,
-                 r_cost_struct=1,
-                 sample_time=0.2,
-                 pred_step_size=1,
+                 step_size=1,
                  estimator_update_time=0.1,
                  estimator_buffer_fill=6,
                  estimator_buffer_power=2,
                  stacked_model_params=0,
                  model_order=3,
-                 gamma=1):
-        """
-
-        SYSTEM-RELATED ATTRIBUTES
-
-        """
-        self.dim_state = system.dim_state
-        self.dim_input = system.dim_input
-        self.dim_output = system.dim_output
-        self.m = system.m
-        self.I = system.I
-        self.is_disturb = system.is_disturb
-        self.system_state = system.system_state
-        self.ctrl_bnds = system.control_bounds
-        self.sys_rhs = system._get_system_dynamics
-        self.sys_out = system.get_curr_state
-
+                 **kwargs):
+        super(ActorCritic, self).__init__(*args, **kwargs)
         """
 
         CONTROLLER-RELATED ATTRIBUTES
 
         """
-        self.t0 = t0
-        self.t1 = t1
-        self.est_clock = t0
-        self.is_prob_noise = 1
+        self.is_prob_noise = 0
         self.estimator_buffer_power = estimator_buffer_power
         self.estimator_buffer_fill = estimator_buffer_fill
         self.estimator_update_time = estimator_update_time
@@ -192,44 +170,16 @@ class ActorCritic(utilities.Generic):
         # time between critic updates
         self.critic_update_time = critic_update_time
 
-        # choice of running cost structure
-        self.r_cost_struct = r_cost_struct
-
-        # running cost parameters
-        self.R1 = np.diag([10, 10, 1, 0, 0, 0, 0])
-        self.R2 = np.array([[10, 2, 1, 0, 0],
-                            [0, 10, 2, 0, 0],
-                            [0, 0, 10, 0, 0],
-                            [0, 0, 0, 0, 0],
-                            [0, 0, 0, 0, 0]])
-
         # integrated cost
-        self.i_cost_val = 0
         self.critic_mode = critic_mode
-        self.critic_clock = t0
-        self.critic_buffer_size = critic_buffer_size
+        self.critic_clock = self.t0
 
         # control mode
         self.ctrl_mode = ctrl_mode
-        self.ctrl_clock = t0
 
-        self.sample_time = sample_time
-        self.pred_step_size = pred_step_size * sample_time
-
-        self.min_bounds = self.ctrl_bnds[:, 0]
-        self.max_bounds = self.ctrl_bnds[:, 1]
         self.u_min = np.tile(self.min_bounds, actor_control_horizon)
         self.u_max = np.tile(self.max_bounds, actor_control_horizon)
-        self.u_curr = self.min_bounds / 10
 
-        # buffer of previous controls
-        self.u_buffer = np.zeros([critic_buffer_size, self.dim_input])
-
-        # buffer of previous outputs
-        self.y_buffer = np.zeros([critic_buffer_size, self.dim_output])
-
-        # discount factor
-        self.gamma = gamma
 
         # critic weights conditional logic
         if self.critic_mode == 1:
@@ -256,37 +206,7 @@ class ActorCritic(utilities.Generic):
             self.w_min = -1e3 * np.ones(self.num_critic_weights)
             self.w_max = 1e3 * np.ones(self.num_critic_weights)
 
-        self.W_next = np.ones(int(self.num_critic_weights))
-
-    def record_sys_state(self, system_state):
-        self.system_state = system_state
-
-    def running_cost(self, y, u):
-        """
-        Running cost (a.k.a. utility, reward, instantaneous cost etc.)
-        """
-        chi = np.concatenate([y, u])
-
-        r = 0
-
-        if self.r_cost_struct == 1:
-            r = chi @ self.R1 @ chi
-
-        elif self.r_cost_struct == 2:
-            r = chi**2 @ self.R2 @ chi**2 + chi @ self.R1 @ chi
-
-        return r
-
-    def update_icost(self, y, u):
-        """
-        Sample-to-sample integrated running cost. This can be handy to evaluate the performance of the agent.
-
-        If the agent succeeded to stabilize the system, `icost` would converge to a finite value which is the performance mark.
-
-        The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
-
-        """
-        self.i_cost_val += self.running_cost(y, u) * self.sample_time
+        self.W_prev = np.ones(int(self.num_critic_weights))
 
     def _estimate_model(self, t, y):
         """
@@ -356,7 +276,7 @@ class ActorCritic(utilities.Generic):
                     # Drop probing noise
                 self.is_prob_noise = 0
 
-    def _actor(self, U, y_obs, N, W, pred_step_size, ctrl_mode):
+    def _actor(self, U, y_obs, N, W, step_size, ctrl_mode):
         """
         This method normally should not be altered. The only customization you might want here is regarding the optimization algorithm
 
@@ -388,14 +308,15 @@ class ActorCritic(utilities.Generic):
                     'options': actor_opt_options
                 }
 
-                U = basinhopping(lambda U: self._actor_cost(U, y_obs, N, W, pred_step_size, ctrl_mode),
+                U = basinhopping(lambda U: self._actor_cost(U, y_obs, N, W, step_size, ctrl_mode),
                                  u_horizon,
                                  minimizer_kwargs=minimizer_kwargs,
                                  niter=10).x
 
             else:
                 warnings.filterwarnings('ignore')
-                U = minimize(lambda U: self._actor_cost(U, y_obs, N, W, pred_step_size, ctrl_mode),
+                
+                U = minimize(lambda U: self._actor_cost(U, y_obs, N, W, step_size, ctrl_mode),
                              u_horizon,
                              method=actor_opt_method,
                              tol=1e-7,
@@ -409,7 +330,7 @@ class ActorCritic(utilities.Generic):
 
         return U[:self.dim_input] # Return first action
 
-    def _actor_cost(self, U, y_obs, N, W, pred_step_size, ctrl_mode):
+    def _actor_cost(self, U, y_obs, N, W, step_size, ctrl_mode):
         U_2d = np.reshape(U, (N, self.dim_input))
         Y = np.zeros([N, self.dim_output])
 
@@ -419,16 +340,16 @@ class ActorCritic(utilities.Generic):
             x = self.system_state
 
             for k in range(1, self.actor_control_horizon):
-                x = x + pred_step_size * self.sys_rhs([], x, U_2d[k - 1, :], [], self.m, self.I, self.dim_state, self.is_disturb)
+                x = x + step_size * self.sys_dynamics([], x, U_2d[k - 1, :], [], self.m, self.I, self.dim_state, self.is_disturb)
 
-                Y[k, :] = self.sys_out(x)
+                Y[k, :] = self.sys_output(x)
 
         elif ctrl_mode in (2,4,6):
-            myU_upsampled = U_2d.repeat(int(pred_step_size / self.sample_time), axis=0)
+            myU_upsampled = U_2d.repeat(int(step_size / self.sample_time), axis=0)
             
             Yupsampled, _ = self._dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0_est, y_obs)
             
-            Y = Yupsampled[::int(pred_step_size / self.sample_time)]
+            Y = Yupsampled[::int(step_size / self.sample_time)]
 
         # compute cost-to-go for k steps in Y
 
@@ -485,13 +406,12 @@ class ActorCritic(utilities.Generic):
     def _critic_cost(self, W, u_buffer, y_buffer):
         """ Cost function of the critic
 
-        Currently uses value-iteration-like method
+        Currently uses value-iteration
 
         """
         Jc = 0
-        Jc_next = 0
 
-        for k in range(self.critic_buffer_size-1, 0, -1):
+        for k in range(1, self.buffer_size-1):
             y_prev = y_buffer[k - 1, :]
             y_next = y_buffer[k, :]
             u_prev = u_buffer[k - 1, :]
@@ -519,40 +439,39 @@ class ActorCritic(utilities.Generic):
                     return self.estimator_buffer_power * (rand(self.dim_input) - 0.5)
 
                 elif not self.is_prob_noise and (self.ctrl_mode == 2):
-                    u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, [], self.pred_step_size, self.ctrl_mode)
+                    u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, [], self.step_size, self.ctrl_mode)
 
                 elif (self.ctrl_mode == 1):
-                    u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, [], self.pred_step_size, self.ctrl_mode)
+                    u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, [], self.step_size, self.ctrl_mode)
 
             elif self.ctrl_mode in (3, 4, 5, 6):
                 time_in_critic_update_time = t - self.critic_clock
 
                 # Update data buffers
-                self.u_buffer = np.vstack([self.u_buffer, self.u_curr])[-self.critic_buffer_size:, :]
-                self.y_buffer = np.vstack([self.y_buffer, y_obs])[-self.critic_buffer_size:, :]
+                self.u_buffer = np.vstack([self.u_buffer, self.u_curr])[-self.buffer_size:, :]
+                self.y_buffer = np.vstack([self.y_buffer, y_obs])[-self.buffer_size:, :]
 
                 # Critic: minimize critic cost and return new weights
                 if time_in_critic_update_time >= self.critic_update_time:
                     self.critic_clock = t
 
-                    W_new = self._critic(self.W_next, self.u_buffer, self.y_buffer)
-
-                    self.W_next = W_new
+                    W_new = self._critic(self.W_prev, self.u_buffer, self.y_buffer)
 
                 else:
-                    W_new = self.W_next
+                    W_new = self.W_prev
 
                 # Actor: Apply control by minimizing actor cost
                 if self.is_prob_noise and (self.ctrl_mode in (4, 6)):
                     u = self.estimator_buffer_power * (rand(self.dim_input) - 0.5)
                 
                 elif not self.is_prob_noise and (self.ctrl_mode in (4, 6)):
-                    u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, W_new, self.pred_step_size, self.ctrl_mode)
+                    u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, W_new, self.step_size, self.ctrl_mode)
 
                 elif self.ctrl_mode in (3, 5):
-                    u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, W_new, self.pred_step_size, self.ctrl_mode)
+                    u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, W_new, self.step_size, self.ctrl_mode)
 
             self.u_curr = u
+            self.W_prev = W_new
 
             return u
 
@@ -612,11 +531,3 @@ class ActorCritic(utilities.Generic):
                 return np.concatenate([y**2, np.kron(y, u), u**2])
             else:
                 return np.concatenate([chi, np.kron(chi, chi), chi**2])
-
-    def reset(self, t0):
-        """
-        Resets agent for use in multi-episode simulation.
-        All the learned parameters are retained
-        """
-        self.ctrl_clock = t0
-        self.u_curr = self.min_bounds / 10

@@ -52,7 +52,7 @@ def main(args=None):
     parser.add_argument('-stacked_model_params', type=int,
                         default=0, help="Estimated model parameters can be stored in stacks and the best among the last ones is picked")
 
-    parser.add_argument('-critic_buffer_size', type=int,
+    parser.add_argument('-buffer_size', type=int,
                         default=20, help="critic stack size.")
 
     parser.add_argument('-actor_control_horizon', type=int, default=10,
@@ -134,7 +134,7 @@ def main(args=None):
     stacked_model_params = args.stacked_model_params
     actor_control_horizon = args.actor_control_horizon
     r_cost_struct = 1
-    critic_buffer_size = args.critic_buffer_size
+    buffer_size = args.buffer_size
     critic_update_time = args.critic_update_time
     gamma = args.gamma
     critic_mode = args.critic_mode
@@ -165,7 +165,7 @@ def main(args=None):
                             t0,
                             t1,
                             actor_control_horizon,
-                            critic_buffer_size,
+                            buffer_size,
                             ctrl_mode,
                             critic_mode,
                             critic_update_time,

@@ -59,10 +59,9 @@ class EndiSystem(utilities.Generic):
         * is dynamic control?
         * If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
     
-
-    is_disturb : int
+    is_disturb : boolean
         * use disturbance?
-        * If 0, no disturbance is fed into the system
+        * If True, no disturbance is fed into the system
     
     sigma_q, mu_q, tau_q : int
         * hyperparameters to disturbance
@@ -140,7 +139,7 @@ class EndiSystem(utilities.Generic):
                  m_min=-1,
                  m_max=1,
                  is_dyn_ctrl=0,
-                 is_disturb=0,
+                 is_disturb=False,
                  sigma_q=None,
                  mu_q=None,
                  tau_q=None):
@@ -278,7 +277,10 @@ class EndiSystem(utilities.Generic):
         return y
 
     def _add_disturbance(self, t, q):
-        """ Dynamical disturbance model """
+        """ Dynamical disturbance model 
+
+        method in development
+        """
 
         Dq = np.zeros(self.dim_disturb)
 
@@ -353,8 +355,7 @@ class EndiSystem(utilities.Generic):
 
         if self.control_bounds.any():
             for k in range(self.dim_input):
-                u[k] = np.clip(u[k], self.control_bounds[k, 0],
-                               self.control_bounds[k, 1])
+                u[k] = np.clip(u[k], self.control_bounds[k, 0],self.control_bounds[k, 1])
 
         new_full_state[0:self.dim_state] = self._get_system_dynamics(
             t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)

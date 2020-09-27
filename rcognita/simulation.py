@@ -5,10 +5,16 @@ import warnings
 import sys
 import itertools
 import statistics
+<<<<<<< HEAD
+=======
+import pprint
+from IPython.display import clear_output
+>>>>>>> temp
 
 
 # scipy
 import scipy as sp
+from scipy import integrate
 
 # numpy
 import numpy as np
@@ -253,13 +259,23 @@ class Simulation(utilities.Generic):
             self.statistics['l2_norm'][mid] = l2_norm
 
         self.l2_norm
+
+
         if self.print_statistics_at_step:
             if mid is not None:
-                print(f"Controller\t{mid+1}")
+                print(f"Controller {mid+1}: run {self.current_run[mid]}")
             else:
-                print(f"Controller\t1")
+                print(f"Controller 1: run {self.current_run}")
 
             self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, icost, u)
+
+            if self.print_inline:
+                try:
+                    __IPYTHON__
+                    clear_output(wait=True)
+                except:
+                    pass
+
 
     def _ctrl_selector(self, t, y, uMan, nominal_ctrl, controller, mode):
         """
@@ -611,8 +627,7 @@ class Simulation(utilities.Generic):
         self.scatter_plots = []
 
         if self.num_controllers > 1:
-            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[
-                                                          :self.num_controllers], marker=self.robot_marker.marker)
+            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker=self.robot_marker.marker)
             self.scatter_plots.append(self.sol_scatter)
 
             if self.show_annotations:
@@ -680,7 +695,7 @@ class Simulation(utilities.Generic):
 
             self._graceful_exit()
 
-    def print_simu_stats(self):
+    def print_sim_summary_stats(self):
         self.mean_rc = []  # mean rc
         self.var_rc = []  # var rc
         self.mean_velocity = []  # mean vel
@@ -819,9 +834,10 @@ class Simulation(utilities.Generic):
                         fig_height=8, 
                         close_plt_on_finish=True, 
                         show_annotations=False, 
-                        print_summary_stats=False, 
-                        is_log_data=False, 
-                        print_statistics_at_step=False):
+                        print_summary_stats=False,
+                        print_statistics_at_step=False,
+                        print_inline=False,
+                        is_log_data=False):
         """
         n_runs : int
             * number of episodes
@@ -851,65 +867,69 @@ class Simulation(utilities.Generic):
             * print results of simulation?
         """
 
-        if hasattr(self, 'error_message') is False:
-            self.is_log_data = is_log_data
-            self.is_visualization = is_visualization
-            self.print_statistics_at_step = print_statistics_at_step
-            self.print_summary_stats = print_summary_stats
-            self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}, 'l2_norm': {}}
-            # self.current_data_file = data_files[0]
-            self.close_plt_on_finish = close_plt_on_finish
-            self.data_files = self._log_data(n_runs, save=self.is_log_data)
-            self.show_annotations = show_annotations
+        try:
+            if hasattr(self, 'error_message') is False:
+                self.is_log_data = is_log_data
+                self.is_visualization = is_visualization
+                self.print_statistics_at_step = print_statistics_at_step
+                self.print_inline = print_inline
+                self.print_summary_stats = print_summary_stats
+                self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}, 'l2_norm': {}}
+                # self.current_data_file = data_files[0]
+                self.close_plt_on_finish = close_plt_on_finish
+                self.data_files = self._log_data(n_runs, save=self.is_log_data)
+                self.show_annotations = show_annotations
 
-            if self.is_visualization is False:
-                self.close_plt_on_finish = False
-                self.show_annotations = False
-                self.print_summary_stats = True
+                if self.is_visualization is False:
+                    self.close_plt_on_finish = False
+                    self.show_annotations = False
+                    self.print_summary_stats = True
 
-            if self.print_statistics_at_step:
-                warnings.filterwarnings('ignore')
+                if self.print_statistics_at_step:
+                    warnings.filterwarnings('ignore')
 
-            for i in range(self.num_controllers):
-                self.statistics['running_cost'].setdefault(i, [])
-                self.statistics['velocity'].setdefault(i, [])
-                self.statistics['alpha'].setdefault(i, [])
-                self.statistics['l2_norm'].setdefault(i, 0)
+                for i in range(self.num_controllers):
+                    self.statistics['running_cost'].setdefault(i, [])
+                    self.statistics['velocity'].setdefault(i, [])
+                    self.statistics['alpha'].setdefault(i, [])
+                    self.statistics['l2_norm'].setdefault(i, 0)
 
-            if self.num_controllers > 1:
-                self.current_runs = np.ones(self.num_controllers, dtype=np.int64)
-                self.n_runs = np.array([n_runs] * self.num_controllers)
-                self.keep_stepping = np.ones((self.num_controllers), dtype=bool)
-                self.t_elapsed = np.zeros(self.num_controllers)
-
-            else:
-                self.current_run = 1
-                self.n_runs = n_runs
-
-
-            # IF NOT VISUALIZING TRAINING
-            if self.is_visualization is False:
                 if self.num_controllers > 1:
-                    self._wrapper_take_steps_multi_no_viz(self.system, self.controllers, self.nominal_ctrlers, self.simulators)
+                    self.current_runs = np.ones(self.num_controllers, dtype=np.int64)
+                    self.n_runs = np.array([n_runs] * self.num_controllers)
+                    self.keep_stepping = np.ones((self.num_controllers), dtype=bool)
+                    self.t_elapsed = np.zeros(self.num_controllers)
 
                 else:
-                    self._wrapper_take_steps_no_viz(self.system, self.controller, self.nominal_ctrl, self.simulator)
+                    self.current_run = 1
+                    self.n_runs = n_runs
+
+
+                # IF NOT VISUALIZING TRAINING
+                if self.is_visualization is False:
+                    if self.num_controllers > 1:
+                        self._wrapper_take_steps_multi_no_viz(self.system, self.controllers, self.nominal_ctrlers, self.simulators)
+
+                    else:
+                        self._wrapper_take_steps_no_viz(self.system, self.controller, self.nominal_ctrl, self.simulator)
+
+                else:
+                    if self.num_controllers > 1:
+                        self._run_animation(self.system,
+                                            self.controllers,
+                                            self.nominal_ctrlers,
+                                            self.simulators,
+                                            fig_width,
+                                            fig_height,
+                                            multi_controllers=True)
+                    else:
+                        self._run_animation(
+                            self.system, self.controller, self.nominal_ctrl, self.simulator, fig_width, fig_height)
 
             else:
-                if self.num_controllers > 1:
-                    self._run_animation(self.system,
-                                        self.controllers,
-                                        self.nominal_ctrlers,
-                                        self.simulators,
-                                        fig_width,
-                                        fig_height,
-                                        multi_controllers=True)
-                else:
-                    self._run_animation(
-                        self.system, self.controller, self.nominal_ctrl, self.simulator, fig_width, fig_height)
-
-        else:
-            pass
+                pass
+        except KeyboardInterrupt:
+            print("Cancelled.")
 
     def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
         simulator.step()
@@ -1080,7 +1100,7 @@ class Simulation(utilities.Generic):
 
         elif self.current_run > self.n_runs and self.exit_animation is False:
             if self.print_summary_stats is True:
-                self.print_simu_stats()
+                self.print_sim_summary_stats()
 
             self.anm.running = False
             self.exit_animation = True
@@ -1146,7 +1166,7 @@ class Simulation(utilities.Generic):
                     self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i] + 0.5, self.initial_ys[i] + 0.5), color='k')
 
             if self.print_summary_stats:
-                self.print_simu_stats()
+                self.print_sim_summary_stats()
 
             self.anm.running = False
             self.exit_animation = True
@@ -1164,7 +1184,7 @@ class Simulation(utilities.Generic):
 
         while self.current_run <= self.n_runs:
             t = simulator.t
-            print("... Running ...")
+            print(f"... Running - run {self.current_run}...")
 
             while t < self.t1:
                 t = self._take_step(*args)
@@ -1176,7 +1196,7 @@ class Simulation(utilities.Generic):
 
         else:
             if self.print_summary_stats is True:
-                self.print_simu_stats()
+                self.print_sim_summary_stats()
 
             self._graceful_exit()
 
@@ -1187,7 +1207,9 @@ class Simulation(utilities.Generic):
             t = simulators[i].t
             print(f"... Running for controller {i+1}")
 
-            while self.current_runs[i] <= self.n_runs[i]: 
+            while self.current_runs[i] <= self.n_runs[i]:
+                print(f"... Controller {i}, run {self.current_runs[i]}...")
+                
                 while t < self.t1s[i]:
                     t, x_coord, y_coord = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i])
 
@@ -1198,6 +1220,6 @@ class Simulation(utilities.Generic):
 
 
         if self.print_summary_stats:
-            self.print_simu_stats()
+            self.print_sim_summary_stats()
 
         self._graceful_exit(plt_close=False)
