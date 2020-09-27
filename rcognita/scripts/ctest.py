@@ -1,12 +1,5 @@
-<<<<<<< HEAD
-from rcognita import EndiSystem, ActorCritic, NominalController, Simulation
-import argparse
-import sys
-=======
 from rcognita import *
 import argparse
->>>>>>> temp
-
 
 def main(args=None):
     """main"""

@@ -5,11 +5,8 @@ import warnings
 import sys
 import itertools
 import statistics
-<<<<<<< HEAD
-=======
 import pprint
 from IPython.display import clear_output
->>>>>>> temp
 
 
 # scipy
