@@ -734,15 +734,13 @@ class Simulation(utilities.Generic):
         self.final_statistics = final_statistics
 
     def _print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
-        # alphaDeg = alpha/np.pi*180
-
         headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
                      'v [m/s]', 'omega [rad/s]', 'run_cost', 'F [N]', 'M [N m]']
         dataRow = [t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]]
         rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f',
                      '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')
         table = tabulate([headerRow, dataRow], floatfmt=rowFormat,
-                         headers='firstrow', tablefmt='grid')
+                         headers='firstrow', tablefmt='fancy_grid')
 
         print(table)
 
