@@ -155,6 +155,8 @@ class EndiControllerBase:
         """
         self.i_cost_val += self.running_cost(y, u) * self.sample_time
 
+        return self.i_cost_val
+
 
     def reset(self, t0):
         """

@@ -8,7 +8,6 @@ import statistics
 import pprint
 from IPython.display import clear_output
 
-
 # scipy
 import scipy as sp
 from scipy import integrate
@@ -260,7 +259,7 @@ class Simulation(utilities.Generic):
 
         if self.print_statistics_at_step:
             if mid is not None:
-                print(f"Controller {mid+1}: run {self.current_run[mid]}")
+                print(f"Controller {mid+1}: run {self.current_runs[mid]}")
             else:
                 print(f"Controller 1: run {self.current_run}")
 
@@ -933,25 +932,20 @@ class Simulation(utilities.Generic):
 
         t = simulator.t
         full_state = simulator.y
-
-        system_state = system.system_state
-        y = system.get_curr_state(system_state)
+        y = full_state[:system.dim_state]
+        controller.record_sys_state(y)
 
         u = self._ctrl_selector(
             t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
 
         system.set_latest_action(u)
+        icost = controller.update_icost(y, u)
 
-        controller.record_sys_state(system_state)
-        controller.update_icost(y, u)
-
-        x_coord = full_state[0]
-        y_coord = full_state[1]
-        alpha = full_state[2]
-        v = full_state[3]
-        omega = full_state[4]
-
-        icost = controller.i_cost_val
+        x_coord = y[0]
+        y_coord = y[1]
+        alpha = y[2]
+        v = y[3]
+        omega = y[4]
         alpha_deg = alpha / np.pi * 180
         r = controller.running_cost(y, u)
         text_time = 't = {time:2.3f}'.format(time=t)
@@ -977,27 +971,20 @@ class Simulation(utilities.Generic):
 
         t = simulator.t
         full_state = simulator.y
-
-        system_state = self.system_states[mid]
-
-        y = system.get_curr_state(system_state)
+        y = full_state[:system.dim_state]
+        controller.record_sys_state(y)
 
         u = self._ctrl_selector(
             t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
 
         system.set_latest_action(u, mid)
+        icost = controller.update_icost(y, u)
 
-        controller.record_sys_state(system_state)
-        controller.update_icost(y, u)
-
-        x_coord = full_state[0]
-        y_coord = full_state[1]
-        alpha = full_state[2]
-        v = full_state[3]
-        omega = full_state[4]
-
-        icost = controller.i_cost_val
-
+        x_coord = y[0]
+        y_coord = y[1]
+        alpha = y[2]
+        v = y[3]
+        omega = y[4]
         alpha_deg = alpha / np.pi * 180
         r = controller.running_cost(y, u)
         text_time = 't = {time:2.3f}'.format(time=t)
