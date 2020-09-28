@@ -43,14 +43,15 @@ def main(args=None):
     nominal_ctrl2 = NominalController()
     nominal_ctrl3 = NominalController()
 
+    # sim = Simulation(sys, agent1, nominal_ctrl)
     sim = Simulation(sys, [agent1, agent2, agent3], [nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
     
     sim.run_simulation(n_runs=2, 
-                    is_visualization=True, 
+                    is_visualization=False, 
                     close_plt_on_finish=False, 
                     show_annotations=True, 
                     print_summary_stats=True, 
-                    print_statistics_at_step=False)
+                    print_statistics_at_step=True)
 
 if __name__ == "__main__":
     main()

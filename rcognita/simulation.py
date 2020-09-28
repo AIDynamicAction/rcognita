@@ -931,46 +931,10 @@ class Simulation(utilities.Generic):
         except KeyboardInterrupt:
             print("Cancelled.")
 
-    def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False):
-        simulator.step()
-
-        t = simulator.t
-        full_state = simulator.y
-        y = full_state[:system.dim_state]
-        controller.record_sys_state(y)
-
-        u = self._ctrl_selector(
-            t, y, system.u_man, nominal_ctrl, controller, controller.ctrl_mode)
-
-        system.set_latest_action(u)
-        icost = controller.update_icost(y, u)
-
-        x_coord = y[0]
-        y_coord = y[1]
-        alpha = y[2]
-        v = y[3]
-        omega = y[4]
-        alpha_deg = alpha / np.pi * 180
-        r = controller.running_cost(y, u)
-        text_time = 't = {time:2.3f}'.format(time=t)
-
-        # Euclidean (aka Frobenius) norm
-        self.l2_norm = la.norm([x_coord, y_coord])
-
-        self._collect_print_statistics(t, x_coord, y_coord, alpha, v, omega, icost, r, u, self.l2_norm)
-
-        if self.is_log_data:
-            self._log_data_row(self.current_data_file, t, x_coord,
-                               y_coord, alpha, v, omega, icost.val, u)
-
-        if animate:
-            self._update_all_lines(
-                text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, self.l2_norm)
-
-        return t
-
-    def _take_step_multi(self, mid, system, controller, nominal_ctrl, simulator, animate=False):
-        system.set_multi_sim(mid)
+    def _take_step(self, system, controller, nominal_ctrl, simulator, animate=False, mid=None):
+        if mid is not None:
+            system.set_multi_sim(mid)
+        
         simulator.step()
 
         t = simulator.t
@@ -997,16 +961,24 @@ class Simulation(utilities.Generic):
         self.l2_norm = la.norm([x_coord, y_coord])
 
         self._collect_print_statistics(t, x_coord, y_coord, alpha, v, omega, icost, r, u, self.l2_norm, mid)
-        
+
         if self.is_log_data:
-            self._log_data_row(self.current_data_file, t, x_coord,
-                               y_coord, alpha, v, omega, icost.val, u)
+            self._log_data_row(self.current_data_file, t, x_coord, y_coord, alpha, v, omega, icost.val, u)
+        
+        if mid is not None:
+            if animate:
+                self._update_all_lines_multi(text_time, full_state, alpha_deg,
+                                             x_coord, y_coord, t, alpha, r, icost, u, self.l2_norm, mid)
 
-        if animate:
-            self._update_all_lines_multi(text_time, full_state, alpha_deg,
-                                         x_coord, y_coord, t, alpha, r, icost, u, self.l2_norm, mid)
+            return t, x_coord, y_coord
 
-        return t, x_coord, y_coord
+        else:
+
+            if animate:
+                self._update_all_lines(
+                    text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, self.l2_norm)
+
+            return t
 
     def _update_line(self, line, new_x, new_y):
         line.set_xdata(np.append(line.get_xdata(), new_x))
@@ -1126,8 +1098,7 @@ class Simulation(utilities.Generic):
                     t = simulators[i].t
 
                     if t < self.t1s[i]:
-                        t, x_coord, y_coord = self._take_step_multi(
-                            i, system, controllers[i], nominal_ctrlers[i], simulators[i], animate)
+                        t, x_coord, y_coord = self._take_step(system, controllers[i], nominal_ctrlers[i], simulators[i], animate, i)
 
                         if self.show_annotations:
                             self.annotations.append(self.xy_plane_axes.annotate(f'{i+1}', xy=(x_coord + 0.5, y_coord + 0.5), color='k'))
@@ -1199,7 +1170,7 @@ class Simulation(utilities.Generic):
                 print(f"... Controller {i}, run {self.current_runs[i]}...")
                 
                 while t < self.t1s[i]:
-                    t, x_coord, y_coord = self._take_step_multi(i, system, controllers[i], nominal_ctrlers[i], simulators[i])
+                    t, x_coord, y_coord = self._take_step(system, controllers[i], nominal_ctrlers[i], simulators[i], i)
 
                 else:
                     self.current_runs[i] += 1
