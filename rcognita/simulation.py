@@ -248,14 +248,12 @@ class Simulation(utilities.Generic):
             self.statistics['velocity'][0].append(v)
             self.statistics['alpha'][0].append(alpha)
             self.statistics['l2_norm'][0] = l2_norm
+
         else:
             self.statistics['running_cost'][mid].append(r)
             self.statistics['velocity'][mid].append(v)
             self.statistics['alpha'][mid].append(alpha)
             self.statistics['l2_norm'][mid] = l2_norm
-
-        self.l2_norm
-
 
         if self.print_statistics_at_step:
             if mid is not None:
@@ -692,11 +690,11 @@ class Simulation(utilities.Generic):
             self._graceful_exit()
 
     def print_sim_summary_stats(self):
-        self.mean_rc = []  # mean rc
-        self.var_rc = []  # var rc
-        self.mean_velocity = []  # mean vel
-        self.var_velocity = []  # var vel
-        self.var_alpha = []  # var alpha
+        self.mean_rc = []
+        self.mean_velocity = []
+        self.sd_rc = []
+        self.sd_velocity = []
+        self.sd_alpha = []
 
         if self.num_controllers > 1:
             n_runs = self.n_runs[0]
@@ -704,28 +702,36 @@ class Simulation(utilities.Generic):
             n_runs = self.n_runs
 
         for mid in range(self.num_controllers):
-            self.mean_rc.append(round(statistics.mean(
-                self.statistics['running_cost'][mid]), 2))
-            self.var_rc.append(round(statistics.variance(
-                self.statistics['running_cost'][mid]), 2))
-            self.mean_velocity.append(
-                round(statistics.mean(self.statistics['velocity'][mid]), 2))
-            self.var_velocity.append(
-                round(statistics.variance(self.statistics['velocity'][mid]), 2))
-            self.var_alpha.append(
-                round(statistics.variance(self.statistics['alpha'][mid]), 2))
+            self.mean_rc.append(round(np.array(self.statistics['running_cost'][mid]).mean(), 2))
+            self.mean_velocity.append(round(np.array(self.statistics['velocity'][mid]).mean(), 2))
+            self.sd_rc.append(round(np.array(self.statistics['running_cost'][mid]).std(), 2))
+            self.sd_velocity.append(round(np.array(self.statistics['velocity'][mid]).std(), 2))
+            self.sd_alpha.append(round(np.array(self.statistics['alpha'][mid]).std(), 2))
 
         print(f"Total runs for each controller: {n_runs}")
         
+        final_statistics = []
+
         for mid in range(self.num_controllers):
+            mean_rc = self.mean_rc[mid]
+            mean_velocity = self.mean_velocity[mid]
+            sd_rc = self.sd_rc[mid]
+            sd_velocity = self.sd_velocity[mid]
+            sd_alpha = self.mean_rc[mid]
+            l2_norm = round(self.statistics['l2_norm'][mid], 4)
+
+            final_statistics.append((mean_rc, mean_velocity, sd_rc, sd_velocity, sd_alpha, l2_norm))
+
             print(f"""Statistics for controller {mid+1}:
-            - Mean of running cost: {self.mean_rc[mid]}
-            - Variance of running cost: {self.var_rc[mid]}
-            - Mean of velocity: {self.mean_velocity[mid]}
-            - Variance of velocity: {self.var_velocity[mid]}
-            - Variance of turning angle: {self.var_alpha[mid]}
-            - Final L2-norm: {round(self.statistics['l2_norm'][mid],2)}
+            - Mean of running cost: {mean_rc}
+            - Mean of velocity: {mean_velocity}
+            - SD of running cost: {sd_rc}
+            - SD of velocity: {sd_velocity}
+            - SD of turning angle: {sd_alpha}
+            - Final L2-norm: {l2_norm}
                 """)
+
+        return final_statistics
 
     def _print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
         # alphaDeg = alpha/np.pi*180
