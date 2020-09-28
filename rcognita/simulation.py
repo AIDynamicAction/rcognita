@@ -731,7 +731,7 @@ class Simulation(utilities.Generic):
             - Final L2-norm: {l2_norm}
                 """)
 
-        return final_statistics
+        self.final_statistics = final_statistics
 
     def _print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
         # alphaDeg = alpha/np.pi*180
@@ -1208,8 +1208,8 @@ class Simulation(utilities.Generic):
                     self.t_elapsed[i] = t
                     self._reset_sim(controllers[i], nominal_ctrlers[i], simulators[i], i)
 
-
-        if self.print_summary_stats:
+        if self.print_summary_stats is True:
             self.print_sim_summary_stats()
-
+        
         self._graceful_exit(plt_close=False)
+
