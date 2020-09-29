@@ -89,10 +89,10 @@ class EndiControllerBase:
 
         # running cost parameters
         # state space
-        self.Q = np.diag(np.array([10, 10, 1, 0, 0]))
+        self.Q = np.diag([10, 10, 1, 0, 0])
 
         # action space
-        self.R = np.diag(np.array([0, 0]))
+        self.R = np.diag([0, 0])
 
         # for 4th order
         self.R2 = np.array([[10, 2, 1, 0, 0],

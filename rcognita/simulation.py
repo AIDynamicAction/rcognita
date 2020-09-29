@@ -261,7 +261,7 @@ class Simulation(utilities.Generic):
             else:
                 print(f"Controller 1: run {self.current_run}")
 
-            self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, icost, u)
+            self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, r, u)
 
             if self.print_inline:
                 try:
@@ -734,11 +734,19 @@ class Simulation(utilities.Generic):
         self.final_statistics = final_statistics
 
     def _print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
-        headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
-                     'v [m/s]', 'omega [rad/s]', 'run_cost', 'F [N]', 'M [N m]']
-        dataRow = [t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]]
-        rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f',
-                     '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')
+        try:
+            __IPYTHON__
+
+            headerRow = ['t [s]', 'x [m]', 'y [m]', 'v [m/s]', 'run_cost', 'F [N]', 'M [N m]']
+            dataRow = [t, xCoord, yCoord, v, icost, u[0], u[1]]
+            rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')
+        
+        except:
+            headerRow = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]',
+                         'v [m/s]', 'omega [rad/s]', 'run_cost', 'F [N]', 'M [N m]']
+            dataRow = [t, xCoord, yCoord, alpha, v, omega, icost, u[0], u[1]]
+            rowFormat = ('8.1f', '8.3f', '8.3f', '8.3f',
+                         '8.3f', '8.3f', '8.1f', '8.3f', '8.3f')
         table = tabulate([headerRow, dataRow], floatfmt=rowFormat,
                          headers='firstrow', tablefmt='fancy_grid')
 
