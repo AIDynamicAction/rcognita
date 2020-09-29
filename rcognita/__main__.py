@@ -63,7 +63,7 @@ def main(args=None):
     parser.add_argument('-sample_time', type=float,
                         default=0.3, help="Sample time")
 
-    parser.add_argument('-pred_step_size', type=float,
+    parser.add_argument('-step_size', type=float,
                         default=0.6, help="prediction step size")
 
     parser.add_argument('-critic_update_time', type=float,
@@ -144,7 +144,7 @@ def main(args=None):
     is_disturb = args.is_disturb
     is_dyn_ctrl = args.is_dyn_ctrl
     sample_time = args.sample_time
-    pred_step_size = args.pred_step_size
+    step_size = args.step_size
     ctrl_mode = args.ctrl_mode
     ctrl_gain = args.ctrl_gain
     initial_x = 5
@@ -162,22 +162,22 @@ def main(args=None):
                 is_disturb)
 
     controller = ActorCritic(sys,
-                            t0,
-                            t1,
-                            actor_control_horizon,
-                            buffer_size,
-                            ctrl_mode,
-                            critic_mode,
-                            critic_update_time,
-                            r_cost_struct,
-                            sample_time,
-                            pred_step_size,
-                            estimator_update_time,
-                            estimator_buffer_fill,
-                            estimator_buffer_power,
-                            stacked_model_params,
-                            model_order,
-                            gamma)
+                            t0=t0,
+                            t1=t1,
+                            actor_control_horizon=actor_control_horizon,
+                            buffer_size=buffer_size,
+                            ctrl_mode=ctrl_mode,
+                            critic_mode=critic_mode,
+                            critic_update_time=critic_update_time,
+                            r_cost_struct=r_cost_struct,
+                            sample_time=sample_time,
+                            step_size=step_size,
+                            estimator_update_time=estimator_update_time,
+                            estimator_buffer_fill=estimator_buffer_fill,
+                            estimator_buffer_power=estimator_buffer_power,
+                            stacked_model_params=stacked_model_params,
+                            model_order=model_order,
+                            gamma=gamma)
 
     nominal_ctrl = NominalController(t0,
                                     m,
