@@ -5,5 +5,7 @@
 --- 
 
 <p align="center">
-	<img src="./data-standard.gif" width=70% height=70% />
+	<img src="./demo.gif" width=70% height=70% />
+	Description: A demonstration of sample time ($dt$) versus prediction step size.
+	Rcognita is a framework for DP and RL algorithm development, testing, and simulation.
 </p>
