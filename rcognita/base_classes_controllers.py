@@ -115,8 +115,6 @@ class EndiControllerBase:
         self.u_curr = self.min_bounds / 10
         self.buffer_size = buffer_size
 
-
-
         # buffer of previous controls
         self.u_buffer = np.zeros([buffer_size, self.dim_input])
 
