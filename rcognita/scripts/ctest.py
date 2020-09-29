@@ -14,7 +14,7 @@ def main(args=None):
                         step_size=0.3,
                         ctrl_mode=3,
                         critic_mode=3,
-                        buffer_size=15,
+                        buffer_size=10,
                         actor_control_horizon=10,
                         t1=15)
 
@@ -25,16 +25,16 @@ def main(args=None):
                         critic_mode=3,
                         buffer_size=10,
                         actor_control_horizon=10,
-                        t1=15)
+                        t1=20)
 
     agent3 = ActorCritic(sys,
-                        sample_time=0.9,
+                        sample_time=0.75,
                         step_size=0.3,
                         ctrl_mode=3,
                         critic_mode=3,
                         buffer_size=10,
                         actor_control_horizon=10,
-                        t1=15)
+                        t1=20)
 
     nominal_ctrl = NominalController()
     nominal_ctrl2 = NominalController()
