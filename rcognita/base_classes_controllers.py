@@ -102,7 +102,9 @@ class EndiControllerBase:
                             [0, 0, 0, 0, 0]])
 
         self.i_cost_val = 0
+
         self.sample_time = sample_time
+        self.step_size = step_size
 
         f = np.linspace(self.f_min, self.f_max, 5)
         m = np.linspace(self.m_min, self.m_max, 5)
@@ -113,8 +115,7 @@ class EndiControllerBase:
         self.u_curr = self.min_bounds / 10
         self.buffer_size = buffer_size
 
-        # self.step_size = step_size * self.sample_time
-        self.step_size = step_size
+
 
         # buffer of previous controls
         self.u_buffer = np.zeros([buffer_size, self.dim_input])

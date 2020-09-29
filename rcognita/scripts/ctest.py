@@ -15,29 +15,26 @@ def main(args=None):
                         ctrl_mode=3,
                         critic_mode=3,
                         buffer_size=15,
-                        actor_control_horizon=15,
-                        t1=20,
-                        estimator_update_time=0.3)
+                        actor_control_horizon=10,
+                        t1=15)
 
     agent2 = ActorCritic(sys,
-                        sample_time=0.45,
-                        step_size=0.3,
-                        ctrl_mode=3,
-                        critic_mode=3,
-                        buffer_size=10,
-                        actor_control_horizon=10,
-                        t1=20,
-                        estimator_update_time=0.3)
-
-    agent3 = ActorCritic(sys,
                         sample_time=0.6,
                         step_size=0.3,
                         ctrl_mode=3,
                         critic_mode=3,
                         buffer_size=10,
                         actor_control_horizon=10,
-                        t1=20,
-                        estimator_update_time=0.3)
+                        t1=15)
+
+    agent3 = ActorCritic(sys,
+                        sample_time=0.9,
+                        step_size=0.3,
+                        ctrl_mode=3,
+                        critic_mode=3,
+                        buffer_size=10,
+                        actor_control_horizon=10,
+                        t1=15)
 
     nominal_ctrl = NominalController()
     nominal_ctrl2 = NominalController()
@@ -47,11 +44,11 @@ def main(args=None):
     sim = Simulation(sys, [agent1, agent2, agent3], [nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
     
     sim.run_simulation(n_runs=2, 
-                    is_visualization=False, 
+                    is_visualization=True, 
                     close_plt_on_finish=False, 
                     show_annotations=True, 
                     print_summary_stats=True, 
-                    print_statistics_at_step=True)
+                    print_statistics_at_step=False)
 
 if __name__ == "__main__":
     main()
