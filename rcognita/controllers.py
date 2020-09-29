@@ -125,20 +125,26 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
     """
 
     def __init__(self,
-                *args,
+                 system,
+                 t0=0,
+                 t1=15,
+                 buffer_size=10,
+                 r_cost_struct=1,
+                 sample_time=0.2,
+                 gamma=1,
                  actor_control_horizon=10,
-                 buffer_size=20,
                  ctrl_mode=3,
-                 critic_mode=1,
+                 critic_mode=3,
                  critic_update_time=0.1,
-                 step_size=1,
+                 step_size=0.3,
                  estimator_update_time=0.1,
                  estimator_buffer_fill=6,
                  estimator_buffer_power=2,
                  stacked_model_params=0,
-                 model_order=3,
-                 **kwargs):
-        super(ActorCritic, self).__init__(*args, **kwargs)
+                 model_order=3):
+
+        super(ActorCritic, self).__init__(system, t0, t1, buffer_size, r_cost_struct, sample_time, step_size, gamma)
+
         """
 
         CONTROLLER-RELATED ATTRIBUTES
