@@ -1117,8 +1117,11 @@ class Simulation(utilities.Generic):
                         self._reset_sim(controllers[i], nominal_ctrlers[
                                         i], simulators[i], i)
                 else:
-                    self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[
-                                                                  i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
+                    self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], 
+                                                                self.initial_ys[i], 
+                                                                s=400, 
+                                                                c=self.colors[i], 
+                                                                marker=self.robot_markers[i].marker)
 
                     if self.show_annotations:
                         self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i] + 0.5, self.initial_ys[i] + 0.5), color='k')
@@ -1178,7 +1181,7 @@ class Simulation(utilities.Generic):
                 print(f"... Controller {i}, run {self.current_runs[i]}...")
                 
                 while t < self.t1s[i]:
-                    t, x_coord, y_coord = self._take_step(system, controllers[i], nominal_ctrlers[i], simulators[i], i)
+                    t, x_coord, y_coord = self._take_step(system, controllers[i], nominal_ctrlers[i], simulators[i], mid=i)
 
                 else:
                     self.current_runs[i] += 1
