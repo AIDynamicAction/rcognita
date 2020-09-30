@@ -106,10 +106,6 @@ class EndiControllerBase:
         self.sample_time = sample_time
         self.step_size = step_size
 
-        f = np.linspace(self.f_min, self.f_max, 5)
-        m = np.linspace(self.m_min, self.m_max, 5)
-        self.action_space = np.array(list(itertools.product(f,m)))
-
         self.min_bounds = self.ctrl_bnds[:, 0]
         self.max_bounds = self.ctrl_bnds[:, 1]
         self.u_curr = self.min_bounds / 10
