@@ -54,7 +54,7 @@ class EndiControllerBase:
                  r_cost_struct=1,
                  sample_time=0.2,
                  step_size=0.3,
-                 gamma=1):
+                 gamma=0.95):
         """
 
         SYSTEM-RELATED ATTRIBUTES

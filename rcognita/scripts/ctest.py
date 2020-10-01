@@ -5,7 +5,7 @@ def main(args=None):
     """main"""
     
     # environment
-    sys = EndiSystem() # already creates bot #1
+    sys = EndiSystem()
     sys.add_bots(-5,-5) # creates bot #2
     sys.add_bots(-7,7) # creates bot #3
 
@@ -43,7 +43,7 @@ def main(args=None):
     # sim = Simulation(sys, agent1, nominal_ctrl)
     sim = Simulation(sys, [agent1, agent2, agent3], [nominal_ctrl, nominal_ctrl2, nominal_ctrl3])
     
-    sim.run_simulation(n_runs=2, 
+    sim.run_simulation(n_runs=1, 
                     is_visualization=True, 
                     close_plt_on_finish=False, 
                     show_annotations=True, 

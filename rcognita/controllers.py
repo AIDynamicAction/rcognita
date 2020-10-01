@@ -424,7 +424,7 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
             u_next = u_buffer[k, :]
 
             # Temporal difference
-            e = self.running_cost(y_prev, u_prev) + (self.gamma * W @ self._phi(y_next, u_next)) - (W @ self._phi(y_prev, u_prev))
+            e = self.running_cost(y_prev, u_prev) + (self.gamma * self.W_prev @ self._phi(y_next, u_next)) - (W @ self._phi(y_prev, u_prev))
 
             Jc += (1 / 2) * e**2
 
