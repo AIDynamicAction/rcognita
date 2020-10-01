@@ -44,12 +44,12 @@ class _model:
         
     """
     
-    def __init__(self, A, B, C, D, x0est):
+    def __init__(self, A, B, C, D, x0_est):
         self.A = A
         self.B = B
         self.C = C
         self.D = D
-        self.x0est = x0est
+        self.x0_est = x0_est
         
     def updatePars(self, Anew, Bnew, Cnew, Dnew):
         self.A = Anew
@@ -58,7 +58,7 @@ class _model:
         self.D = Dnew
         
     def updateIC(self, x0setNew):
-        self.x0set = x0setNew
+        self.x0_est = x0setNew
 
 class _ZOH:
     """

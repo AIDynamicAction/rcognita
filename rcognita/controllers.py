@@ -463,6 +463,7 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
 
                     W_new = self._critic(self.W_prev, self.u_buffer, self.y_buffer)
 
+
                 else:
                     W_new = self.W_prev
 
@@ -476,8 +477,9 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
                 elif self.ctrl_mode in (3, 5):
                     u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, W_new, self.step_size, self.ctrl_mode)
 
+                self.W_prev = W_new
+
             self.u_curr = u
-            self.W_prev = W_new
 
             return u
 
