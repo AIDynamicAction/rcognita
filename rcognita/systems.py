@@ -55,10 +55,6 @@ class EndiSystem(utilities.Generic):
     m_man: int
         * manual control variable for steering/turning torque
     
-    is_dyn_ctrl : int
-        * is dynamic control?
-        * If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
-    
     is_disturb : boolean
         * use disturbance?
         * If True, no disturbance is fed into the system
@@ -138,7 +134,6 @@ class EndiSystem(utilities.Generic):
                  f_max=5,
                  m_min=-1,
                  m_max=1,
-                 is_dyn_ctrl=0,
                  is_disturb=False,
                  sigma_q=None,
                  mu_q=None,
@@ -148,12 +143,11 @@ class EndiSystem(utilities.Generic):
         self.dim_input = dim_input
         self.dim_output = dim_output
         self.dim_disturb = dim_disturb
+        self._dim_initial_full_state = self.dim_state + self.dim_input
 
-        if is_dyn_ctrl:
-            self._dim_initial_full_state = self.dim_state + self.dim_disturb + self.dim_input
-        else:
-            self._dim_initial_full_state = self.dim_state + self.dim_disturb
-
+        self.initial_x = initial_x
+        self.initial_y = initial_y
+        self.alpha = np.pi / 2
         self.m = m
         self.I = I
         self.f_min = f_min
@@ -164,24 +158,15 @@ class EndiSystem(utilities.Generic):
         self.m_man = m_man
         self.u_man = np.array([f_man, m_man])
         self.control_bounds = np.array([[f_min, f_max], [m_min, m_max]])
-        self.initial_x = initial_x
-        self.initial_y = initial_y
+
+        self.multi_sim = None
         self.num_controllers = 1
+
         self.q0 = np.zeros(dim_disturb)
         self.u0 = np.zeros(dim_input)
-        self.is_dyn_ctrl = is_dyn_ctrl
-        self.multi_sim = None
 
-        # initial values of the system's state
-        self.initial_alpha = self.alpha = initial_alpha = np.pi / 2
-        initial_state = np.zeros(dim_state)
-        initial_state[0] = initial_x
-        initial_state[1] = initial_y
-        initial_state[2] = initial_alpha
-        self.system_state = initial_state
-
-        self.full_state = self.create_full_state(
-            self.system_state, self.q0, self.u0, is_dyn_ctrl)
+        self.system_state = self._create_system_state()
+        self.full_state = self.create_full_state(self.system_state, self.q0, self.u0)
 
         """ disturbance """
         self.is_disturb = is_disturb
@@ -189,21 +174,29 @@ class EndiSystem(utilities.Generic):
         self.mu_q = mu_q
         self.tau_q = tau_q
 
-    def create_full_state(self, system_state, u0, q0=None, is_dyn_ctrl=0):
-        if is_dyn_ctrl:
-            self.full_state = np.concatenate([self.system_state, u0, q0])
-        else:
-            self.full_state = np.concatenate([self.system_state, u0])
+    def _create_system_state(self):
+        # initial values of the system's state
+        initial_state = np.zeros(self.dim_state)
+        initial_state[0] = self.initial_x
+        initial_state[1] = self.initial_y
+        initial_state[2] = self.alpha
+        system_state = initial_state
+
+        return system_state
+
+    def create_full_state(self, system_state, u0, q0=None):
+        self.full_state = np.concatenate([self.system_state, u0])
 
         return self.full_state
 
     def add_bots(self, initial_x, initial_y, number=1):
-        self.new_state = np.zeros(self.dim_state)
-        self.new_state[0] = initial_x
-        self.new_state[1] = initial_y
-        self.new_state[2] = self.initial_alpha
+        new_state = np.zeros(self.dim_state)
+        alpha = np.pi / 2
+        new_state[0] = initial_x
+        new_state[1] = initial_y
+        new_state[2] = alpha
 
-        self.system_state = np.vstack((self.system_state, self.new_state))
+        self.system_state = np.vstack((self.system_state, new_state))
 
         if self.u0.ndim == 1:
             self.u0 = np.tile(self.u0, (2, 1))
@@ -219,12 +212,10 @@ class EndiSystem(utilities.Generic):
             new_row = self.u0[0, :]
             self.q0 = np.vstack((self.q0, new_row))
 
-        if self.is_dyn_ctrl:
-            self.full_state = np.concatenate(
-                (self.system_state, self.q0, self.u0), axis=1)
+        if self.is_disturb:
+            self.full_state = np.concatenate((self.system_state, self.u0, self.q0), axis=1)
         else:
-            self.full_state = np.concatenate(
-                (self.system_state, self.q0), axis=1)
+            self.full_state = np.concatenate((self.system_state, self.u0), axis=1)
 
         self.alpha = self.system_state[:, 2]
 
@@ -290,20 +281,6 @@ class EndiSystem(utilities.Generic):
 
         return Dq
 
-    def _create_dyn_controller(t, u, y):
-        """
-        Dynamical controller.
-        
-        When `is_dyn_ctrl=0`, the controller is considered static, which is to say that the control actions are computed immediately from the system's output.
-        In case of a dynamical controller, the system's state vector effectively gets extended.
-        
-        Dynamical controllers have some advantages compared to the static ones. Currently, left for future implementation
-        """
-
-        Du = np.zeros(self.dim_input)
-
-        return Du
-
     def set_latest_action(self, u, mid=None):
         if self.num_controllers > 1:
             self.u0[mid] = u
@@ -343,15 +320,10 @@ class EndiSystem(utilities.Generic):
         x = full_state[0:self.dim_state]
         q = full_state[self.dim_state:]
 
-        if self.is_dyn_ctrl:
-            u = full_state[-self.dim_input:]
-            new_full_state[-self.dim_input:] = self._create_dyn_controller(t, u, y)
+        if self.multi_sim is not None:
+            u = self.u0[mid]
         else:
-            # Fetch the control action stored in the system
-            if self.multi_sim is not None:
-                u = self.u0[mid]
-            else:
-                u = self.u0
+            u = self.u0
 
         if self.control_bounds.any():
             for k in range(self.dim_input):
