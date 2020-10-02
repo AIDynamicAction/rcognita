@@ -222,7 +222,7 @@ class EndiSystem(utilities.Generic):
         self.num_controllers += 1
 
     @staticmethod
-    def _get_system_dynamics(t, x, u, q, m, I, dim_state, is_disturb):
+    def _get_system_dynamics(t, x, u, m, I, dim_state, is_disturb):
         """ Get internal system dynamics
             Generalized derivative of: x_t+1 = f(x_t, u_t, q_t)
         
@@ -311,16 +311,8 @@ class EndiSystem(utilities.Generic):
                 sys.set_latest_action(u)
         """
 
-        # environment + disturbance
         if self.multi_sim is not None:
             mid = self.multi_sim
-
-        new_full_state = np.zeros(self._dim_initial_full_state)
-
-        x = full_state[0:self.dim_state]
-        q = full_state[self.dim_state:]
-
-        if self.multi_sim is not None:
             u = self.u0[mid]
         else:
             u = self.u0
@@ -329,11 +321,11 @@ class EndiSystem(utilities.Generic):
             for k in range(self.dim_input):
                 u[k] = np.clip(u[k], self.control_bounds[k, 0],self.control_bounds[k, 1])
 
-        new_full_state[0:self.dim_state] = self._get_system_dynamics(
-            t, x, u, q, self.m, self.I, self.dim_state, self.is_disturb)
+        x = full_state[0:self.dim_state]
 
-        if self.is_disturb:
-            new_full_state[self.dim_state:] = self._add_disturbance(t, q)
+        new_full_state = np.zeros(self._dim_initial_full_state)
+        new_full_state[0:self.dim_state] = self._get_system_dynamics(
+            t, x, u, self.m, self.I, self.dim_state, self.is_disturb)
 
         if self.multi_sim is not None:
             self.system_state[mid, :] = x

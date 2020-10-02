@@ -403,7 +403,7 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
             x = self.system_state
 
             for k in range(1, self.actor_control_horizon):
-                x = x + step_size * self.sys_dynamics([], x, U_2d[k - 1, :], [], self.m, self.I, self.dim_state, self.is_disturb)
+                x = x + step_size * self.sys_dynamics([], x, U_2d[k - 1, :], self.m, self.I, self.dim_state, self.is_disturb)
 
                 Y[k, :] = self.sys_output(x)
 
