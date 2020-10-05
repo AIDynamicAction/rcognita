@@ -575,8 +575,8 @@ class Simulation(utilities.Generic):
 
         return self.sim_fig
 
-    def _graceful_exit(self, plt_close=True):
-        if plt_close is True:
+    def _graceful_exit(self, exit_py=True):
+        if exit_py is True:
             plt.close('all')
 
         # graceful exit from Jupyter notebook
@@ -585,7 +585,7 @@ class Simulation(utilities.Generic):
 
         # graceful exit from terminal
         except NameError:
-            if plt_close is True:
+            if exit_py is True:
                 print("Program exit")
                 sys.exit()
             else:
@@ -809,7 +809,7 @@ class Simulation(utilities.Generic):
                         is_visualization=True, 
                         fig_width=8, 
                         fig_height=8, 
-                        close_plt_on_finish=True, 
+                        exit_py_on_finish=True, 
                         show_annotations=False, 
                         print_summary_stats=False,
                         print_statistics_at_step=False,
@@ -828,7 +828,7 @@ class Simulation(utilities.Generic):
         fig_height : int
             * if visualizing: height of figure
 
-        close_plt_on_finish : bool
+        exit_py_on_finish : bool
             * if visualizing: close plots automatically on finishing simulation
 
         show_annotations : bool
@@ -853,12 +853,12 @@ class Simulation(utilities.Generic):
                 self.print_summary_stats = print_summary_stats
                 self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}, 'l2_norm': {}}
                 # self.current_data_file = data_files[0]
-                self.close_plt_on_finish = close_plt_on_finish
+                self.exit_py_on_finish = exit_py_on_finish
                 self.data_files = self._log_data(n_runs, save=self.is_log_data)
                 self.show_annotations = show_annotations
 
                 if self.is_visualization is False:
-                    self.close_plt_on_finish = False
+                    self.exit_py_on_finish = False
                     self.show_annotations = False
                     self.print_summary_stats = True
 
@@ -1041,11 +1041,11 @@ class Simulation(utilities.Generic):
             self.exit_animation = True
 
         else:
-            if self.close_plt_on_finish is True:
+            if self.exit_py_on_finish is True:
                 self._graceful_exit()
 
-            elif self.close_plt_on_finish is False:
-                self._graceful_exit(plt_close=False)
+            elif self.exit_py_on_finish is False:
+                self._graceful_exit(exit_py=False)
 
     def _wrapper_take_steps_multi(self, k, *args):
         system, controllers, simulators, animate = args
@@ -1109,11 +1109,11 @@ class Simulation(utilities.Generic):
 
         else:
             self.t_elapsed = self.t1s
-            if self.close_plt_on_finish is True:
+            if self.exit_py_on_finish is True:
                 self._graceful_exit()
 
-            elif self.close_plt_on_finish is False:
-                self._graceful_exit(plt_close=False)
+            elif self.exit_py_on_finish is False:
+                self._graceful_exit(exit_py=False)
 
     def _wrapper_take_steps_no_viz(self, *args):
         system, controller, simulator = args
@@ -1134,7 +1134,11 @@ class Simulation(utilities.Generic):
             if self.print_summary_stats is True:
                 self.print_sim_summary_stats()
 
-            self._graceful_exit()
+            if self.exit_py_on_finish is True:
+                self._graceful_exit()
+
+            elif self.exit_py_on_finish is False:
+                self._graceful_exit(exit_py=False)
 
     def _wrapper_take_steps_multi_no_viz(self, *args):
         system, controllers, simulators = args
@@ -1157,5 +1161,5 @@ class Simulation(utilities.Generic):
         if self.print_summary_stats is True:
             self.print_sim_summary_stats()
         
-        self._graceful_exit(plt_close=False)
+        self._graceful_exit(exit_py=False)
 
