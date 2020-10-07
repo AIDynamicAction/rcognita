@@ -214,130 +214,74 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
 
         self.W_prev = np.ones(int(self.num_critic_weights))
 
+
     def _estimate_model(self, t, y):
         """
         Estimate model parameters by accumulating data buffers `u_buffer` and `y_buffer`
 
         """
 
+        time_in_sample = t - self.ctrl_clock
 
-        try:
-            SSest = sippy.system_identification(self.y_buffer,
-                                                self.u_buffer,
-                                                id_method='N4SID',
-                                                SS_fixed_order=self.model_order,
-                                                SS_D_required=False,
-                                                SS_A_stability=False,
-                                                SS_PK_B_reval=False,
-                                                tsample=self.sample_time)
+        if time_in_sample >= self.sample_time:  # New sample
+            # Update buffers when using RL or requiring estimated model
+            if self.ctrl_mode in (2, 3, 4, 5, 6):
+                time_in_est_period = t - self.est_clock
 
-            self.my_model.updatePars(SSest.A, SSest.B, SSest.C, SSest.D)
+                # Estimate model if required by ctrlStatMode
+                if (time_in_est_period >= estimator_update_time) and (self.ctrl_mode in (2, 4, 6)):
+                    # Update model estimator's internal clock
+                    self.est_clock = t
 
-        except:
-            print('Model estimation problem')
-            self.my_model.updatePars(np.zeros([self.model_order, self.model_order]),
-                                     np.zeros(
-                                         [self.model_order, self.dim_input]),
-                                     np.zeros(
-                                         [self.dim_output, self.model_order]),
-                                     np.zeros([self.dim_output, self.dim_input]))
+                    try:
+                        SSest = sippy.system_identification(self.y_buffer,
+                                                            self.u_buffer,
+                                                            id_method='N4SID',
+                                                            SS_fixed_order=self.model_order,
+                                                            SS_D_required=False,
+                                                            SS_A_stability=False,
+                                                            SS_PK_B_reval=False,
+                                                            tsample=self.sample_time)
 
-        # Model checks
-        if self.stacked_model_params > 0:
-            # Update estimated model parameter stacks
-            self.model_stack.pop(0)
-            self.model_stack.append(self.model)
+                        self.my_model.updatePars(SSest.A, SSest.B, SSest.C, SSest.D)
 
-            # Perform check of stack of models and pick the best
-            totAbsErrCurr = 1e8
-            for k in range(self.stacked_model_params):
-                A, B, C, D = self.model_stack[k].A, self.model_stack[k].B, self.model_stack[k].C, self.model_stack[k].D
-                x0_est, _, _, _ = np.linalg.lstsq(C, y)
-                y_est, _ = self._dss_sim(
-                    A, B, C, D, self.u_buffer, x0_est, y)
-                meanErr = np.mean(y_est - self.y_buffer, axis=0)
+                    except:
+                        print('Model estimation problem')
+                        self.my_model.updatePars(np.zeros([self.model_order, self.model_order]),
+                                                 np.zeros(
+                                                     [self.model_order, self.dim_input]),
+                                                 np.zeros(
+                                                     [self.dim_output, self.model_order]),
+                                                 np.zeros([self.dim_output, self.dim_input]))
 
-                totAbsErr = np.sum(np.abs(meanErr))
-                if totAbsErr <= totAbsErrCurr:
-                    totAbsErrCurr = totAbsErr
-                    self.my_model.updatePars(
-                        SSest.A, SSest.B, SSest.C, SSest.D)
+                    # Model checks
+                    if self.stacked_model_params > 0:
+                        # Update estimated model parameter stacks
+                        self.model_stack.pop(0)
+                        self.model_stack.append(self.model)
 
-        # Update initial state estimate
-        x0_est, _, _, _ = np.linalg.lstsq(self.my_model.C, y)
-        self.my_model.updateIC(x0_est)
+                        # Perform check of stack of models and pick the best
+                        totAbsErrCurr = 1e8
+                        for k in range(self.stacked_model_params):
+                            A, B, C, D = self.model_stack[k].A, self.model_stack[k].B, self.model_stack[k].C, self.model_stack[k].D
+                            x0_est, _, _, _ = np.linalg.lstsq(C, y)
+                            y_est, _ = self._dss_sim(
+                                A, B, C, D, self.u_buffer, x0_est, y)
+                            meanErr = np.mean(y_est - self.y_buffer, axis=0)
 
-        if t >= self.estimator_buffer_fill:
-                # Drop probing noise
-            self.is_prob_noise = 0
+                            totAbsErr = np.sum(np.abs(meanErr))
+                            if totAbsErr <= totAbsErrCurr:
+                                totAbsErrCurr = totAbsErr
+                                self.my_model.updatePars(
+                                    SSest.A, SSest.B, SSest.C, SSest.D)
 
-    # def _estimate_model(self, t, y):
-    #     """
-    #     Estimate model parameters by accumulating data buffers `u_buffer` and `y_buffer`
+            # Update initial state estimate
+            x0_est, _, _, _ = np.linalg.lstsq(self.my_model.C, y)
+            self.my_model.updateIC(x0_est)
 
-    #     """
-
-    #     time_in_sample = t - self.ctrl_clock
-
-    #     if time_in_sample >= self.sample_time:  # New sample
-    #         # Update buffers when using RL or requiring estimated model
-    #         if self.ctrl_mode in (2, 3, 4, 5, 6):
-    #             time_in_est_period = t - self.est_clock
-
-    #             # Estimate model if required by ctrlStatMode
-    #             if (time_in_est_period >= estimator_update_time) and (self.ctrl_mode in (2, 4, 6)):
-    #                 # Update model estimator's internal clock
-    #                 self.est_clock = t
-
-    #                 try:
-    #                     SSest = sippy.system_identification(self.y_buffer,
-    #                                                         self.u_buffer,
-    #                                                         id_method='N4SID',
-    #                                                         SS_fixed_order=self.model_order,
-    #                                                         SS_D_required=False,
-    #                                                         SS_A_stability=False,
-    #                                                         SS_PK_B_reval=False,
-    #                                                         tsample=self.sample_time)
-
-    #                     self.my_model.updatePars(SSest.A, SSest.B, SSest.C, SSest.D)
-
-    #                 except:
-    #                     print('Model estimation problem')
-    #                     self.my_model.updatePars(np.zeros([self.model_order, self.model_order]),
-    #                                              np.zeros(
-    #                                                  [self.model_order, self.dim_input]),
-    #                                              np.zeros(
-    #                                                  [self.dim_output, self.model_order]),
-    #                                              np.zeros([self.dim_output, self.dim_input]))
-
-    #                 # Model checks
-    #                 if self.stacked_model_params > 0:
-    #                     # Update estimated model parameter stacks
-    #                     self.model_stack.pop(0)
-    #                     self.model_stack.append(self.model)
-
-    #                     # Perform check of stack of models and pick the best
-    #                     totAbsErrCurr = 1e8
-    #                     for k in range(self.stacked_model_params):
-    #                         A, B, C, D = self.model_stack[k].A, self.model_stack[k].B, self.model_stack[k].C, self.model_stack[k].D
-    #                         x0_est, _, _, _ = np.linalg.lstsq(C, y)
-    #                         y_est, _ = self._dss_sim(
-    #                             A, B, C, D, self.u_buffer, x0_est, y)
-    #                         meanErr = np.mean(y_est - self.y_buffer, axis=0)
-
-    #                         totAbsErr = np.sum(np.abs(meanErr))
-    #                         if totAbsErr <= totAbsErrCurr:
-    #                             totAbsErrCurr = totAbsErr
-    #                             self.my_model.updatePars(
-    #                                 SSest.A, SSest.B, SSest.C, SSest.D)
-
-    #         # Update initial state estimate
-    #         x0_est, _, _, _ = np.linalg.lstsq(self.my_model.C, y)
-    #         self.my_model.updateIC(x0_est)
-
-    #         if t >= self.estimator_buffer_fill:
-    #                 # Drop probing noise
-    #             self.is_prob_noise = 0
+            if t >= self.estimator_buffer_fill:
+                    # Drop probing noise
+                self.is_prob_noise = 0
 
     def _actor(self, U, y_obs, N, W, step_size, ctrl_mode):
         """
@@ -423,10 +367,8 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
                 J += self.gamma**k * self.running_cost(Y[k, :], U_2d[k, :])
 
         elif ctrl_mode in (3, 4, 5, 6):
-            for k in range(N - 1):
-                J += self.gamma**k * self.running_cost(Y[k, :], U_2d[k, :])
-            
-            J += W @ self._phi(Y[-1, :], U_2d[-1, :])
+            for k in range(N):
+                J += self.running_cost(Y[k, :], U_2d[k, :]) + self.gamma**k * W @ self._phi(Y[-1, :], U_2d[-1, :])
 
             if ctrl_mode in (4,5):
                     J /= N
@@ -502,7 +444,7 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
 
                 # Apply control when model estimation phase is over
                 if self.is_prob_noise and (self.ctrl_mode == 2):
-                    return self.estimator_buffer_power * (rand(self.dim_input) - 0.5)
+                    u = self.estimator_buffer_power * (rand(self.dim_input) - 0.5)
 
                 elif not self.is_prob_noise and (self.ctrl_mode == 2):
                     u = self._actor(self.u_curr, y_obs, self.actor_control_horizon, [], self.step_size, self.ctrl_mode)
