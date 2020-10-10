@@ -860,7 +860,6 @@ class Simulation(utilities.Generic):
                 if self.is_visualization is False:
                     self.exit_py_on_finish = False
                     self.show_annotations = False
-                    self.print_summary_stats = True
 
                 if self.print_statistics_at_step:
                     warnings.filterwarnings('ignore')
@@ -1104,6 +1103,9 @@ class Simulation(utilities.Generic):
             if self.print_summary_stats:
                 self.print_sim_summary_stats()
 
+            else:
+                print("Simulation completed...")
+
             self.anm.running = False
             self.exit_animation = True
 
@@ -1133,6 +1135,8 @@ class Simulation(utilities.Generic):
         else:
             if self.print_summary_stats is True:
                 self.print_sim_summary_stats()
+            else:
+                print("Simulation completed...")
 
             if self.exit_py_on_finish is True:
                 self._graceful_exit()
@@ -1160,6 +1164,9 @@ class Simulation(utilities.Generic):
 
         if self.print_summary_stats is True:
             self.print_sim_summary_stats()
+
+        else:
+            print("Simulation completed...")
         
         self._graceful_exit(exit_py=False)
 
