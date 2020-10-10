@@ -236,13 +236,13 @@ class Simulation(utilities.Generic):
             self.statistics['running_cost'][0].append(r)
             self.statistics['velocity'][0].append(v)
             self.statistics['alpha'][0].append(alpha)
-            self.statistics['l2_norm'][0] = l2_norm
+            self.statistics['l2_norm'][0].append(l2_norm)
 
         else:
             self.statistics['running_cost'][mid].append(r)
             self.statistics['velocity'][mid].append(v)
             self.statistics['alpha'][mid].append(alpha)
-            self.statistics['l2_norm'][mid] = l2_norm
+            self.statistics['l2_norm'][mid].append(l2_norm)
 
         if self.print_statistics_at_step:
             if mid is not None:
@@ -250,7 +250,7 @@ class Simulation(utilities.Generic):
             else:
                 print(f"Controller 1: run {self.current_run}")
 
-            self._print_sim_step(t, x_coord, y_coord, alpha, v, omega, r, u)
+            self._print_stats_on_step(t, x_coord, y_coord, alpha, v, omega, r, u)
 
             if self.print_inline:
                 try:
@@ -663,12 +663,13 @@ class Simulation(utilities.Generic):
 
             self._graceful_exit()
 
-    def print_sim_summary_stats(self):
+    def print_summary_stats(self):
         self.mean_rc = []
         self.mean_velocity = []
         self.sd_rc = []
         self.sd_velocity = []
         self.sd_alpha = []
+        self.sd_l2 = []
 
         if self.num_controllers > 1:
             n_runs = self.n_runs[0]
@@ -681,6 +682,7 @@ class Simulation(utilities.Generic):
             self.sd_rc.append(round(np.array(self.statistics['running_cost'][mid]).std(), 2))
             self.sd_velocity.append(round(np.array(self.statistics['velocity'][mid]).std(), 2))
             self.sd_alpha.append(round(np.array(self.statistics['alpha'][mid]).std(), 2))
+            self.sd_l2.append(round(np.array(self.statistics['l2_norm'][mid]).std(), 2))
 
         print(f"Total runs for each controller: {n_runs}")
         
@@ -692,9 +694,10 @@ class Simulation(utilities.Generic):
             sd_rc = self.sd_rc[mid]
             sd_velocity = self.sd_velocity[mid]
             sd_alpha = self.mean_rc[mid]
-            l2_norm = round(self.statistics['l2_norm'][mid], 4)
+            sd_l2 = self.sd_l2[mid]
+            final_l2 = round(self.statistics['l2_norm'][mid][-1], 2)
 
-            final_statistics.append((mean_rc, mean_velocity, sd_rc, sd_velocity, sd_alpha, l2_norm))
+            final_statistics.append((mean_rc, mean_velocity, sd_rc, sd_velocity, sd_alpha, final_l2, sd_l2))
 
             print(f"""Statistics for controller {mid+1}:
             - Mean of running cost: {mean_rc}
@@ -702,12 +705,13 @@ class Simulation(utilities.Generic):
             - SD of running cost: {sd_rc}
             - SD of velocity: {sd_velocity}
             - SD of turning angle: {sd_alpha}
-            - Final L2-norm: {l2_norm}
+            - SD L2-norm: {sd_l2}
+            - Final L2-norm: {final_l2}
                 """)
-
+            
         self.final_statistics = final_statistics
 
-    def _print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
+    def _print_stats_on_step(self, t, xCoord, yCoord, alpha, v, omega, icost, u):
         try:
             __IPYTHON__
 
@@ -811,7 +815,7 @@ class Simulation(utilities.Generic):
                         fig_height=8, 
                         exit_py_on_finish=True, 
                         show_annotations=False, 
-                        print_summary_stats=False,
+                        show_summary_stats=False,
                         print_statistics_at_step=False,
                         print_inline=False,
                         is_log_data=False):
@@ -834,7 +838,7 @@ class Simulation(utilities.Generic):
         show_annotations : bool
             * if visualizing: annotate controller/agent for identification
 
-        print_summary_stats : bool
+        show_summary_stats : bool
             * print summary statistics after simulation
         
         is_log_data : bool
@@ -850,7 +854,7 @@ class Simulation(utilities.Generic):
                 self.is_visualization = is_visualization
                 self.print_statistics_at_step = print_statistics_at_step
                 self.print_inline = print_inline
-                self.print_summary_stats = print_summary_stats
+                self.show_summary_stats = show_summary_stats
                 self.statistics = {'running_cost': {}, 'velocity': {}, 'alpha': {}, 'l2_norm': {}}
                 # self.current_data_file = data_files[0]
                 self.exit_py_on_finish = exit_py_on_finish
@@ -868,7 +872,7 @@ class Simulation(utilities.Generic):
                     self.statistics['running_cost'].setdefault(i, [])
                     self.statistics['velocity'].setdefault(i, [])
                     self.statistics['alpha'].setdefault(i, [])
-                    self.statistics['l2_norm'].setdefault(i, 0)
+                    self.statistics['l2_norm'].setdefault(i, [])
 
                 if self.num_controllers > 1:
                     self.current_runs = np.ones(self.num_controllers, dtype=np.int64)
@@ -1033,8 +1037,8 @@ class Simulation(utilities.Generic):
                 self._reset_sim(controller, simulator)
 
         elif self.current_run > self.n_runs and self.exit_animation is False:
-            if self.print_summary_stats is True:
-                self.print_sim_summary_stats()
+            if self.show_summary_stats is True:
+                self.print_summary_stats()
 
             self.anm.running = False
             self.exit_animation = True
@@ -1100,8 +1104,8 @@ class Simulation(utilities.Generic):
                 if self.show_annotations:
                     self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i] + 0.5, self.initial_ys[i] + 0.5), color='k')
 
-            if self.print_summary_stats:
-                self.print_sim_summary_stats()
+            if self.show_summary_stats:
+                self.print_summary_stats()
 
             else:
                 print("Simulation completed...")
@@ -1133,8 +1137,8 @@ class Simulation(utilities.Generic):
                 self._reset_sim(controller, simulator)
 
         else:
-            if self.print_summary_stats is True:
-                self.print_sim_summary_stats()
+            if self.show_summary_stats is True:
+                self.print_summary_stats()
             else:
                 print("Simulation completed...")
 
@@ -1162,8 +1166,8 @@ class Simulation(utilities.Generic):
                     self.t_elapsed[i] = t
                     self._reset_sim(controllers[i], simulators[i], i)
 
-        if self.print_summary_stats is True:
-            self.print_sim_summary_stats()
+        if self.show_summary_stats is True:
+            self.print_summary_stats()
 
         else:
             print("Simulation completed...")
