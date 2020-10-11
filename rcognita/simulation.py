@@ -146,8 +146,10 @@ class Simulation(utilities.Generic):
                 self.sample_time, self.ctrl_mode, self.t1, self.t0 = self._get_controller_info(
                     self.controller)
 
-                self.system_state, self.full_state, self.alpha, self.initial_x, self.initial_y = self._get_system_info(
+                self.system_state, self.full_state, self.alpha, self.x_coord, self.y_coord = self._get_system_info(
                     system)
+
+                self.initial_x = self.x_coord
 
                 self.simulator = sp.integrate.RK45(closed_loop,
                                                    self.t0,
@@ -162,8 +164,12 @@ class Simulation(utilities.Generic):
                 self.sample_times, self.ctrl_modes, self.t1s, self.t0 = self._get_controller_info(
                     self.controllers, multi=True)
 
-                self.system_states, self.full_states, self.alphas, self.initial_xs, self.initial_ys, self.u0s = self._get_system_info(
+                self.system_states, self.full_states, self.alphas, self.x_coords, self.y_coords, self.u0s = self._get_system_info(
                     system, multi=True)
+
+                self.initial_xs = self.x_coords.copy()
+                self.initial_ys = self.y_coords.copy()
+
 
                 self.simulators = []
 
@@ -294,7 +300,7 @@ class Simulation(utilities.Generic):
                                 'k--', lw=0.75)   # y-axis
 
         self.traj_line, = self.xy_plane_axes.plot(
-            self.initial_x, self.initial_y, 'b--', lw=0.5)
+            self.x_coord, self.y_coord, 'b--', lw=0.5)
 
         self.robot_marker = utilities._pltMarker(angle=self.alpha)
 
@@ -322,7 +328,7 @@ class Simulation(utilities.Generic):
                            'k--', lw=0.75)   # Help line
 
         self.norm_line, = self.sol_axes.plot(self.t0, la.norm(
-            [self.initial_x, self.initial_y]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+            [self.x_coord, self.y_coord]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
 
         self.alpha_line, = self.sol_axes.plot(
             self.t0, self.alpha, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
@@ -438,7 +444,7 @@ class Simulation(utilities.Generic):
         run_positions = [[0.15, 0.90], [0.80, 0.90], [0.15, 0.13], [0.80, 0.13]]
 
         for i in range(self.num_controllers):
-            self.traj_line, = self.xy_plane_axes.plot(self.initial_xs[i], self.initial_ys[i], f'{self.colors[i]}--', lw=0.5, c=self.colors[i])
+            self.traj_line, = self.xy_plane_axes.plot(self.x_coords[i], self.y_coords[i], f'{self.colors[i]}--', lw=0.5, c=self.colors[i])
 
             self.robot_marker = utilities._pltMarker(angle=self.alphas[i])
 
@@ -472,7 +478,7 @@ class Simulation(utilities.Generic):
         self.alpha_lines = []
 
         for i in range(self.num_controllers):
-            self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.initial_xs[i], self.initial_ys[i]]), f'{self.color_pairs[i][0]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+            self.norm_line, = self.sol_axes.plot(self.t0, la.norm([self.x_coords[i], self.y_coords[i]]), f'{self.color_pairs[i][0]}--', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
 
             self.alpha_line, = self.sol_axes.plot(self.t0, self.alphas[i], f'{self.color_pairs[i][1]}--', lw=0.5, label=r'$\alpha$ [rad]')
 
@@ -548,7 +554,6 @@ class Simulation(utilities.Generic):
 
         handles, labels = self.ctrlAxs.get_legend_handles_labels()
 
-        # clabels = clabels[::-1]
         new_labels = [clabels] * self.num_controllers
         new_labels = list(itertools.chain.from_iterable(new_labels))
 
@@ -595,18 +600,18 @@ class Simulation(utilities.Generic):
         self.scatter_plots = []
 
         if self.num_controllers > 1:
-            self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs, self.initial_ys, s=400, c=self.colors[:self.num_controllers], marker=self.robot_marker.marker)
+            self.sol_scatter = self.xy_plane_axes.scatter(self.x_coords, self.y_coords, s=400, c=self.colors[:self.num_controllers], marker=self.robot_marker.marker)
             self.scatter_plots.append(self.sol_scatter)
 
             if self.show_annotations:
                 self.annotations = []
                 for i in range(self.num_controllers):
-                    self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i] + 0.5, self.initial_ys[i] + 0.5), color='k')
+                    self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.x_coords[i] + 0.5, self.y_coords[i] + 0.5), color='k')
                     self.annotations.append(self.annotation)
 
         else:
             self.sol_scatter = self.xy_plane_axes.scatter(
-                self.initial_x, self.initial_y, marker=self.robot_marker.marker, s=400, c='b')
+                self.x_coord, self.y_coord, marker=self.robot_marker.marker, s=400, c='b')
 
         return self.sol_scatter,
 
@@ -670,9 +675,11 @@ class Simulation(utilities.Generic):
         self.sd_velocity = []
         self.sd_alpha = []
         self.sd_l2 = []
+        self.rmse_l2 = []
 
         if self.num_controllers > 1:
             n_runs = self.n_runs[0]
+
         else:
             n_runs = self.n_runs
 
@@ -683,6 +690,21 @@ class Simulation(utilities.Generic):
             self.sd_velocity.append(round(np.array(self.statistics['velocity'][mid]).std(), 2))
             self.sd_alpha.append(round(np.array(self.statistics['alpha'][mid]).std(), 2))
             self.sd_l2.append(round(np.array(self.statistics['l2_norm'][mid]).std(), 2))
+
+            # RMSE calc
+            num_steps = len(self.statistics['l2_norm'][mid])
+
+            if self.num_controllers == 1:
+                x = np.linspace(self.x_coord, 0, num_steps)
+                y = np.linspace(self.x_coord, 0, num_steps)
+            else:
+                x = np.linspace(self.x_coords[mid], 0, num_steps)
+                y = np.linspace(self.y_coords[mid], 0, num_steps)
+
+            coords = np.concatenate((x,y)).reshape(2,-1)
+            nominal_norms = np.linalg.norm(coords, axis=0)
+            norm_per_step = self.statistics['l2_norm'][mid]
+            self.rmse_l2.append(round(np.sqrt(np.mean((norm_per_step-nominal_norms)**2)),3))
 
         print(f"Total runs for each controller: {n_runs}")
         
@@ -696,8 +718,9 @@ class Simulation(utilities.Generic):
             sd_alpha = self.mean_rc[mid]
             sd_l2 = self.sd_l2[mid]
             final_l2 = round(self.statistics['l2_norm'][mid][-1], 2)
+            rmse_error = self.rmse_l2[mid]
 
-            final_statistics.append((mean_rc, mean_velocity, sd_rc, sd_velocity, sd_alpha, final_l2, sd_l2))
+            final_statistics.append((mean_rc, mean_velocity, sd_rc, sd_velocity, sd_alpha, final_l2, sd_l2, rmse_error))
 
             print(f"""Statistics for controller {mid+1}:
             - Mean of running cost: {mean_rc}
@@ -707,6 +730,7 @@ class Simulation(utilities.Generic):
             - SD of turning angle: {sd_alpha}
             - SD L2-norm: {sd_l2}
             - Final L2-norm: {final_l2}
+            - RMSE of Trajectory: {rmse_error}
                 """)
             
         self.final_statistics = final_statistics
@@ -951,7 +975,6 @@ class Simulation(utilities.Generic):
             return t, x_coord, y_coord
 
         else:
-
             if animate:
                 self._update_all_lines(
                     text_time, full_state, alpha_deg, x_coord, y_coord, t, alpha, r, icost, u, self.l2_norm)
@@ -1006,8 +1029,7 @@ class Simulation(utilities.Generic):
         # Rotate the robot on the plot
         self.robot_markers[mid].rotate(alpha_deg)
 
-        self.scatter_plots.append(self.xy_plane_axes.scatter(
-            x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
+        self.scatter_plots.append(self.xy_plane_axes.scatter(x_coord, y_coord, marker=self.robot_markers[mid].marker, s=400, c=self.colors[mid]))
 
         # Solution
         self._update_line(self.norm_lines[mid], t, l2_norm)
@@ -1086,23 +1108,22 @@ class Simulation(utilities.Generic):
                         self.t_elapsed[i] = t
                         self._reset_sim(controllers[i], simulators[i], i)
                 else:
-                    self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], 
-                                                                self.initial_ys[i], 
+                    self.sol_scatter = self.xy_plane_axes.scatter(self.x_coords[i], 
+                                                                self.y_coords[i], 
                                                                 s=400, 
                                                                 c=self.colors[i], 
                                                                 marker=self.robot_markers[i].marker)
 
                     if self.show_annotations:
-                        self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i] + 0.5, self.initial_ys[i] + 0.5), color='k')
+                        self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.x_coords[i] + 0.5, self.y_coords[i] + 0.5), color='k')
                     continue
 
         elif self.keep_stepping.all() == False and self.exit_animation is False:
             for i in range(self.num_controllers):
-                self.sol_scatter = self.xy_plane_axes.scatter(self.initial_xs[i], self.initial_ys[
-                                                              i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
+                self.sol_scatter = self.xy_plane_axes.scatter(self.x_coords[i], self.y_coords[i], s=400, c=self.colors[i], marker=self.robot_markers[i].marker)
 
                 if self.show_annotations:
-                    self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.initial_xs[i] + 0.5, self.initial_ys[i] + 0.5), color='k')
+                    self.annotation = self.xy_plane_axes.annotate(f'{i+1}', xy=(self.x_coords[i] + 0.5, self.y_coords[i] + 0.5), color='k')
 
             if self.show_summary_stats:
                 self.print_summary_stats()

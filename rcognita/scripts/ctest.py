@@ -6,8 +6,8 @@ def main(args=None):
     
     # environment
     sys = EndiSystem()
-    # sys.add_bots(-5,-5) # creates bot #2
-    # sys.add_bots(-7,7) # creates bot #3
+    sys.add_bots(-5,-5) # creates bot #2
+    sys.add_bots(-7,7) # creates bot #3
 
     agent1 = ActorCritic(sys,
                         sample_time=0.3,
@@ -40,11 +40,12 @@ def main(args=None):
     sim = Simulation(sys, [agent1, agent2, agent3])
     
     sim.run_simulation(n_runs=2, 
-                    is_visualization=True, 
+                    is_visualization=False, 
                     exit_py_on_finish=False, 
                     show_annotations=True, 
-                    print_summary_stats=True, 
+                    show_summary_stats=True, 
                     print_statistics_at_step=False)
+
 
 if __name__ == "__main__":
     main()
