@@ -302,8 +302,9 @@ class Simulation(utilities.Generic):
 
         self.xy_plane_axes.plot([0, 0], [self.y_min, self.y_max],'k--', lw=0.75)   # y-axis
 
-        self.traj_line, = self.xy_plane_axes.plot(self.x_coord, self.y_coord, 'b--', lw=0.5)
+        self.run_handle = self.xy_plane_axes.text(0.15, 0.90, f"Run: 0", horizontalalignment='center', transform=self.xy_plane_axes.transAxes)
 
+        self.traj_line, = self.xy_plane_axes.plot(self.x_coord, self.y_coord, 'b--', lw=0.5)
 
         self.robot_marker = utilities._pltMarker(angle=self.alpha)
 
@@ -453,8 +454,7 @@ class Simulation(utilities.Generic):
 
             self.run_handle = self.xy_plane_axes.text(run_positions[i][0], run_positions[i][1], f"Run: 0", horizontalalignment='center', transform=self.xy_plane_axes.transAxes)
 
-            self.text_time_handle = self.xy_plane_axes.text(time_positions[i][0], time_positions[i][
-                                                            1], text_time, horizontalalignment='left', verticalalignment='center', transform=self.xy_plane_axes.transAxes)
+            self.text_time_handle = self.xy_plane_axes.text(time_positions[i][0], time_positions[i][1], text_time, horizontalalignment='left', verticalalignment='center', transform=self.xy_plane_axes.transAxes)
 
             self.traj_lines.append(self.traj_line)
             self.robot_markers.append(self.robot_marker)
@@ -996,6 +996,7 @@ class Simulation(utilities.Generic):
         Update lines on all scatter plots
         """
         self._update_text(self.text_time_handle, text_time)
+        self._update_text(self.run_handle, f"Run: {self.current_run}")
 
         # Update the robot's track on the plot
         self._update_line(self.traj_line, *full_state[:2])

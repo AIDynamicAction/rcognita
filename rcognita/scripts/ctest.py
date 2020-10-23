@@ -18,7 +18,7 @@ def main(args=None):
                         critic_mode=3,
                         buffer_size=10,
                         actor_control_horizon=10,
-                        t1=15)
+                        t1=10)
 
     # agent2 = ActorCritic(sys,
     #                     sample_time=0.6,
@@ -41,7 +41,7 @@ def main(args=None):
     sim = Simulation(sys, agent1)
     # sim = Simulation(sys, [agent1, agent2, agent3])
     
-    sim.run_simulation(n_runs=2,
+    sim.run_simulation(n_runs=4,
                     is_visualization=True, 
                     exit_py_on_finish=False, 
                     show_annotations=True, 
