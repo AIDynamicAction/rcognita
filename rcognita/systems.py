@@ -230,14 +230,23 @@ class EndiSystem(utilities.Generic):
 
     def add_obstacle(self, obs_type = "Triangle_1"):
         if obs_type == "Triangle_1":
-            triangle_vertices = np.array([[-5, 1], [4.5, 1], [4, 6]])
+            triangle_vertices = np.array([[-5, 1], [4, 1], [4, 6]])
             polygon = plt.Polygon(triangle_vertices)
             polygon_path = Path(triangle_vertices)
         
         elif obs_type == "Triangle_2":
-            triangle_vertices = np.array([[-5, -1], [4.5, -1], [4, -6]])
+            triangle_vertices = np.array([[-5, -1], [4, -1], [4, -6]])
             polygon = plt.Polygon(triangle_vertices)
             polygon_path = Path(triangle_vertices)
+
+        elif obs_type == "Custom":
+            try:
+                with open('custom_shape.npy', 'rb') as f:
+                    vertices = np.load(f)
+                    polygon= plt.Polygon(vertices)
+                    polygon_path = Path(vertices)
+            except FileNotFoundError:
+                print("Cannot find custom shape numpy file.")
 
         if self.obstacles == None:
             self.obstacles = {'paths': np.array([polygon_path]), 'polygons': [polygon]}

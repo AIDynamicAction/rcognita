@@ -9,7 +9,6 @@ def main(args=None):
     # sys.add_bots(-5,-5) # creates bot #2
     # sys.add_bots(-7,7) # creates bot #3
     sys.add_obstacle()
-    sys.add_obstacle("Triangle_2")
 
     agent1 = ActorCritic(sys,
                         sample_time=0.3,
@@ -41,7 +40,7 @@ def main(args=None):
     sim = Simulation(sys, agent1)
     # sim = Simulation(sys, [agent1, agent2, agent3])
     
-    sim.run_simulation(n_runs=4,
+    sim.run_simulation(n_runs=7,
                     is_visualization=True, 
                     exit_py_on_finish=False, 
                     show_annotations=True, 

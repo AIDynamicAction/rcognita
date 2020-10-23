@@ -138,6 +138,14 @@ class EndiControllerBase:
 
         r = 0
 
+        # if self.system_obstacles['paths'].any().contains_point(y[:2]) == True:
+        #     self.Q[0,0] += 10000
+        #     self.Q[1,1] += 10000
+
+        # else:
+        #     self.Q[0,0] = 10
+        #     self.Q[1,1] = 10
+
         if self.r_cost_struct == 1:
             r = (y @ self.Q @ y) + (u @ self.R @ u)
 
@@ -146,7 +154,7 @@ class EndiControllerBase:
             r = chi**2 @ self.R2 @ chi**2 + chi @ self.R2 @ chi
 
         if self.system_obstacles['paths'].any().contains_point(y[:2]) == True:
-            r *= 1000
+            r = 100000
 
         return r
 
