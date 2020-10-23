@@ -7,6 +7,7 @@ from numpy.random import rand
 from numpy.random import randn
 import numpy.linalg as la
 from matplotlib.path import Path
+import matplotlib.pyplot as plt
 
 # rcognita
 from . import utilities
@@ -175,6 +176,11 @@ class EndiSystem(utilities.Generic):
         self.mu_q = mu_q
         self.tau_q = tau_q
 
+
+        """ obstacles """
+
+        self.obstacles = None
+
     def _create_system_state(self):
         # initial values of the system's state
         initial_state = np.zeros(self.dim_state)
@@ -222,13 +228,25 @@ class EndiSystem(utilities.Generic):
 
         self.num_controllers += 1
 
-    def add_obstacle(self):
-        # if system has obstacles
-        points1 = np.array([[-5, 1], [4.5, 1], [4.5, 6]])
-        points2 = np.array([[-5, -1], [4, -1], [4, -6]])
-        obstacle1 = Path(points1)
-        obstacle2 = Path(points2)
-        self.obstacle = np.array([obstacle1, obstacle2])
+    def add_obstacle(self, obs_type = "Triangle_1"):
+        if obs_type == "Triangle_1":
+            triangle_vertices = np.array([[-5, 1], [4.5, 1], [4, 6]])
+            polygon = plt.Polygon(triangle_vertices)
+            polygon_path = Path(triangle_vertices)
+        
+        elif obs_type == "Triangle_2":
+            triangle_vertices = np.array([[-5, -1], [4.5, -1], [4, -6]])
+            polygon = plt.Polygon(triangle_vertices)
+            polygon_path = Path(triangle_vertices)
+
+        if self.obstacles == None:
+            self.obstacles = {'paths': np.array([polygon_path]), 'polygons': [polygon]}
+
+        else:
+            self.obstacles['paths'] = np.concatenate((self.obstacles['paths'], np.array([polygon_path])))
+            self.obstacles['polygons'].append(polygon)
+
+        return self.obstacles
 
     @staticmethod
     def _get_system_dynamics(t, x, u, m, I, dim_state, is_disturb):

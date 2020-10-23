@@ -293,15 +293,10 @@ class Simulation(utilities.Generic):
 
         self.xy_plane_axes.set_aspect('equal', adjustable='box')
         
-        # if system has obstacles
-        points1 = np.array([[-5, 1], [4, 1], [4, 6]])
-        polygon1 = plt.Polygon(points1)
-
-        points2 = np.array([[-5, -1], [4, -1], [4, -6]])
-        polygon2 = plt.Polygon(points2)
-
-        self.xy_plane_axes.add_patch(polygon1)
-        self.xy_plane_axes.add_patch(polygon2)
+        # add obstacles to graph
+        if system.obstacles is not None:
+            for polygon in system.obstacles['polygons']:
+                self.xy_plane_axes.add_patch(polygon)
 
         self.xy_plane_axes.plot([self.x_min, self.x_max], [0, 0], 'k--', lw=0.75)   # x-axis
 

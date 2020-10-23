@@ -9,6 +9,7 @@ def main(args=None):
     # sys.add_bots(-5,-5) # creates bot #2
     # sys.add_bots(-7,7) # creates bot #3
     sys.add_obstacle()
+    sys.add_obstacle("Triangle_2")
 
     agent1 = ActorCritic(sys,
                         sample_time=0.3,

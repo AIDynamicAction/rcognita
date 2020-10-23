@@ -88,9 +88,9 @@ class EndiControllerBase:
 
         self.r_cost_struct = r_cost_struct
 
-        if hasattr(system, "obstacle"):
+        if system.obstacles is not None:
             self.running_cost = self.running_cost_obstacles
-            self.system_obstacle = system.obstacle
+            self.system_obstacles = system.obstacles
 
         else:
             self.running_cost = self.running_cost_plain
@@ -145,7 +145,7 @@ class EndiControllerBase:
             chi = np.concatenate((y, u))
             r = chi**2 @ self.R2 @ chi**2 + chi @ self.R2 @ chi
 
-        if self.system_obstacle.any().contains_point(y[:2]) == True:
+        if self.system_obstacles['paths'].any().contains_point(y[:2]) == True:
             r *= 1000
 
         return r
