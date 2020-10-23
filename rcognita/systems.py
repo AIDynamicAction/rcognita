@@ -6,6 +6,7 @@ import numpy as np
 from numpy.random import rand
 from numpy.random import randn
 import numpy.linalg as la
+from matplotlib.path import Path
 
 # rcognita
 from . import utilities
@@ -220,6 +221,14 @@ class EndiSystem(utilities.Generic):
         self.alpha = self.system_state[:, 2]
 
         self.num_controllers += 1
+
+    def add_obstacle(self):
+        # if system has obstacles
+        points1 = np.array([[-5, 1], [4.5, 1], [4.5, 6]])
+        points2 = np.array([[-5, -1], [4, -1], [4, -6]])
+        obstacle1 = Path(points1)
+        obstacle2 = Path(points2)
+        self.obstacle = np.array([obstacle1, obstacle2])
 
     @staticmethod
     def _get_system_dynamics(t, x, u, m, I, dim_state, is_disturb):

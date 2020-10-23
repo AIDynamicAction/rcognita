@@ -1,6 +1,7 @@
 import warnings
 import itertools
 from rcognita import EndiSystem
+import sys
 
 # numpy
 import numpy as np
@@ -87,6 +88,13 @@ class EndiControllerBase:
 
         self.r_cost_struct = r_cost_struct
 
+        if hasattr(system, "obstacle"):
+            self.running_cost = self.running_cost_obstacles
+            self.system_obstacle = system.obstacle
+
+        else:
+            self.running_cost = self.running_cost_plain
+
         # running cost parameters
         # state space
         self.Q = np.diag([10, 10, 1, 0, 0])
@@ -123,7 +131,7 @@ class EndiControllerBase:
     def record_sys_state(self, system_state):
         self.system_state = system_state
 
-    def running_cost(self, y, u):
+    def running_cost_obstacles(self, y, u):
         """
         Running cost (a.k.a. utility, reward, instantaneous cost etc.)
         """
@@ -135,7 +143,26 @@ class EndiControllerBase:
 
         elif self.r_cost_struct == 2:
             chi = np.concatenate((y, u))
-            r = chi**2 @ self.R2 @ chi**2 + chi @ self.R1 @ chi
+            r = chi**2 @ self.R2 @ chi**2 + chi @ self.R2 @ chi
+
+        if self.system_obstacle.any().contains_point(y[:2]) == True:
+            r *= 1000
+
+        return r
+
+    def running_cost_plain(self, y, u):
+        """
+        Running cost (a.k.a. utility, reward, instantaneous cost etc.)
+        """
+
+        r = 0
+
+        if self.r_cost_struct == 1:
+            r = (y @ self.Q @ y) + (u @ self.R @ u)
+
+        elif self.r_cost_struct == 2:
+            chi = np.concatenate((y, u))
+            r = chi**2 @ self.R2 @ chi**2 + chi @ self.R2 @ chi
 
         return r
 
