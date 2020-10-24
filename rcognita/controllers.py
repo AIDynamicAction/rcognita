@@ -141,9 +141,11 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
                  estimator_buffer_fill=6,
                  estimator_buffer_power=2,
                  stacked_model_params=0,
-                 model_order=3):
+                 model_order=3,
+                 obs_penalty=10000,
+                 obs_penalty_type=2):
 
-        super(ActorCritic, self).__init__(system, t0, t1, buffer_size, r_cost_struct, sample_time, step_size, gamma)
+        super(ActorCritic, self).__init__(system, t0, t1, buffer_size, r_cost_struct, sample_time, step_size, gamma, obs_penalty, obs_penalty_type)
 
         """
 
@@ -366,12 +368,17 @@ class ActorCritic(EndiControllerBase, utilities.Generic):
             for k in range(N):
                 J += self.gamma**k * self.running_cost(Y[k, :], U_2d[k, :])
 
-        elif ctrl_mode in (3, 4, 5, 6):
-            for k in range(N):
-                J += self.running_cost(Y[k, :], U_2d[k, :]) + self.gamma**k * W @ self._phi(Y[-1, :], U_2d[-1, :])
+        elif ctrl_mode in (3, 4):
+            for k in range(1, N):
+                J += self.running_cost(Y[k-1, :], U_2d[k-1, :]) + self.gamma**k * W @ self._phi(Y[k, :], U_2d[k, :])
+                # J += self.gamma**k * self.running_cost(Y[k, :], U_2d[k, :])  
 
-            if ctrl_mode in (4,5):
-                    J /= N
+            # J += W @ self._phi(Y[-1, :], U_2d[-1, :])
+
+        elif ctrl_mode in (5, 6):
+            for k in range(N):
+                Q = W @ self._phi(Y[k, :], U_2d[k, :])
+                J += 1 / N * Q
 
         return J
 

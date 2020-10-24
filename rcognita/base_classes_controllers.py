@@ -55,7 +55,9 @@ class EndiControllerBase:
                  r_cost_struct=1,
                  sample_time=0.2,
                  step_size=0.3,
-                 gamma=0.95):
+                 gamma=0.99,
+                 obs_penalty=10000,
+                 obs_penalty_type=2):
         """
 
         SYSTEM-RELATED ATTRIBUTES
@@ -86,29 +88,6 @@ class EndiControllerBase:
         self.est_clock = t0
         self.ctrl_clock = self.t0
 
-        self.r_cost_struct = r_cost_struct
-
-        if system.obstacles is not None:
-            self.running_cost = self.running_cost_obstacles
-            self.system_obstacles = system.obstacles
-
-        else:
-            self.running_cost = self.running_cost_plain
-
-        # running cost parameters
-        # state space
-        self.Q = np.diag([10, 10, 1, 0, 0])
-
-        # action space
-        self.R = np.diag([0, 0])
-
-        # for 4th order
-        self.R2 = np.array([[10, 2, 1, 0, 0],
-                            [0, 10, 2, 0, 0],
-                            [0, 0, 10, 0, 0],
-                            [0, 0, 0, 0, 0],
-                            [0, 0, 0, 0, 0]])
-
         self.i_cost_val = 0
 
         self.sample_time = sample_time
@@ -128,6 +107,33 @@ class EndiControllerBase:
         # discount factor
         self.gamma = gamma
 
+        # running cost parameters
+        self.obs_penalty = obs_penalty
+        self.obs_penalty_type = obs_penalty_type
+
+        self.r_cost_struct = r_cost_struct
+
+        if system.obstacles is not None:
+            self.running_cost = self.running_cost_obstacles
+            self.system_obstacles = system.obstacles
+
+        else:
+            self.running_cost = self.running_cost_plain
+
+        
+        # state space
+        self.Q = np.diag([10, 10, 1, 0, 0])
+
+        # action space
+        self.R = np.diag([0, 0])
+
+        # for 4th order
+        self.R2 = np.array([[10, 2, 1, 0, 0],
+                            [0, 10, 2, 0, 0],
+                            [0, 0, 10, 0, 0],
+                            [0, 0, 0, 0, 0],
+                            [0, 0, 0, 0, 0]])
+
     def record_sys_state(self, system_state):
         self.system_state = system_state
 
@@ -138,13 +144,16 @@ class EndiControllerBase:
 
         r = 0
 
-        # if self.system_obstacles['paths'].any().contains_point(y[:2]) == True:
-        #     self.Q[0,0] += 10000
-        #     self.Q[1,1] += 10000
+        test = np.array(list(map(lambda path: path.contains_point(y[:2]), self.system_obstacles['paths']))).any()
 
-        # else:
-        #     self.Q[0,0] = 10
-        #     self.Q[1,1] = 10
+        if self.obs_penalty_type == 1:
+            if test == True:
+                self.Q[0,0] += self.obs_penalty
+                self.Q[1,1] += self.obs_penalty
+
+            else:
+                self.Q[0,0] = 10
+                self.Q[1,1] = 10
 
         if self.r_cost_struct == 1:
             r = (y @ self.Q @ y) + (u @ self.R @ u)
@@ -153,8 +162,14 @@ class EndiControllerBase:
             chi = np.concatenate((y, u))
             r = chi**2 @ self.R2 @ chi**2 + chi @ self.R2 @ chi
 
-        if self.system_obstacles['paths'].any().contains_point(y[:2]) == True:
-            r = 100000
+        if self.obs_penalty_type == 2:
+            if test == True:
+                r = self.obs_penalty
+
+        # for path in self.system_obstacles['paths']:
+        #     if path.contains_point(y[:2]) == True:
+        #         r = 100000
+        #         break
 
         return r
 

@@ -6,8 +6,11 @@ import numpy as np
 from numpy.random import rand
 from numpy.random import randn
 import numpy.linalg as la
+
+# matplotlib
 from matplotlib.path import Path
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 
 # rcognita
 from . import utilities
@@ -228,7 +231,7 @@ class EndiSystem(utilities.Generic):
 
         self.num_controllers += 1
 
-    def add_obstacle(self, obs_type = "Triangle_1"):
+    def add_obstacle(self, obs_type = "Triangle_1", coords = (0, 0), radius = 2):
         if obs_type == "Triangle_1":
             triangle_vertices = np.array([[-5, 1], [4, 1], [4, 6]])
             polygon = plt.Polygon(triangle_vertices)
@@ -239,20 +242,25 @@ class EndiSystem(utilities.Generic):
             polygon = plt.Polygon(triangle_vertices)
             polygon_path = Path(triangle_vertices)
 
+        elif obs_type == "Circle":
+            polygon = Circle(coords, radius)
+            polygon_path = polygon
+
         elif obs_type == "Custom":
             try:
                 with open('custom_shape.npy', 'rb') as f:
                     vertices = np.load(f)
                     polygon= plt.Polygon(vertices)
                     polygon_path = Path(vertices)
+            
             except FileNotFoundError:
                 print("Cannot find custom shape numpy file.")
 
         if self.obstacles == None:
-            self.obstacles = {'paths': np.array([polygon_path]), 'polygons': [polygon]}
+            self.obstacles = {'paths': [polygon_path], 'polygons': [polygon]}
 
         else:
-            self.obstacles['paths'] = np.concatenate((self.obstacles['paths'], np.array([polygon_path])))
+            self.obstacles['paths'].append(polygon_path)
             self.obstacles['polygons'].append(polygon)
 
         return self.obstacles

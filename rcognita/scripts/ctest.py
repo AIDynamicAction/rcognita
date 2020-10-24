@@ -5,19 +5,22 @@ def main(args=None):
     """main"""
     
     # environment
-    sys = EndiSystem()
+    sys = EndiSystem(initial_x=7, initial_y=7)
     # sys.add_bots(-5,-5) # creates bot #2
     # sys.add_bots(-7,7) # creates bot #3
-    sys.add_obstacle()
+    # sys.add_obstacle()
+    sys.add_obstacle(obs_type='Circle', coords=(2,3), radius=1.5)
+    sys.add_obstacle(obs_type='Circle', coords=(7,3), radius=0.5)
 
     agent1 = ActorCritic(sys,
                         sample_time=0.3,
-                        step_size=0.3,
+                        step_size=0.6,
                         ctrl_mode=3,
                         critic_mode=3,
                         buffer_size=10,
-                        actor_control_horizon=10,
-                        t1=10)
+                        actor_control_horizon=7,
+                        t1=12,
+                        obs_penalty=10**8)
 
     # agent2 = ActorCritic(sys,
     #                     sample_time=0.6,

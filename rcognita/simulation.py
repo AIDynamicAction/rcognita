@@ -23,6 +23,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib import cm
+from matplotlib.collections import PatchCollection
 
 # rcognita
 from . import utilities
@@ -292,11 +293,10 @@ class Simulation(utilities.Generic):
                                                       title=' Simulation: \n Pause - space, q - quit, click - data cursor')
 
         self.xy_plane_axes.set_aspect('equal', adjustable='box')
-        
-        # add obstacles to graph
+
         if system.obstacles is not None:
-            for polygon in system.obstacles['polygons']:
-                self.xy_plane_axes.add_patch(polygon)
+            p = PatchCollection(system.obstacles['polygons'], alpha=0.99)
+            self.xy_plane_axes.add_collection(p)
 
         self.xy_plane_axes.plot([self.x_min, self.x_max], [0, 0], 'k--', lw=0.75)   # x-axis
 
