@@ -1,3 +1,4 @@
+build_script.sh
 test/
 rcognita_archive
 .idea/*
