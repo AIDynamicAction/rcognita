@@ -147,8 +147,7 @@ class Simulation(utilities.Generic):
                 self.sample_time, self.ctrl_mode, self.t1, self.t0 = self._get_controller_info(
                     self.controller)
 
-                self.system_state, self.full_state, self.alpha, self.x_coord, self.y_coord = self._get_system_info(
-                    system)
+                self.initial_system_state, self.full_state, self.alpha, self.x_coord, self.y_coord = self._get_system_info(system)
 
                 self.initial_x = self.x_coord
 
@@ -165,7 +164,7 @@ class Simulation(utilities.Generic):
                 self.sample_times, self.ctrl_modes, self.t1s, self.t0 = self._get_controller_info(
                     self.controllers, multi=True)
 
-                self.system_states, self.full_states, self.alphas, self.x_coords, self.y_coords, self.u0s = self._get_system_info(
+                self.initial_system_state, self.full_states, self.alphas, self.x_coords, self.y_coords, self.u0s = self._get_system_info(
                     system, multi=True)
 
                 self.initial_xs = self.x_coords.copy()
@@ -270,7 +269,7 @@ class Simulation(utilities.Generic):
     def _create_figure_plots(self, system, controller, fig_width, fig_height):
         """ returns a pyplot figure with 4 plots """
 
-        y0 = system.get_curr_state(self.system_state)
+        y0 = system.get_curr_state(self.initial_system_state)
         self.alpha = self.alpha / 2 / np.pi
 
         plt.close('all')
@@ -408,7 +407,7 @@ class Simulation(utilities.Generic):
 
         y0_list = []
 
-        for system_state in self.system_states:
+        for system_state in self.initial_system_states:
             y0 = system.get_curr_state(system_state)
             y0_list.append(y0)
 
