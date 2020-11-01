@@ -78,7 +78,7 @@ class EndiSystem(utilities.Generic):
         * state of the environment
         * can be a vector or matrix (if there are multiple sub-states, i.e. for multiple controllers)
     
-    _dim_initial_full_state : int vector
+    dim_full_state : int vector
         * dimensions of full state
     
     full_state : int vector
@@ -148,7 +148,7 @@ class EndiSystem(utilities.Generic):
         self.dim_input = dim_input
         self.dim_output = dim_output
         self.dim_disturb = dim_disturb
-        self._dim_initial_full_state = self.dim_state + self.dim_input
+        self.dim_full_state = self.dim_state + self.dim_input
 
         self.initial_x = initial_x
         self.initial_y = initial_y
@@ -367,7 +367,7 @@ class EndiSystem(utilities.Generic):
 
         x = full_state[0:self.dim_state]
 
-        new_full_state = np.zeros(self._dim_initial_full_state)
+        new_full_state = np.zeros(self.dim_full_state)
         new_full_state[0:self.dim_state] = self._get_system_dynamics(
             t, x, u, self.m, self.I, self.dim_state, self.is_disturb)
 
