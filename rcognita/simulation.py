@@ -164,7 +164,7 @@ class Simulation(utilities.Generic):
                 self.sample_times, self.ctrl_modes, self.t1s, self.t0 = self._get_controller_info(
                     self.controllers, multi=True)
 
-                self.initial_system_state, self.full_states, self.alphas, self.x_coords, self.y_coords, self.u0s = self._get_system_info(
+                self.initial_system_states, self.full_states, self.alphas, self.x_coords, self.y_coords, self.u0s = self._get_system_info(
                     system, multi=True)
 
                 self.initial_xs = self.x_coords.copy()

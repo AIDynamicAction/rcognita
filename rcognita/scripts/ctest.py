@@ -48,7 +48,7 @@ def main(args=None):
                     exit_py_on_finish=False, 
                     show_annotations=True, 
                     show_summary_stats=True, 
-                    print_statistics_at_step=True)
+                    print_statistics_at_step=False)
 
 
 if __name__ == "__main__":
