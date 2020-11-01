@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="rcognita",
-    version="1.8.0",
+    version="1.8.1",
     author="Pavel Osinenko, Eli Bolotin",
     author_email="p.osinenko@skoltech.ru, ebolotin6.git@gmail.com",
     description="Python framework for Dynamic RL",
