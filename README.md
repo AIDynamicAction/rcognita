@@ -36,6 +36,7 @@ Arguments for command line for single run:
 - is_visualization - will visualize interface of rcognita and all process *default False*
 
 If you need a series of experiments with variable parameters, then use bash script **itter**.
+
 ***Argument only for itter***
 - is_bash -*default False*
 - dt_bash *default 1*
