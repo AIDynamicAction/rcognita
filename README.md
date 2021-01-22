@@ -20,7 +20,7 @@ Example of terminal comand:
 ```{r, engine='bash', count_lines}
 python3 main_3wrobot.py --mode 5 --ndots 20 --radius 5 --dt 0.05
 ```
-Arguments for command line for single run:
+Arguments for comand line for single run:
 - mode - *default 3*
 - dt - *default 0.05*
 - Nactor - *default 6*
