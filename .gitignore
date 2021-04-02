@@ -1,5 +1,6 @@
 build_script.sh
 test/
+data/
 rcognita_archive
 .idea/*
 .DS_Store
