@@ -45,6 +45,7 @@ from rcognita.utilities import on_key_press
 from argparse import ArgumentParser
 import os
 import warnings
+import shapely
 warnings.filterwarnings('ignore')
 
 #------------------------------------user settings : : system

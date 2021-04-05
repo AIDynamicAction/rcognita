@@ -423,3 +423,188 @@ class animator_3wrobot_kinematic(animator_3wrobot):
             #             self.reset_line(item)
 
             upd_line(self.line_traj, np.nan, np.nan)
+
+class animator_2tank(animator):
+    """
+    Animator class for a 2-tank system.
+
+    """
+    def __init__(self, objects=[], pars=[]):
+        self.objects = objects
+        self.pars = pars
+
+        # Unpack entities
+        self.simulator, self.sys, self.ctrl_nominal, self.ctrl_benchmarking, self.datafiles, self.ctrl_selector, self.logger = self.objects
+
+        x0, u0, t0, t1, ksi0, ctrl_mode, uMan, u_min, u_max, Nruns, is_print_sim_step, is_log_data, is_playback, r0, level_target = self.pars
+
+        # Store some parameters for later use
+        self.t0 = t0
+        self.ksi0 = ksi0
+        self.t1 = t1
+        self.ctrl_mode = ctrl_mode
+        self.uMan = uMan
+        self.Nruns = Nruns
+        self.is_print_sim_step = is_print_sim_step
+        self.is_log_data = is_log_data
+        self.is_playback = is_playback
+
+        self.level_target = level_target
+
+        h1_0 = x0[0]
+        h2_0 = x0[1]
+        p0 = u0
+
+        plt.close('all')
+
+        self.fig_sim = plt.figure(figsize=(10,10))
+
+        # h1, h2 plot
+        self.axs_sol = self.fig_sim.add_subplot(221, autoscale_on=False, xlim=(t0,t1), ylim=( -2, 2 ), xlabel='t [s]', title='Pause - space, q - quit, click - data cursor')
+        self.axs_sol.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.axs_sol.plot([t0, t1], [level_target[0], level_target[0]], 'b--', lw=0.75)   # Help line (target)
+        self.axs_sol.plot([t0, t1], [level_target[1], level_target[1]], 'r--', lw=0.75)   # Help line (target)
+        self.line_h1, = self.axs_sol.plot(t0, h1_0, 'b-', lw=0.5, label=r'$h_1$')
+        self.line_h2, = self.axs_sol.plot(t0, h2_0, 'r-', lw=0.5, label=r'$h_2$')
+        self.axs_sol.legend(fancybox=True, loc='upper right')
+        self.axs_sol.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+
+        # Cost
+        if is_playback:
+            r = r0
+        else:
+            y0 = self.sys.out(x0)
+            r = self.ctrl_benchmarking.rcost(y0, u0)
+
+        self.axs_cost = self.fig_sim.add_subplot(223, autoscale_on=False, xlim=(t0,t1), ylim=(0, 1e4*r), yscale='symlog', xlabel='t [s]')
+
+        text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost = 0)
+        self.text_icost_handle = self.fig_sim.text(0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
+        self.line_rcost, = self.axs_cost.plot(t0, r, 'r-', lw=0.5, label='r')
+        self.line_icost, = self.axs_cost.plot(t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+        self.axs_cost.legend(fancybox=True, loc='upper right')
+
+        # Control
+        self.axs_ctrl = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=(u_min-0.1, u_max+0.1), xlabel='t [s]')
+        self.axs_ctrl.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.line_ctrl, = self.axs_ctrl.plot(t0, p0, lw=0.5, label='p')
+        self.axs_cost.legend(fancybox=True, loc='upper right')
+
+        # Pack all lines together
+        cLines = namedtuple('lines', ['line_h1', 'line_h2', 'line_rcost', 'line_icost', 'line_ctrl'])
+        self.lines = cLines(line_h1=self.line_h1,
+                            line_h2=self.line_h2,
+                            line_rcost=self.line_rcost,
+                            line_icost=self.line_icost,
+                            line_ctrl=self.line_ctrl)
+
+        # Enable data cursor
+        for item in self.lines:
+            if isinstance(item, list):
+                for subitem in item:
+                    datacursor(subitem)
+            else:
+                datacursor(item)
+
+    def get_sim_data(self, ts, h1s, h2s, ps, rs, icosts):
+        """
+        This function is needed for playback purposes when simulation data were generated elsewhere.
+        It feeds data into the animator from outside.
+        The simulation step counter ``curr_step`` is reset accordingly.
+
+        """
+        self.ts, self.h1s, self.h2s, self.ps = ts, h1s, h2s, ps
+        self.rs, self.icosts = rs, icosts
+        self.curr_step = 0
+
+    def upd_sim_data_row(self):
+        self.t = self.ts[self.curr_step]
+        self.ksi = np.array([self.h1s[self.curr_step], self.h2s[self.curr_step]])
+        self.r = self.rs[self.curr_step]
+        self.icost = self.icosts[self.curr_step]
+        self.u = np.array([self.ps[self.curr_step]])
+
+        self.curr_step = self.curr_step + 1
+
+    def init_anim(self):
+        x0, *_ = self.pars
+
+        self.run_curr = 1
+        self.datafile_curr = self.datafiles[0]
+
+    def animate(self, k):
+
+        if self.is_playback:
+            self.upd_sim_data_row()
+            t = self.t
+            ksi = self.ksi
+            u = self.u
+            r = self.r
+            icost = self.icost
+
+        else:
+            self.simulator.sim_step()
+
+            t, x, y, ksi = self.simulator.get_sim_step_data()
+
+            u = self.ctrl_selector(t, y, self.uMan, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
+
+            self.sys.receive_action(u)
+            self.ctrl_benchmarking.receive_sys_state(self.sys._x)
+            self.ctrl_benchmarking.upd_icost(y, u)
+
+            r = self.ctrl_benchmarking.rcost(y, u)
+            icost = self.ctrl_benchmarking.icost_val
+
+        h1 = ksi[0]
+        h2 = ksi[1]
+        p = u
+
+        if self.is_print_sim_step:
+            self.logger.print_sim_step(t, h1, h2, p, r, icost)
+
+        if self.is_log_data:
+            self.logger.log_data_row(self.datafile_curr, t, h1, h2, p, r, icost)
+
+        # # Solution
+        upd_line(self.line_h1, t, h1)
+        upd_line(self.line_h2, t, h2)
+
+        # Cost
+        upd_line(self.line_rcost, t, r)
+        upd_line(self.line_icost, t, icost)
+        text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'.format(icost = icost)
+        upd_text(self.text_icost_handle, text_icost)
+
+        # Control
+        upd_line(self.line_ctrl, t, p)
+
+        # Run done
+        if t >= self.t1:
+            if self.is_print_sim_step:
+                    print('.....................................Run {run:2d} done.....................................'.format(run = self.run_curr))
+
+            self.run_curr += 1
+
+            if self.run_curr > self.Nruns:
+                return
+
+            if self.is_log_data:
+                self.datafile_curr = self.datafiles[self.run_curr-1]
+
+            # Reset simulator
+            self.simulator.reset()
+
+            # Reset controller
+            if self.ctrl_mode > 0:
+                self.ctrl_benchmarking.reset(self.t0)
+            else:
+                self.ctrl_nominal.reset(self.t0)
+
+            icost = 0
+
+            reset_line(self.line_h1)
+            reset_line(self.line_h1)
+            reset_line(self.line_ctrl)
+            reset_line(self.line_rcost)
+            reset_line(self.line_icost)
