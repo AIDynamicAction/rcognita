@@ -390,3 +390,25 @@ class sys_3wrobot_kinematic(system):
         # y = x[:3] + measNoise # <-- Measure only position and orientation
         y = x  # <-- Position, force and torque sensors on
         return y
+
+class sys_2tank(system):
+    """
+    Two-tank system with nonlinearity
+    """
+    def _state_dyn(self, t, x, u, q):
+        tau1, tau2, K1, K2, K3 = self.pars
+
+        Dx = np.zeros(self.dim_state)
+        Dx[0] = 1/(tau1) * ( -x[0] + K1 * u)
+        Dx[1] = 1/(tau2) * ( -x[1] + K2 * x[0] + K3 * x[1]**2)
+
+        return Dx
+
+    def _disturb_dyn(self, t, q):
+        Dq = np.zeros(self.dim_disturb)
+
+        return Dq
+
+    def out(self, x, u=[]):
+        y = x
+        return y   

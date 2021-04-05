@@ -105,3 +105,23 @@ class logger_model(logger):
         with open(datafile, 'a') as outfile:
                 writer = csv.writer(outfile)
                 writer.writerow([t, epoch, xCoord, yCoord, alpha, loss])
+
+class logger_2tank(logger):
+    """
+    Data logger for a 2-tank system.
+
+    """
+    def print_sim_step(self, t, h1, h2, p, r, icost):
+    # alphaDeg = alpha/np.pi*180
+
+        row_header = ['t [s]', 'h1', 'h2', 'p', 'r', 'int r dt']
+        row_data = [t, h1, h2, p, r, icost]
+        row_format = ('8.1f', '8.4f', '8.4f', '8.4f', '8.4f', '8.2f')
+        table = tabulate([row_header, row_data], floatfmt=row_format, headers='firstrow', tablefmt='grid')
+
+        print(table)
+
+    def log_data_row(self, datafile, t, h1, h2, p, r, icost):
+        with open(datafile, 'a', newline='') as outfile:
+                writer = csv.writer(outfile)
+                writer.writerow([t, h1, h2, p, r, icost])

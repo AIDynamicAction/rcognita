@@ -2,7 +2,6 @@ build_script.sh
 test/
 data/
 tutorials/
-main_3wrobot.py
 rcognita_archive
 .idea/*
 .DS_Store
@@ -145,3 +144,5 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+main_2tank.py
+main_3wrobot.py

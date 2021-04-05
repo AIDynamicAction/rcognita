@@ -229,7 +229,7 @@ class ctrl_RL_pred:
     def __init__(self, dim_input, dim_output, mode=1, ctrl_bnds=[], ctrl_mode=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
                  sys_rhs=[], sys_out=[], x_sys=[], is_prob_noise = 0, prob_noise_pow = 1, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
                  gamma=1, Ncritic=4, critic_period=0.1, critic_struct_Q=1, critic_struct_V=1, rcost_struct=1, model=None, optimizer=None, criterion=None, is_estimate_model=1, is_use_offline_model=0, rcost_pars=[],
-                 lr = None, feature_size = None, output_shape = None, layers = None, hidden_size = None, epochs = None):
+                 lr = None, feature_size = None, output_shape = None, layers = None, hidden_size = None, epochs = None, y_target=[]):
 
         self.dim_input = dim_input
         self.dim_output = dim_output
@@ -292,6 +292,7 @@ class ctrl_RL_pred:
         self.critic_struct_V = critic_struct_V
         self.rcost_struct = rcost_struct
         self.rcost_pars = rcost_pars
+        self.y_target = y_target
 
         self.icost_val = 0
 
@@ -372,7 +373,10 @@ class ctrl_RL_pred:
 
         See class documentation
         """
-        chi = np.concatenate([y, u])
+        if self.y_target == []:
+            chi = np.concatenate([y, u])
+        else:
+            chi = np.concatenate([y - self.y_target, u])
 
         r = 0
 
@@ -435,7 +439,10 @@ class ctrl_RL_pred:
         within :func:`~RLframe.controller._critic_cost`
 
         """
-        chi = np.concatenate([y, u])
+        if self.y_target == []:
+            chi = np.concatenate([y, u])
+        else:
+            chi = np.concatenate([y - self.y_target, u])
 
         if self.critic_struct_Q == 1:
             return np.concatenate([ uptria2vec( np.kron(chi, chi) ), chi ])
@@ -460,43 +467,43 @@ class ctrl_RL_pred:
         elif self.critic_struct_V == 3:
             return y * y
 
-        def _critic_cost(self, W, U, Y):
-            """
-            Cost function of the critic
+    def _critic_cost(self, W, U, Y):
+        """
+        Cost function of the critic
 
-            Currently uses value-iteration-like method
+        Currently uses value-iteration-like method
 
-            Customization
-            -------------
+        Customization
+        -------------
 
-            Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation
+        Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation
 
-            """
-            Jc = 0
+        """
+        Jc = 0
 
-            for k in range(self.Ncritic-1, 0, -1):
-                yPrev = Y[k-1, :]
-                yNext = Y[k, :]
-                uPrev = U[k-1, :]
-                uNext = U[k, :]
+        for k in range(self.Ncritic-1, 0, -1):
+            yPrev = Y[k-1, :]
+            yNext = Y[k, :]
+            uPrev = U[k-1, :]
+            uNext = U[k, :]
 
-                # Temporal difference
-                if self.mode == 4:
+            # Temporal difference
+            if self.mode == 4:
 
-                    Wq = W[:(self.dim_crit_Q)]
-                    Wv = W[-self.dim_crit_V:]
-                    params = W
+                Wq = W[:(self.dim_crit_Q)]
+                Wv = W[-self.dim_crit_V:]
+                params = W
 
-                    e_wq = np.dot(Wq, self._phi_Q(yPrev, uPrev)) - self.gamma * np.dot(self.Wq_prev, self._phi_Q( yNext, uNext )) - self.rcost(yPrev, uPrev)
-                    e_wv = np.dot(Wv, self._phi_V(yPrev)) - self.gamma * np.dot(self.Wv_prev, self._phi_V(yNext)) - self.rcost(yPrev, uPrev)
+                e_wq = np.dot(Wq, self._phi_Q(yPrev, uPrev)) - self.gamma * np.dot(self.Wq_prev, self._phi_Q( yNext, uNext )) - self.rcost(yPrev, uPrev)
+                e_wv = np.dot(Wv, self._phi_V(yPrev)) - self.gamma * np.dot(self.Wv_prev, self._phi_V(yNext)) - self.rcost(yPrev, uPrev)
 
-                    Jc += 0.5 * e_wq**2  + 0.5 * e_wv**2
-                else:
-                    e = np.dot(W, self._phi_Q( yPrev, uPrev )) - self.gamma * np.dot(self.Wq_prev, self._phi_Q( yNext, uNext )) - self.rcost(yPrev, uPrev)
+                Jc += 0.5 * e_wq**2  + 0.5 * e_wv**2
+            else:
+                e = np.dot(W, self._phi_Q( yPrev, uPrev )) - self.gamma * np.dot(self.Wq_prev, self._phi_Q( yNext, uNext )) - self.rcost(yPrev, uPrev)
 
-                    Jc += 0.5 * e**2
+                Jc += 0.5 * e**2
 
-            return Jc
+        return Jc
 
 
     def _critic(self, Wqprev, Wqinit, Wvprev, Wvinit, U, Y):
