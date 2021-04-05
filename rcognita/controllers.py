@@ -29,25 +29,25 @@ All buffers are treated as of type [L, n] where each row is a vector
 Buffers are updated from bottom to top
 """
 
-from utilities import dss_sim
-from utilities import rep_mat
-from utilities import uptria2vec
-from utilities import push_vec
+from rcognita.utilities import dss_sim, rep_mat, uptria2vec, push_vec
 import numpy as np
 import scipy as sp
 from numpy.random import rand
 from scipy.optimize import minimize
 from scipy.optimize import basinhopping
 
+
+import torch
+import torch.nn as nn
+from rcognita.models import model_SS, model_NN
+
+
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+
 # System identification packages
 # import ssid  # Github:OsinenkoP/pyN4SID, fork of Githug:AndyLamperski/pyN4SID, with some errors fixed
-import sippy  # Github:CPCLAB-UNIPI/SIPPY
-
-# [EXPERIMENTAL] Use MATLAB's system identification toolbox instead of ssid and sippy
-# Compatible MATLAB Runtime and system identification toolbox must be installed
-# import matlab.engine
-# eng = matlab.engine.start_matlab()
-# eng.addpath(r'~/MATLAB/RL/ENDICart',nargout=0)
+# import sippy  # Github:CPCLAB-UNIPI/SIPPY
 
 def ctrl_selector(t, y, uMan, ctrl_nominal, ctrl_benchmarking, mode):
     """
@@ -95,16 +95,15 @@ class ctrl_RL_pred:
 
            * - Mode
              - Cost function
-           * - 1, 2 - Model-predictive control (MPC)
+           * - 1 - Model-predictive control (MPC)
              - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right)=\\sum_{k=1}^{N_a} \\gamma^{k-1} r(y_k, u_k)`
-           * - 3, 4 - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
+           * - 2  - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
              - :math:`J \\left( y_1, \\{u\}_{1}^{N_a}\\right) =\\sum_{k=1}^{N_a-1} \\gamma^{k-1} r(y_k, u_k) + \\hat Q(y_{N_a}, u_{N_a})`
-           * - 5, 6 - RL/ADP via normalized stacked Q-learning [[1]_]
-             - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right) =\\frac{1}{N_a} \\sum_{k=1}^{N_a-1} \\hat Q(y_{N_a}, u_{N_a})`
+           * - 3  - RL/ADP via stacked Q-learning [[1]_]
+             - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\hat Q(y_{N_a}, u_{N_a})`
+           * - 4  - RL/ADP via normalized stacked Q-learning with terminal value function
+             - :math:`J \\left( x_1, \\{u\\}_1^{N_a} \\right) = \\sum_{i=1}^{N-1} \\hat Q (\hat x_{i|k}, u_{i|k}, \\vartheta^*_{k-1}) + \\hat V(\\hat x_{N|k}; \\lambda^*_{k-1}) \\right)`
 
-        Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
-
-        Modes 2, 4, 6 use am estimated online, see :func:`~RLframe.controller.estimateModel`
 
         **Add your specification into the table when customizing the agent**
 
@@ -227,9 +226,10 @@ class ctrl_RL_pred:
 
     """
 
-    def __init__(self, dim_input, dim_output, mode=1, ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
-                 sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
-                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct=1, rcost_struct=1, rcost_pars=[]):
+    def __init__(self, dim_input, dim_output, mode=1, ctrl_bnds=[], ctrl_mode=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
+                 sys_rhs=[], sys_out=[], x_sys=[], is_prob_noise = 0, prob_noise_pow = 1, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
+                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct_Q=1, critic_struct_V=1, rcost_struct=1, model=None, optimizer=None, criterion=None, is_estimate_model=1, is_use_offline_model=0, rcost_pars=[],
+                 lr = None, feature_size = None, output_shape = None, layers = None, hidden_size = None, epochs = None):
 
         self.dim_input = dim_input
         self.dim_output = dim_output
@@ -276,7 +276,7 @@ class ctrl_RL_pred:
         D = np.zeros( [self.dim_output, self.dim_input] )
         x0est = np.zeros( self.model_order )
 
-        self.my_model = self.model(A, B, C, D, x0est)
+        self.my_model = model_SS(A, B, C, D, x0est)
 
         self.model_stack = []
         for k in range(self.model_est_checks):
@@ -288,71 +288,66 @@ class ctrl_RL_pred:
         self.Ncritic = Ncritic
         self.Ncritic = np.min([self.Ncritic, self.buffer_size-1]) # Clip critic buffer size
         self.critic_period = critic_period
-        self.critic_struct = critic_struct
+        self.critic_struct_Q = critic_struct_Q
+        self.critic_struct_V = critic_struct_V
         self.rcost_struct = rcost_struct
         self.rcost_pars = rcost_pars
 
         self.icost_val = 0
 
-        if self.critic_struct == 1:
-            self.dim_crit = ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 + (self.dim_output + self.dim_input)
-            self.Wmin = -1e3*np.ones(self.dim_crit)
-            self.Wmax = 1e3*np.ones(self.dim_crit)
-        elif self.critic_struct == 2:
-            self.dim_crit = ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2
-            self.Wmin = np.zeros(self.dim_crit)
-            self.Wmax = 1e3*np.ones(self.dim_crit)
-        elif self.critic_struct == 3:
-            self.dim_crit = self.dim_output + self.dim_input
-            self.Wmin = np.zeros(self.dim_crit)
-            self.Wmax = 1e3*np.ones(self.dim_crit)
-        elif self.critic_struct == 4:
-            self.dim_crit = self.dim_output + self.dim_output * self.dim_input + self.dim_input
-            self.Wmin = -1e3*np.ones(self.dim_crit)
-            self.Wmax = 1e3*np.ones(self.dim_crit)
+        if self.critic_struct_Q == 1:
+            self.dim_crit_Q = ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 + (self.dim_output + self.dim_input)
+            self.Wq_min = -1e3*np.ones(self.dim_crit_Q)
+            self.Wq_max = 1e3*np.ones(self.dim_crit_Q)
+        elif self.critic_struct_Q == 2:
+            self.dim_crit_Q = ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2
+            self.Wq_min = np.zeros(self.dim_crit_Q_Q)
+            self.Wq_max = 1e3*np.ones(self.dim_crit_Q)
+        elif self.critic_struct_Q == 3:
+            self.dim_crit_Q = self.dim_output + self.dim_input
+            self.Wq_min = np.zeros(self.dim_crit_Q)
+            self.Wq_max = 1e3*np.ones(self.dim_crit_Q)
+        elif self.critic_struct_Q == 4:
+            self.dim_crit_Q = self.dim_output + self.dim_output * self.dim_input + self.dim_input
+            self.Wq_min = -1e3*np.ones(self.dim_crit_Q)
+            self.Wq_max = 1e3*np.ones(self.dim_crit_Q)
 
-        self.Wprev = np.ones(self.dim_crit)
+        self.Wq_prev = np.ones(self.dim_crit_Q)
 
-        self.Winit = self.Wprev
+        self.Wq_init = self.Wq_prev
 
-    class model:
-        """
-            Class of estimated models
+        if self.critic_struct_V == 1:
+            self.dim_crit_V = ( ( self.dim_output) + 1 ) * ( self.dim_output )/2 + (self.dim_output)
+            self.Wv_min = -1e3*np.ones(self.dim_crit_V)
+            self.Wv_max = 1e3*np.ones(self.dim_crit_V)
+        elif self.critic_struct_V == 2:
+            self.dim_crit_V = ( ( self.dim_output ) + 1 ) * ( self.dim_output)/2
+            self.Wv_min = np.zeros(self.dim_crit_V)
+            self.Wv_max = 1e3*np.ones(self.dim_crit_V)
+        elif self.critic_struct_V == 3:
+            self.dim_crit_V = self.dim_output
+            self.Wv_min = np.zeros(self.dim_crit_V)
+            self.Wv_max = 1e3*np.ones(self.dim_crit_V)
+        elif self.critic_struct_V == 4:
+            self.dim_crit_V = self.dim_output + self.dim_output
+            self.Wv_min = -1e3*np.ones(self.dim_crit_V)
+            self.Wv_max = 1e3*np.ones(self.dim_crit_V)
 
-            So far, uses just the state-space structure:
+        self.Wv_prev = np.ones(self.dim_crit_V)
 
-        .. math::
-            \\begin{array}{ll}
-    			\\hat x^+ & = A \\hat x + B u \\newline
-    			y^+  & = C \\hat x + D u,
-            \\end{array}
-
-        Attributes
-        ----------
-        A, B, C, D : : arrays of proper shape
-            State-space model parameters
-        x0set : : array
-            Initial state estimate
-
-        **When introducing your custom model estimator, adjust this class**
-
-        """
-
-        def __init__(self, A, B, C, D, x0est):
-            self.A = A
-            self.B = B
-            self.C = C
-            self.D = D
-            self.x0est = x0est
-
-        def upd_pars(self, Anew, Bnew, Cnew, Dnew):
-            self.A = Anew
-            self.B = Bnew
-            self.C = Cnew
-            self.D = Dnew
-
-        def updateIC(self, x0setNew):
-            self.x0set = x0setNew
+        self.Wv_init = self.Wv_prev
+################################################################
+        self.model = model
+        self.is_estimate_model = is_estimate_model
+        self.is_use_offline_model = is_use_offline_model
+        self.lr = lr
+        self.optimizer = optimizer
+        self.criterion = criterion
+        self.feature_size = feature_size
+        self.output_shape = output_shape
+        self.layers = layers
+        self.hidden_size = hidden_size
+        self.epochs = epochs
 
     def reset(self, t0):
         """
@@ -411,107 +406,22 @@ class ctrl_RL_pred:
 
         if time_in_sample >= self.sampling_time: # New sample
             # Update buffers when using RL or requiring estimated model
-            if self.mode in (2,3,4,5,6):
                 time_in_est_period = t - self.est_clock
 
                 # Estimate model if required by ctrlStatMode
-                if (time_in_est_period >= self.model_est_period) and (self.mode in (2,4,6)):
-                    # Update model estimator's internal clock
+                if (time_in_est_period >= self.model_est_period) and self.is_estimate_model:
                     self.est_clock = t
 
-                    try:
-                        # Using ssid from Githug:AndyLamperski/pyN4SID
-                        # Aid, Bid, Cid, Did, _ ,_ = ssid.N4SID(serf.ubuffer.T,  self.ybuffer.T,
-                        #                                       NumRows = self.dim_input + self.model_order,
-                        #                                       NumCols = self.buffer_size - (self.dim_input + self.model_order)*2,
-                        #                                       NSig = self.model_order,
-                        #                                       require_stable=False)
-                        # self.my_model.upd_pars(Aid, Bid, Cid, Did)
-
-                        # Using Github:CPCLAB-UNIPI/SIPPY
-                        # method: N4SID, MOESP, CVA, PARSIM-P, PARSIM-S, PARSIM-K
-                        SSest = sippy.system_identification(self.ybuffer, self.ubuffer,
-                                                            id_method='N4SID',
-                                                            SS_fixed_order=self.model_order,
-                                                            SS_D_required=False,
-                                                            SS_A_stability=False,
-                                                            # SS_f=int(self.buffer_size/12),
-                                                            # SS_p=int(self.buffer_size/10),
-                                                            SS_PK_B_reval=False,
-                                                            tsample=self.sampling_time)
-
-                        self.my_model.upd_pars(SSest.A, SSest.B, SSest.C, SSest.D)
-
-                        # [EXPERIMENTAL] Using MATLAB's system identification toolbox
-                        # us_ml = eng.transpose(matlab.double(self.ubuffer.tolist()))
-                        # ys_ml = eng.transpose(matlab.double(self.ybuffer.tolist()))
-
-                        # Aml, Bml, Cml, Dml = eng.mySSest_simple(ys_ml, us_ml, dt, model_order, nargout=4)
-
-                        # self.my_model.upd_pars(np.asarray(Aml), np.asarray(Bml), np.asarray(Cml), np.asarray(Dml) )
-
-                    except:
-                        print('Model estimation problem')
-                        self.my_model.upd_pars(np.zeros( [self.model_order, self.model_order] ),
-                                                np.zeros( [self.model_order, self.dim_input] ),
-                                                np.zeros( [self.dim_output, self.model_order] ),
-                                                np.zeros( [self.dim_output, self.dim_input] ) )
-
-                    # Model checks
-                    if self.model_est_checks > 0:
-                        # Update estimated model parameter stacks
-                        self.model_stack.pop(0)
-                        self.model_stack.append(self.model)
-
-                        # Perform check of stack of models and pick the best
-                        tot_abs_err_curr = 1e8
-                        for k in range(self.model_est_checks):
-                            A, B, C, D = self.model_stack[k].A, self.model_stack[k].B, self.model_stack[k].C, self.model_stack[k].D
-                            x0est,_,_,_ = np.linalg.lstsq(C, y)
-                            Yest,_ = dss_sim(A, B, C, D, self.ubuffer, x0est, y)
-                            mean_err = np.mean(Yest - self.ybuffer, axis=0)
-
-                            # DEBUG ===================================================================
-                            # ================================Interm output of model prediction quality
-                            # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
-                            # dataRow = []
-                            # for k in range(dim_output):
-                            #     dataRow.append( mean_err[k] )
-                            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
-                            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
-                            # print( table )
-                            # /DEBUG ===================================================================
-
-                            tot_abs_err = np.sum( np.abs( mean_err ) )
-                            if tot_abs_err <= tot_abs_err_curr:
-                                tot_abs_err_curr = tot_abs_err
-                                self.my_model.upd_pars(SSest.A, SSest.B, SSest.C, SSest.D)
-
-                        # DEBUG ===================================================================
-                        # ==========================================Print quality of the best model
-                        # R  = '\033[31m'
-                        # Bl  = '\033[30m'
-                        # x0est,_,_,_ = np.linalg.lstsq(ctrlStat.C, y)
-                        # Yest,_ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, ctrlStat.ubuffer, x0est, y)
-                        # mean_err = np.mean(Yest - ctrlStat.ybuffer, axis=0)
-                        # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
-                        # dataRow = []
-                        # for k in range(dim_output):
-                        #     dataRow.append( mean_err[k] )
-                        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
-                        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
-                        # print(R+table+Bl)
-                        # /DEBUG ===================================================================
 
             # Update initial state estimate
-            x0est,_,_,_ = np.linalg.lstsq(self.my_model.C, y)
-            self.my_model.updateIC(x0est)
+                elif self.is_use_offline_model:
+                    pass
 
-            if t >= self.model_est_stage:
-                    # Drop probing noise
-                    self.is_prob_noise = 0
+                if t >= self.model_est_stage:
+                        # Drop probing noise
+                        self.is_prob_noise = 0
 
-    def _phi(self, y, u):
+    def _phi_Q(self, y, u):
         """
         Feature vector of critic
 
@@ -521,52 +431,77 @@ class ctrl_RL_pred:
         -------------
 
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
-        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``W @ self._phi( y, u )``
+        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``W @ self._phi_Q( y, u )``
         within :func:`~RLframe.controller._critic_cost`
 
         """
         chi = np.concatenate([y, u])
 
-        if self.critic_struct == 1:
+        if self.critic_struct_Q == 1:
             return np.concatenate([ uptria2vec( np.kron(chi, chi) ), chi ])
-        elif self.critic_struct == 2:
+        elif self.critic_struct_Q == 2:
             return np.concatenate([ uptria2vec( np.kron(chi, chi) ) ])
-        elif self.critic_struct == 3:
+        elif self.critic_struct_Q == 3:
             return chi * chi
-        elif self.critic_struct == 4:
+        elif self.critic_struct_Q == 4:
             return np.concatenate([ y**2, np.kron(y, u), u**2 ])
 
-    def _critic_cost(self, W, U, Y):
+    def _phi_V(self, y):
         """
-        Cost function of the critic
+        Feature vector of critic
 
-        Currently uses value-iteration-like method
-
-        Customization
-        -------------
-
-        Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation
+        In value function approximation learning, it uses ``y``
 
         """
-        Jc = 0
+        if self.critic_struct_V == 1:
+            return np.concatenate([ uptria2vec( np.kron(y, y) ), y ])
+        elif self.critic_struct_V == 2:
+            return np.concatenate([ uptria2vec( np.kron(y, y) ) ])
+        elif self.critic_struct_V == 3:
+            return y * y
 
-        for k in range(self.Ncritic-1, 0, -1):
-            yPrev = Y[k-1, :]
-            yNext = Y[k, :]
-            uPrev = U[k-1, :]
-            uNext = U[k, :]
+        def _critic_cost(self, W, U, Y):
+            """
+            Cost function of the critic
 
-            # Temporal difference
-            e = W @ self._phi( yPrev, uPrev ) - self.gamma * self.Wprev @ self._phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
+            Currently uses value-iteration-like method
 
-            Jc += 1/2 * e**2
+            Customization
+            -------------
 
-        return Jc
+            Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation
+
+            """
+            Jc = 0
+
+            for k in range(self.Ncritic-1, 0, -1):
+                yPrev = Y[k-1, :]
+                yNext = Y[k, :]
+                uPrev = U[k-1, :]
+                uNext = U[k, :]
+
+                # Temporal difference
+                if self.mode == 4:
+
+                    Wq = W[:(self.dim_crit_Q)]
+                    Wv = W[-self.dim_crit_V:]
+                    params = W
+
+                    e_wq = np.dot(Wq, self._phi_Q(yPrev, uPrev)) - self.gamma * np.dot(self.Wq_prev, self._phi_Q( yNext, uNext )) - self.rcost(yPrev, uPrev)
+                    e_wv = np.dot(Wv, self._phi_V(yPrev)) - self.gamma * np.dot(self.Wv_prev, self._phi_V(yNext)) - self.rcost(yPrev, uPrev)
+
+                    Jc += 0.5 * e_wq**2  + 0.5 * e_wv**2
+                else:
+                    e = np.dot(W, self._phi_Q( yPrev, uPrev )) - self.gamma * np.dot(self.Wq_prev, self._phi_Q( yNext, uNext )) - self.rcost(yPrev, uPrev)
+
+                    Jc += 0.5 * e**2
+
+            return Jc
 
 
-    def _critic(self, Wprev, Winit, U, Y):
+    def _critic(self, Wqprev, Wqinit, Wvprev, Wvinit, U, Y):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
+        See class documentation.
 
         Customization
         -------------
@@ -584,20 +519,35 @@ class ctrl_RL_pred:
         else:
             critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2}
 
-        bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
+        if self.mode == 4:
+            bnds_min = np.concatenate([self.Wq_min, self.Wv_min])
+            bnds_max = np.concatenate([self.Wq_max, self.Wv_max])
 
-        W = minimize(lambda W: self._critic_cost(W, U, Y), Winit, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
+            bnds = sp.optimize.Bounds(bnds_min, bnds_max, keep_feasible=True)
 
-        # DEBUG ===================================================================
-        # print('-----------------------Critic parameters--------------------------')
-        # print( W )
-        # /DEBUG ==================================================================
+            wqv_init = np.concatenate([self.Wq_init, self.Wv_init])
 
-        return W
+            try:
+                w_lmbd = minimize(lambda w_lmbd: self._critic_cost(w_lmbd, U, Y), wqv_init, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
+                Wq = w_lmbd[:self.dim_crit_Q]
+                Wv = w_lmbd[-self.dim_crit_V:]
+            except:
+                print('Critic''s optimizer failed. Returning default parameters.')
+                Wq = self.Wq_init
+                Wv = self.Wv_init
 
-    def _actor_cost(self, U, y, N, W, delta, mode):
+        else:
+            bnds = sp.optimize.Bounds(self.Wq_min, self.Wq_max, keep_feasible=True)
+
+            Wq = minimize(lambda W: self._critic_cost(W, U, Y), self.Wq_init, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
+            Wv = None
+
+
+        return Wq, Wv
+
+    def _actor_cost(self, U, y, Wq, Wv):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
+        See class documentation.
 
         Customization
         -------------
@@ -606,42 +556,47 @@ class ctrl_RL_pred:
 
         """
 
-        myU = np.reshape(U, [N, self.dim_input])
+        myU = np.reshape(U, [self.Nactor, self.dim_input])
 
-        Y = np.zeros([N, self.dim_output])
+        Y = np.zeros([self.Nactor, self.dim_output])
 
         # System output prediction
-        if (mode==1) or (mode==3) or (mode==5):    # Via exogenously passed model
+        if (self.mode==1) or (self.mode==2) or (self.mode==3) or (self.mode==4):    # Via exogenously passed model
             Y[0, :] = y
             x = self.x_sys
-            for k in range(1, self.Nactor):
-                x = x + delta * self.sys_rhs([], x, myU[k-1, :], [])  # Euler scheme
+            for k in range(1, self.Nactor-1):
+                if self.is_use_offline_model:
+                    a = np.concatenate([x.reshape(3,), myU[k-1,:]])
+                    x =  self.model.prediction(a.reshape(5))[0]  # need to define trained_NN with saved weights get_next_state
+
+                else:
+                    x = x + self.pred_step_size * self.sys_rhs([], x, myU[k-1, :], [])  # Euler scheme
                 Y[k, :] = self.sys_out(x)
 
-        elif (mode==2) or (mode==4) or (mode==6):    # Via estimated model
-            myU_upsampled = myU.repeat(int(delta/self.sampling_time), axis=0)
-            Yupsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0est, y)
-            Y = Yupsampled[::int(delta/self.sampling_time)]
-
         J = 0
-        if (mode==1) or (mode==2):     # MPC
-            for k in range(N):
+        if self.mode==1:     # MPC
+            for k in range(self.Nactor):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
-        elif (mode==3) or (mode==4):     # RL: Q-learning with Ncritic-1 roll-outs of running cost
-             for k in range(N-1):
+        elif self.mode==2:     # RL: Q-learning with Ncritic-1 roll-outs of running cost
+             for k in range(self.Nactor-1):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
-             J += W @ self._phi( Y[-1, :], myU[-1, :] )
-        elif (mode==5) or (mode==6):     # RL: (normalized) stacked Q-learning
-             for k in range(N):
-                Q = W @ self._phi( Y[k, :], myU[k, :] )
-                # J += 1/N * Q 
+             J += np.dot(Wq, self._phi_Q( Y[-1, :], myU[-1, :] ))
+        elif self.mode==3:     # RL: stacked Q-learning
+             for k in range(self.Nactor):
+                Q = np.dot(Wq, self._phi_Q( Y[k, :], myU[k, :] ))
+                # J += 1/N * Q # normalization
                 J += Q
-
+        elif self.mode==4:
+             for k in range(self.Nactor-1):
+                Q = np.dot(Wq, self._phi_Q( Y[k, :], myU[k, :] ))
+                # J += 1/N * Q
+                J += Q
+             J += np.dot(Wv, self._phi_V( Y[-1, :]))
         return J
 
-    def _actor(self, y, Uinit, N, W, delta, mode):
+    def _actor(self, y, Wq, Wv):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
+        See class documentation.
 
         Customization
         -------------
@@ -661,44 +616,21 @@ class ctrl_RL_pred:
 
         isGlobOpt = 0
 
-        myUinit = np.reshape(Uinit, [N*self.dim_input,])
+        myUinit = np.reshape(self.Uinit, [self.Nactor*self.dim_input,])
 
         bnds = sp.optimize.Bounds(self.Umin, self.Umax, keep_feasible=True)
 
         try:
             if isGlobOpt:
                 minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                U = basinhopping(lambda U: self._actor_cost(U, y, N, W, delta, mode), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
+                U = basinhopping(lambda U: self._actor_cost(U, y, Wq, Wv), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
             else:
-                U = minimize(lambda U: self._actor_cost(U, y, N, W, delta, mode), myUinit, method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x
+                U = minimize(lambda U: self._actor_cost(U, y, Wq, Wv), myUinit, method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
             U = myUinit
 
-        # DEBUG ===================================================================
-        # ================================Interm output of model prediction quality
-        # R  = '\033[31m'
-        # Bl  = '\033[30m'
-        # myU = np.reshape(U, [N, self.dim_input])
-        # myU_upsampled = myU.repeat(int(delta/self.sampling_time), axis=0)
-        # Yupsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0est, y)
-        # Y = Yupsampled[::int(delta/self.sampling_time)]
-        # Yt = np.zeros([N, self.dim_output])
-        # Yt[0, :] = y
-        # x = self.x_sys
-        # for k in range(1, Nactor):
-        #     x = x + delta * self.sys_rhs([], x, myU[k-1, :], [])  # Euler scheme
-        #     Yt[k, :] = self.sys_out(x)
-        # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
-        # dataRow = []
-        # for k in range(dim_output):
-        #     dataRow.append( np.mean(Y[:,k] - Yt[:,k]) )
-        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
-        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
-        # print(R+table+Bl)
-        # /DEBUG ==================================================================
-
-        return U[:self.dim_input]    # Return first action
+        return U[:self.dim_input]     # Return first action
 
     def compute_action(self, t, y):
         """
@@ -711,25 +643,26 @@ class ctrl_RL_pred:
 
         """
 
+        if self.is_estimate_model:
+            self._estimate_model(t,y)
+
         time_in_sample = t - self.ctrl_clock
 
         if time_in_sample >= self.sampling_time: # New sample
             # Update controller's internal clock
             self.ctrl_clock = t
 
-            if self.mode in (1, 2):
-
-                # Apply control when model estimation phase is over
-                if self.is_prob_noise and (self.mode==2):
+            if self.mode==1:
+                if self.is_prob_noise and self.is_estimate_model:
                     return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
 
-                elif not self.is_prob_noise and (self.mode==2):
-                    u = self._actor(y, self.Uinit, self.Nactor, [], self.pred_step_size, self.mode)
+                elif not self.is_prob_noise and self.is_estimate_model:
+                    u = self._actor(y, [],[])
 
-                elif (self.mode==1):
-                    u = self._actor(y, self.Uinit, self.Nactor, [], self.pred_step_size, self.mode)
+                else:
+                    u = self._actor(y, [], [])
 
-            elif self.mode in (3, 4, 5, 6):
+            elif self.mode in (2, 4, 3):
                 # Critic
                 timeInCriticPeriod = t - self.critic_clock
 
@@ -738,43 +671,23 @@ class ctrl_RL_pred:
                 self.ybuffer = push_vec(self.ybuffer, y)
 
                 if timeInCriticPeriod >= self.critic_period:
-                    # Update critic's internal clock
                     self.critic_clock = t
 
-                    W = self._critic(self.Wprev, self.Winit, self.ubuffer[-self.Ncritic:,:], self.ybuffer[-self.Ncritic:,:])
-                    self.Wprev = W
-
-                    # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
-                    # self.Winit = self.Wprev
+                    Wq, Wv = self._critic(self.Wq_prev, self.Wq_init, self.Wv_prev, self.Wv_init, self.ubuffer[-self.Ncritic:,:], self.ybuffer[-self.Ncritic:,:])
+                    self.Wq_prev = Wq
+                    self.Wv_prev = Wv
 
                 else:
-                    W = self.Wprev
+                    Wq = self.Wq_prev
+                    Wv = self.Wv_prev
 
-                # Actor. Apply control when model estimation phase is over
-                if self.is_prob_noise and (self.mode in (4, 6)):
+                if self.is_prob_noise and self.is_estimate_model:
                     u = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
-                elif not self.is_prob_noise and (self.mode in (4, 6)):
-                    u = self._actor(y, self.Uinit, self.Nactor, W, self.pred_step_size, self.mode)
 
-                    # [EXPERIMENTAL] Call MATLAB's actor
-                    # R1 = self.rcost_pars[0]
-                    # u = eng.optCtrl(eng.transpose(matlab.double(y.tolist())), eng.transpose(matlab.double(self.Uinit.tolist())),
-                    #                                   matlab.double(R1[:dim_output,:dim_output].tolist()), matlab.double(R1[dim_output:,dim_output:].tolist()), self.gamma,
-                    #                                   self.Nactor,
-                    #                                   eng.transpose(matlab.double(W.tolist())),
-                    #                                   matlab.double(self.my_model.A.tolist()),
-                    #                                   matlab.double(self.my_model.B.tolist()),
-                    #                                   matlab.double(self.my_model.C.tolist()),
-                    #                                   matlab.double(self.my_model.D.tolist()),
-                    #                                   eng.transpose(matlab.double(self.my_model.x0est.tolist())),
-                    #                                   self.mode,
-                    #                                   eng.transpose(matlab.double(self.uMin.tolist())),
-                    #                                   eng.transpose(matlab.double(self.uMax.tolist())),
-                    #                                   dt, matlab.double(self.trueModelPars), self.critic_struct, nargout=1)
-                    # u = np.squeeze(np.asarray(u)
-
-                elif self.mode in (3, 5):
-                    u = self._actor(y, self.Uinit, self.Nactor, W, self.pred_step_size, self.mode)
+                elif not self.is_prob_noise and self.is_estimate_model:
+                    u = self._actor(y,  Wq,[])
+                else:
+                    u = self._actor(y, Wq, Wv)
 
             self.uCurr = u
 
@@ -782,6 +695,7 @@ class ctrl_RL_pred:
 
         else:
             return self.uCurr
+
 
 class ctrl_nominal_3wrobot:
     """
@@ -997,6 +911,61 @@ class ctrl_nominal_3wrobot:
             z = eta - kappa_val
             uNI = - self.ctrl_gain * z
             u = self._NH2ctrl_Cart(xNI, eta, uNI)
+
+            if self.ctrl_bnds.any():
+                for k in range(2):
+                    u[k] = np.clip(u[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
+
+            self.uCurr = u
+
+            return u
+
+        else:
+            return self.uCurr
+
+
+class ctrl_nominal_kinematic_3wrobot:
+
+
+    def __init__(self, ctrl_bnds, pose_goal, t0, sampling_time):
+        self.ctrl_bnds = ctrl_bnds
+        self.ctrl_clock = t0
+        self.sampling_time = sampling_time
+        self.pose_goal = pose_goal
+
+        self.uCurr = np.zeros(2)
+
+    def compute_action(self, t, dstate):
+
+        time_in_sample = t - self.ctrl_clock
+        if time_in_sample >= self.sampling_time: # New sample
+
+            # This controller needs full-state measurement
+            x = dstate[0]
+            y = dstate[1]
+            theta = dstate[2]
+            # errors
+            e_x = self.pose_goal[0] - x
+            e_y = self.pose_goal[1] - y
+            error_angle = self.pose_goal[1] - theta
+
+            # distance to goal
+            dist_to_goal = math.sqrt(e_x**2 + e_y**2)
+            if theta > math.pi:
+                error_angle = -np.arctan2(e_y, e_x) + theta - 2 * math.pi
+            else:
+                error_angle = -np.arctan2(e_y, e_x) + theta
+            errors = [e_x, e_y, error_angle]
+            u_v = 0.6 * dist_to_goal * np.cos(error_angle)
+            u_w = - 0.4 * error_angle
+
+            u = np.array([u_v, u_w])
+
+            # theta_star = self._minimizer_theta(xNI, eta)
+            # kappa_val = self._kappa(xNI, theta_star)
+            # z = eta - kappa_val
+            # uNI = - self.ctrl_gain * z
+            # u = self._NH2ctrl_Cart(xNI, eta, uNI)
 
             if self.ctrl_bnds.any():
                 for k in range(2):

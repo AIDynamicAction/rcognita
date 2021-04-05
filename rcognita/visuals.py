@@ -31,11 +31,7 @@ Buffers are updated from bottom to top
 
 import numpy as np
 import numpy.linalg as la
-from utilities import upd_line
-from utilities import reset_line
-from utilities import upd_scatter
-from utilities import upd_text
-from utilities import to_col_vec
+from rcognita.utilities import upd_line, reset_line, upd_scatter, upd_text, to_col_vec
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -253,6 +249,112 @@ class animator_3wrobot(animator):
 
         if self.is_log_data:
             self.logger.log_data_row(self.datafile_curr, t, xCoord, yCoord, alpha, v, omega, r, icost, u)
+
+        # xy plane
+        text_time = 't = {time:2.3f}'.format(time = t)
+        upd_text(self.text_time_handle, text_time)
+        upd_line(self.line_traj, xCoord, yCoord)  # Update the robot's track on the plot
+
+        self.robot_marker.rotate(1e-3)    # Rotate the robot on the plot
+        self.scatter_sol.remove()
+        self.scatter_sol = self.axs_xy_plane.scatter(5, 5, marker=self.robot_marker.marker, s=400, c='b')
+
+        self.robot_marker.rotate(alpha_deg)    # Rotate the robot on the plot
+        self.scatter_sol.remove()
+        self.scatter_sol = self.axs_xy_plane.scatter(xCoord, yCoord, marker=self.robot_marker.marker, s=400, c='b')
+
+        # # Solution
+        upd_line(self.line_norm, t, la.norm([xCoord, yCoord]))
+        upd_line(self.line_alpha, t, alpha)
+
+        # Cost
+        upd_line(self.line_rcost, t, r)
+        upd_line(self.line_icost, t, icost)
+        text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'.format(icost = icost)
+        upd_text(self.text_icost_handle, text_icost)
+        # Control
+        for (line, uSingle) in zip(self.lines_ctrl, u):
+            upd_line(line, t, uSingle)
+
+        # Run done
+        if t >= self.t1:
+            if self.is_print_sim_step:
+                    print('.....................................Run {run:2d} done.....................................'.format(run = self.run_curr))
+
+            self.run_curr += 1
+
+            if self.run_curr > self.Nruns:
+                return
+
+            if self.is_log_data:
+                self.datafile_curr = self.datafiles[self.run_curr-1]
+
+            # Reset simulator
+            self.simulator.reset()
+
+            # Reset controller
+            if self.ctrl_mode > 0:
+                self.ctrl_benchmarking.reset(self.t0)
+            else:
+                self.ctrl_nominal.reset(self.t0)
+
+            icost = 0
+
+            reset_line(self.line_norm)
+            reset_line(self.line_alpha)
+            reset_line(self.line_rcost)
+            reset_line(self.line_icost)
+            reset_line(self.lines_ctrl[0])
+            reset_line(self.lines_ctrl[1])
+
+            # for item in self.lines:
+            #     if item != self.line_traj:
+            #         if isinstance(item, list):
+            #             for subitem in item:
+            #                 self.reset_line(subitem)
+            #                 print('line reset')
+            #         else:
+            #             self.reset_line(item)
+
+            upd_line(self.line_traj, np.nan, np.nan)
+
+class animator_3wrobot_kinematic(animator_3wrobot):
+    def animate(self, k):
+
+        if self.is_playback:
+            self.upd_sim_data_row()
+            t = self.t
+            ksi = self.ksi
+            u = self.u
+            r = self.r
+            icost = self.icost
+
+        else:
+            self.simulator.sim_step()
+
+            t, x, y, ksi = self.simulator.get_sim_step_data()
+
+            u = self.ctrl_selector(t, y, self.uMan, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
+
+            self.sys.receive_action(u)
+            self.ctrl_benchmarking.receive_sys_state(self.sys._x)
+            self.ctrl_benchmarking.upd_icost(y, u)
+
+            r = self.ctrl_benchmarking.rcost(y, u)
+            icost = self.ctrl_benchmarking.icost_val
+
+        xCoord = ksi[0]
+        yCoord = ksi[1]
+        alpha = ksi[2]
+        alpha_deg = alpha/np.pi*180
+        v = ksi[3]
+        omega = ksi[4]
+
+        if self.is_print_sim_step:
+            self.logger.print_sim_step(t, xCoord, yCoord, alpha, v, omega, r, icost, u)
+
+        if self.is_log_data:
+            self.logger.log_data_row(self.datafile_curr, t, xCoord, yCoord, alpha, r, icost, u)
 
         # xy plane
         text_time = 't = {time:2.3f}'.format(time = t)

@@ -1,6 +1,8 @@
 build_script.sh
 test/
 data/
+tutorials/
+main_3wrobot.py
 rcognita_archive
 .idea/*
 .DS_Store
