@@ -8,6 +8,9 @@
 Rcognita is a framework for DP and RL algorithm development, testing, and simulation.
 </p>
 
+Installation:
+* clone repo
+* run in terminal ```python3 setup.py install```
 
 Example of terminal comand:
 ```{r, engine='bash', count_lines}
