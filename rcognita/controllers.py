@@ -32,6 +32,7 @@ Buffers are updated from bottom to top
 from rcognita.utilities import dss_sim, rep_mat, uptria2vec, push_vec
 import numpy as np
 import scipy as sp
+import math
 from numpy.random import rand
 from scipy.optimize import minimize
 from scipy.optimize import basinhopping
@@ -952,6 +953,7 @@ class ctrl_nominal_kinematic_3wrobot:
             x = dstate[0]
             y = dstate[1]
             theta = dstate[2]
+
             # errors
             e_x = self.pose_goal[0] - x
             e_y = self.pose_goal[1] - y
