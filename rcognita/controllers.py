@@ -910,7 +910,7 @@ class ctrl_nominal_3wrobot:
         time_in_sample = t - self.ctrl_clock
 
         if time_in_sample >= self.sampling_time: # New sample
-
+            self.ctrl_clock = t
             # This controller needs full-state measurement
             xNI, eta = self._Cart2NH( y )
             theta_star = self._minimizer_theta(xNI, eta)
@@ -946,6 +946,7 @@ class ctrl_nominal_kinematic_3wrobot:
 
         time_in_sample = t - self.ctrl_clock
         if time_in_sample >= self.sampling_time: # New sample
+            self.ctrl_clock = t
 
             # This controller needs full-state measurement
             x = dstate[0]
