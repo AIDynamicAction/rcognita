@@ -705,7 +705,7 @@ class ctrl_RL_pred:
             return self.uCurr
 
 
-class ctrl_nominal_3wrobot:
+class ctrl_endi_nominal_3wrobot:
     """
     This is a class of nominal controllers for 3-wheel robots used for benchmarking of other controllers.
 
@@ -931,59 +931,22 @@ class ctrl_nominal_3wrobot:
         else:
             return self.uCurr
 
+    def compute_action_vanila(self, y):
+        """
+        Same as :func:`~ctrl_endi_nominal_3wrobot.compute_action`, but without invoking the internal clock
 
-class ctrl_nominal_kinematic_3wrobot:
+        """
 
+        xNI, eta = self._Cart2NH( y )
+        theta_star = self._minimizer_theta(xNI, eta)
+        kappa_val = self._kappa(xNI, theta_star)
+        z = eta - kappa_val
+        uNI = - self.ctrl_gain * z
+        for k in range(len(uNI)):
+            uNI[k] = np.clip(uNI[k], -1, 1)
 
-    def __init__(self, ctrl_bnds, pose_goal, t0, sampling_time):
-        self.ctrl_bnds = ctrl_bnds
-        self.ctrl_clock = t0
-        self.sampling_time = sampling_time
-        self.pose_goal = pose_goal
+        u = self._NH2ctrl_Cart(xNI, eta, uNI)
 
-        self.uCurr = np.zeros(2)
+        self.uCurr = u
 
-    def compute_action(self, t, dstate):
-
-        time_in_sample = t - self.ctrl_clock
-        if time_in_sample >= self.sampling_time: # New sample
-            self.ctrl_clock = t
-
-            # This controller needs full-state measurement
-            x = dstate[0]
-            y = dstate[1]
-            theta = dstate[2]
-
-            # errors
-            e_x = self.pose_goal[0] - x
-            e_y = self.pose_goal[1] - y
-            error_angle = self.pose_goal[1] - theta
-
-            # distance to goal
-            dist_to_goal = math.sqrt(e_x**2 + e_y**2)
-            if theta > math.pi:
-                error_angle = -np.arctan2(e_y, e_x) + theta - 2 * math.pi
-            else:
-                error_angle = -np.arctan2(e_y, e_x) + theta
-            errors = [e_x, e_y, error_angle]
-            u_v = 0.6 * dist_to_goal * np.cos(error_angle)
-            u_w = - 0.4 * error_angle
-
-            u = np.array([u_v, u_w])
-
-            # theta_star = self._minimizer_theta(xNI, eta)
-            # kappa_val = self._kappa(xNI, theta_star)
-            # z = eta - kappa_val
-            # uNI = - self.ctrl_gain * z
-            # u = self._NH2ctrl_Cart(xNI, eta, uNI)
-
-            if self.ctrl_bnds.any():
-                for k in range(2):
-                    u[k] = np.clip(u[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
-
-            self.uCurr = u
-
-            return u
-
-        else:
-            return self.uCurr
+        return u
