@@ -305,7 +305,7 @@ class sys_3wrobot_endi(system):
         return y
 
 
-class sys_3wrobot_kinematic(system):
+class sys_3wrobot_ni(system):
     """
     System class: 3-wheel robot with dynamical actuators.
 
@@ -411,4 +411,4 @@ class sys_2tank(system):
 
     def out(self, x, u=[]):
         y = x
-        return y   
+        return y

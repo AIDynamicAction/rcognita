@@ -71,7 +71,7 @@ class logger_3wrobot_endi:
                 writer = csv.writer(outfile)
                 writer.writerow([t, xCoord, yCoord, alpha, v, omega, r, icost, u[0], u[1]])
 
-class logger_3wrobot_kinematic:
+class logger_3wrobot_ni:
     """
     Data logger for a kinematic 3-wheel robot.
 

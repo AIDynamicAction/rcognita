@@ -31,7 +31,11 @@ Buffers are updated from bottom to top
 
 import numpy as np
 import numpy.linalg as la
-from rcognita.utilities import upd_line, reset_line, upd_scatter, upd_text, to_col_vec
+from rcognita.utilities import upd_line
+from rcognita.utilities import reset_line
+from rcognita.utilities import upd_scatter
+from rcognita.utilities import upd_text
+from rcognita.utilities import to_col_vec
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -71,6 +75,23 @@ class animator:
     def animate(self, k):
         pass
 
+    def get_anm(self, anm):
+        """
+        ``anm`` should be a ``FuncAnimation`` object.
+        This method is needed to hand the animator access to the currently running animation, say, via ``anm.event_source.stop()``
+
+        """
+        self.anm = anm
+
+    def stop_anm(self):
+        """
+        Stops animation, provided that ``self.anm`` was defined via ``get_anm``
+
+        """
+        self.anm.event_source.stop()
+        # plt.close('all')
+        # raise Exception('exit')
+
 class robot_marker:
     """
     Robot marker for visualization.
@@ -92,7 +113,7 @@ class robot_marker:
 
 class animator_3wrobot(animator):
     """
-    Animator class for a 3-wheel robot.
+    Animator class for a 3-wheel robot with dynamic actuators.
 
     """
     def __init__(self, objects=[], pars=[]):
@@ -272,6 +293,7 @@ class animator_3wrobot(animator):
         upd_line(self.line_icost, t, icost)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'.format(icost = icost)
         upd_text(self.text_icost_handle, text_icost)
+
         # Control
         for (line, uSingle) in zip(self.lines_ctrl, u):
             upd_line(line, t, uSingle)
@@ -284,6 +306,8 @@ class animator_3wrobot(animator):
             self.run_curr += 1
 
             if self.run_curr > self.Nruns:
+                print('Animation done...')
+                self.stop_anm()
                 return
 
             if self.is_log_data:
@@ -318,7 +342,129 @@ class animator_3wrobot(animator):
 
             upd_line(self.line_traj, np.nan, np.nan)
 
-class animator_3wrobot_kinematic(animator_3wrobot):
+class animator_3wrobot_ni(animator):
+    """
+    Animator class for a 3-wheel robot with static actuators.
+
+    """
+    def __init__(self, objects=[], pars=[]):
+        self.objects = objects
+        self.pars = pars
+
+        # Unpack entities
+        self.simulator, self.sys, self.ctrl_nominal, self.ctrl_benchmarking, self.datafiles, self.ctrl_selector, self.logger = self.objects
+
+        x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrl_mode, uMan, v_min, omega_min, v_max, omega_max, Nruns, is_print_sim_step, is_log_data, is_playback, r0 = self.pars
+
+        # Store some parameters for later use
+        self.t0 = t0
+        self.ksi0 = ksi0
+        self.t1 = t1
+        self.ctrl_mode = ctrl_mode
+        self.uMan = uMan
+        self.Nruns = Nruns
+        self.is_print_sim_step = is_print_sim_step
+        self.is_log_data = is_log_data
+        self.is_playback = is_playback
+
+        xCoord0 = x0[0]
+        yCoord0 = x0[1]
+        alpha0 = x0[2]
+        alpha_deg0 = alpha0/2/np.pi
+
+        plt.close('all')
+
+        self.fig_sim = plt.figure(figsize=(10,10))
+
+        # xy plane
+        self.axs_xy_plane = self.fig_sim.add_subplot(221, autoscale_on=False, xlim=(xMin,xMax), ylim=(yMin,yMax),
+                                                  xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+        self.axs_xy_plane.set_aspect('equal', adjustable='box')
+        self.axs_xy_plane.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
+        self.axs_xy_plane.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
+        self.line_traj, = self.axs_xy_plane.plot(xCoord0, yCoord0, 'b--', lw=0.5)
+        self.robot_marker = robot_marker(angle=alpha_deg0)
+        text_time = 't = {time:2.3f}'.format(time = t0)
+        self.text_time_handle = self.axs_xy_plane.text(0.05, 0.95, text_time,
+                                                   horizontalalignment='left', verticalalignment='center', transform=self.axs_xy_plane.transAxes)
+        self.axs_xy_plane.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+
+        # Solution
+        self.axs_sol = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
+        self.axs_sol.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.line_norm, = self.axs_sol.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+        self.line_alpha, = self.axs_sol.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
+        self.axs_sol.legend(fancybox=True, loc='upper right')
+        self.axs_sol.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+
+        # Cost
+        if is_playback:
+            r = r0
+        else:
+            y0 = self.sys.out(x0)
+            r = self.ctrl_benchmarking.rcost(y0, u0)
+
+        self.axs_cost = self.fig_sim.add_subplot(223, autoscale_on=False, xlim=(t0,t1), ylim=(0, 1e4*r), yscale='symlog', xlabel='t [s]')
+
+        text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.3f}'.format(icost = 0)
+        self.text_icost_handle = self.fig_sim.text(0.05, 0.5, text_icost, horizontalalignment='left', verticalalignment='center')
+        self.line_rcost, = self.axs_cost.plot(t0, r, 'r-', lw=0.5, label='r')
+        self.line_icost, = self.axs_cost.plot(t0, 0, 'g-', lw=0.5, label=r'$\int r \,\mathrm{d}t$')
+        self.axs_cost.legend(fancybox=True, loc='upper right')
+
+        # Control
+        self.axs_ctrl = self.fig_sim.add_subplot(224, autoscale_on=False, xlim=(t0,t1), ylim=(1.1*np.min([v_min, omega_min]), 1.1*np.max([v_max, omega_max])), xlabel='t [s]')
+        self.axs_ctrl.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.lines_ctrl = self.axs_ctrl.plot(t0, to_col_vec(u0).T, lw=0.5)
+        self.axs_ctrl.legend(iter(self.lines_ctrl), ('v [m/s]', r'$\omega$ [rad/s]'), fancybox=True, loc='upper right')
+
+        # Pack all lines together
+        cLines = namedtuple('lines', ['line_traj', 'line_norm', 'line_alpha', 'line_rcost', 'line_icost', 'lines_ctrl'])
+        self.lines = cLines(line_traj=self.line_traj,
+                            line_norm=self.line_norm,
+                            line_alpha=self.line_alpha,
+                            line_rcost=self.line_rcost,
+                            line_icost=self.line_icost,
+                            lines_ctrl=self.lines_ctrl)
+
+        # Enable data cursor
+        for item in self.lines:
+            if isinstance(item, list):
+                for subitem in item:
+                    datacursor(subitem)
+            else:
+                datacursor(item)
+
+    def get_sim_data(self, ts, xCoords, yCoords, alphas, rs, icosts, vs, omegas):
+        """
+        This function is needed for playback purposes when simulation data were generated elsewhere.
+        It feeds data into the animator from outside.
+        The simulation step counter ``curr_step`` is reset accordingly.
+
+        """
+        self.ts, self.xCoords, self.yCoords, self.alphas = ts, xCoords, yCoords, alphas
+        self.rs, self.icosts, self.vs, self.omegas = rs, icosts, vs, omegas
+        self.curr_step = 0
+
+    def upd_sim_data_row(self):
+        self.t = self.ts[self.curr_step]
+        self.ksi = np.array([self.xCoords[self.curr_step], self.yCoords[self.curr_step], self.alphas[self.curr_step]])
+        self.r = self.rs[self.curr_step]
+        self.icost = self.icosts[self.curr_step]
+        self.u = np.array([self.vs[self.curr_step], self.omegas[self.curr_step]])
+
+        self.curr_step = self.curr_step + 1
+
+    def init_anim(self):
+        x0, *_ = self.pars
+
+        xCoord0 = x0[0]
+        yCoord0 = x0[1]
+
+        self.scatter_sol = self.axs_xy_plane.scatter(xCoord0, yCoord0, marker=self.robot_marker.marker, s=400, c='b')
+        self.run_curr = 1
+        self.datafile_curr = self.datafiles[0]
+
     def animate(self, k):
 
         if self.is_playback:
@@ -347,14 +493,13 @@ class animator_3wrobot_kinematic(animator_3wrobot):
         yCoord = ksi[1]
         alpha = ksi[2]
         alpha_deg = alpha/np.pi*180
-        v = ksi[3]
-        omega = ksi[4]
 
         if self.is_print_sim_step:
-            self.logger.print_sim_step(t, xCoord, yCoord, alpha, v, omega, r, icost, u)
+            self.logger.print_sim_step(t, xCoord, yCoord, alpha, r, icost, u)
 
         if self.is_log_data:
-            self.logger.log_data_row(self.datafile_curr, t, xCoord, yCoord, alpha, r, icost, u)
+            v, omega = u
+            self.logger.log_data_row(self.datafile_curr, t, xCoord, yCoord, alpha, v, omega, r, icost, u)
 
         # xy plane
         text_time = 't = {time:2.3f}'.format(time = t)
@@ -378,6 +523,7 @@ class animator_3wrobot_kinematic(animator_3wrobot):
         upd_line(self.line_icost, t, icost)
         text_icost = r'$\int r \,\mathrm{{d}}t$ = {icost:2.1f}'.format(icost = icost)
         upd_text(self.text_icost_handle, text_icost)
+
         # Control
         for (line, uSingle) in zip(self.lines_ctrl, u):
             upd_line(line, t, uSingle)
@@ -390,6 +536,8 @@ class animator_3wrobot_kinematic(animator_3wrobot):
             self.run_curr += 1
 
             if self.run_curr > self.Nruns:
+                print('Animation done...')
+                self.stop_anm()
                 return
 
             if self.is_log_data:
@@ -587,6 +735,8 @@ class animator_2tank(animator):
             self.run_curr += 1
 
             if self.run_curr > self.Nruns:
+                print('Animation done...')
+                self.stop_anm()
                 return
 
             if self.is_log_data:
@@ -608,3 +758,14 @@ class animator_2tank(animator):
             reset_line(self.line_ctrl)
             reset_line(self.line_rcost)
             reset_line(self.line_icost)
+
+            # for item in self.lines:
+            #     if item != self.line_traj:
+            #         if isinstance(item, list):
+            #             for subitem in item:
+            #                 self.reset_line(subitem)
+            #                 print('line reset')
+            #         else:
+            #             self.reset_line(item)
+
+            # upd_line(self.line_h1, np.nan)

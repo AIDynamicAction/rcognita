@@ -36,6 +36,7 @@ import math
 from numpy.random import rand
 from scipy.optimize import minimize
 from scipy.optimize import basinhopping
+from scipy.optimize import NonlinearConstraint
 
 
 import torch
@@ -704,225 +705,414 @@ class ctrl_RL_pred:
         else:
             return self.uCurr
 
-
-class ctrl_endi_nominal_3wrobot:
+class ctrl_RL_stab:
     """
-    This is a class of nominal controllers for 3-wheel robots used for benchmarking of other controllers.
+    Class of agents with stabilizing constraints.
 
-    The controller is sampled.
+    Needs a nominal controller object ``safe_ctrl`` with a respective Lyapunov function.
 
-    For a 3-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [[1]_], we use here
-    a controller designed by non-smooth backstepping (read more in [[2]_], [[3]_])
+    Actor
+    -----
 
-    Attributes
-    ----------
-    m, I : : numbers
-        Mass and moment of inertia around vertical axis of the robot
-    ctrl_gain : : number
-        Controller gain
-    t0 : : number
-        Initial value of the controller's internal clock
-    sampling_time : : number
-        Controller's sampling time (in seconds)
+    ``H`` : weights
 
-    References
-    ----------
-    .. [1] W. Abbasi, F. urRehman, and I. Shah. “Backstepping based nonlinear adaptive control for the extended
-           nonholonomic double integrator”. In: Kybernetika 53.4 (2017), pp. 578–594
+    ``_psi``: regressor
 
-    ..   [2] Matsumoto, R., Nakamura, H., Satoh, Y., and Kimura, S. (2015). Position control of two-wheeled mobile robot
-             via semiconcave function backstepping. In 2015 IEEE Conference on Control Applications (CCA), 882–887
+    ``_psi`` is a vector, not matrix. So, if the environment is multi-input, the input is actually computed as
 
-    ..   [3] Osinenko, Pavel, Patrick Schmidt, and Stefan Streif. "Nonsmooth stabilization and its computational aspects." arXiv preprint arXiv:2006.14013 (2020)
+    ``u = reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )``
+
+    where ``y`` is the output
+
+    Critic
+    -----
+
+    ``W`` : weights
+
+    ``_phi``: regressor
+
+    Read more
+    ---------
+
+    Osinenko, P., Beckenbach, L., Göhrt, T., & Streif, S. (2020). A reinforcement learning method with closed-loop stability guarantee. IFAC-PapersOnLine
 
     """
+    def __init__(self, dim_input, dim_output, mode=1, ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
+                 sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
+                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct=1, actor_struct=1, rcost_struct=1, rcost_pars=[], y_target=[],
+                 safe_ctrl=[], safe_decay_rate=[]):
 
-    def __init__(self, m, I, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1):
-        self.m = m
-        self.I = I
-        self.ctrl_gain = ctrl_gain
-        self.ctrl_bnds = ctrl_bnds
+        self.dim_input = dim_input
+        self.dim_output = dim_output
+
+        self.mode = mode
+
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.uCurr = np.zeros(2)
+        # Controller: common
+        self.Nactor = Nactor
+        self.pred_step_size = pred_step_size
+
+        self.uMin = np.array( ctrl_bnds[:,0] )
+        self.uMax = np.array( ctrl_bnds[:,1] )
+        self.Umin = rep_mat(self.uMin, 1, Nactor)
+        self.Umax = rep_mat(self.uMax, 1, Nactor)
+
+        self.uCurr = self.uMin/10
+
+        self.Uinit = rep_mat( self.uMin/10 , 1, self.Nactor)
+
+        self.ubuffer = np.zeros( [buffer_size, dim_input] )
+        self.ybuffer = np.zeros( [buffer_size, dim_output] )
+
+        # Exogeneous model's things
+        self.sys_rhs = sys_rhs
+        self.sys_out = sys_out
+        self.x_sys = x_sys
+
+        # Model estimator's things
+        self.est_clock = t0
+        self.is_prob_noise = 1
+        self.prob_noise_pow = prob_noise_pow
+        self.model_est_stage = model_est_stage
+        self.model_est_period = model_est_period
+        self.buffer_size = buffer_size
+        self.model_order = model_order
+        self.model_est_checks = model_est_checks
+
+        A = np.zeros( [self.model_order, self.model_order] )
+        B = np.zeros( [self.model_order, self.dim_input] )
+        C = np.zeros( [self.dim_output, self.model_order] )
+        D = np.zeros( [self.dim_output, self.dim_input] )
+        x0est = np.zeros( self.model_order )
+
+        self.my_model = self.model(A, B, C, D, x0est)
+
+        self.model_stack = []
+        for k in range(self.model_est_checks):
+            self.model_stack.append(self.my_model)
+
+        # RL elements
+        self.critic_clock = t0
+        self.gamma = gamma
+        self.Ncritic = Ncritic
+        self.Ncritic = np.min([self.Ncritic, self.buffer_size-1]) # Clip critic buffer size
+        self.critic_period = critic_period
+        self.critic_struct = critic_struct
+        self.actor_struct = actor_struct
+        self.rcost_struct = rcost_struct
+        self.rcost_pars = rcost_pars
+        self.y_target = y_target
+
+        self.icost_val = 0
+
+        if self.critic_struct == 1:
+            self.dim_critic = int( (  self.dim_output  + 1 ) *  self.dim_output / 2 + self.dim_output )
+            self.Wmin = -1e3*np.ones(self.dim_critic)
+            self.Wmax = 1e3*np.ones(self.dim_critic)
+        elif self.critic_struct == 2:
+            self.dim_critic = int( ( self.dim_output + 1 ) * self.dim_output / 2 ).astype(int)
+            self.Wmin = np.zeros(self.dim_critic)
+            self.Wmax = 1e3*np.ones(self.dim_critic)
+        elif self.critic_struct == 3:
+            self.dim_critic = self.dim_output
+            self.Wmin = np.zeros(self.dim_critic)
+            self.Wmax = 1e3*np.ones(self.dim_critic)
+
+        self.Wprev = self.Wmin
+        self.Winit = np.ones(self.dim_critic)
+
+        self.lmbd_prev = 0
+        self.lmbd_init = 0
+
+        self.lmbd_min = 0
+        self.lmbd_max = 1
+
+        if self.actor_struct == 1:
+            self.dim_actor_per_input = int( ( self.dim_output  + 1 ) *  self.dim_output / 2 + self.dim_output )
+        elif self.actor_struct == 2:
+            self.dim_actor_per_input = int( ( self.dim_output + 1 ) * self.dim_output / 2 )
+        elif self.actor_struct == 3:
+            self.dim_actor_per_input = self.dim_output
+
+        self.dim_actor = self.dim_actor_per_input * self.dim_input
+
+        self.Hmin = -0.5e1*np.ones(self.dim_actor)
+        self.Hmax = 0.5e1*np.ones(self.dim_actor)
+
+        # Stabilizing constraint stuff
+        self.safe_ctrl = safe_ctrl          # Safe controller (agent)
+        self.safe_decay_rate = safe_decay_rate
+
+    class model:
+        """
+            Class of estimated models
+
+            So far, uses just the state-space structure:
+
+        .. math::
+            \\begin{array}{ll}
+    			\\hat x^+ & = A \\hat x + B u \\newline
+    			y^+  & = C \\hat x + D u,
+            \\end{array}
+
+        Attributes
+        ----------
+        A, B, C, D : : arrays of proper shape
+            State-space model parameters
+        x0set : : array
+            Initial state estimate
+
+        **When introducing your custom model estimator, adjust this class**
+
+        """
+
+        def __init__(self, A, B, C, D, x0est):
+            self.A = A
+            self.B = B
+            self.C = C
+            self.D = D
+            self.x0est = x0est
+
+        def upd_pars(self, Anew, Bnew, Cnew, Dnew):
+            self.A = Anew
+            self.B = Bnew
+            self.C = Cnew
+            self.D = Dnew
+
+        def updateIC(self, x0setNew):
+            self.x0set = x0setNew
 
     def reset(self, t0):
         """
-        Resets controller for use in multi-episode simulation
+        Resets agent for use in multi-episode simulation.
+        Only internal clock and current actions are reset.
+        All the learned parameters are retained
 
         """
         self.ctrl_clock = t0
-        self.uCurr = np.zeros(2)
+        self.uCurr = self.uMin/10
 
-    def _zeta(self, xNI, theta):
+    def receive_sys_state(self, x):
         """
-        Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators)
-
-        """
-
-        #                                 3
-        #                             |x |
-        #         4     4             | 3|
-        # V(x) = x  +  x  +  ----------------------------------=   min F(x)
-        #         1     2                                        theta
-        #                     /     / 2   2 \             \ 2
-        #                    | sqrt| x + x   | + sqrt|x |  |
-        #                     \     \ 1   2 /        | 3| /
-        #                        \_________  __________/
-        #                                 \/
-        #                               sigma
-        #                                         3
-        #                                     |x |
-        #            4     4                     | 3|
-        # F(x; theta) = x  +  x  +  ----------------------------------------
-        #            1     2
-        #                        /                                     \ 2
-        #                        | x cos theta + x sin theta + sqrt|x | |
-        #                        \ 1             2                | 3| /
-        #                           \_______________  ______________/
-        #                                            \/
-        #                                            sigma~
-
-        sigma_tilde = xNI[0]*np.cos(theta) + xNI[1]*np.sin(theta) + np.sqrt(np.abs(xNI[2]))
-
-        nablaF = np.zeros(3)
-
-        nablaF[0] = 4*xNI[0]**3 - 2 * np.abs(xNI[2])**3 * np.cos(theta)/sigma_tilde**3
-
-        nablaF[1] = 4*xNI[1]**3 - 2 * np.abs(xNI[2])**3 * np.sin(theta)/sigma_tilde**3
-
-        nablaF[2] = ( 3*xNI[0]*np.cos(theta) + 3*xNI[1]*np.sin(theta) + 2*np.sqrt(np.abs(xNI[2])) ) * xNI[2]**2 * np.sign(xNI[2]) / sigma_tilde**3
-
-        return nablaF
-
-    def _kappa(self, xNI, theta):
-        """
-        Stabilizing controller for NI-part
+        Fetch exogenous model state. Used in some controller modes. See class documentation
 
         """
-        kappa_val = np.zeros(2)
+        self.x_sys = x
 
-        G = np.zeros([3, 2])
-        G[:,0] = np.array([1, 0, xNI[1]])
-        G[:,1] = np.array([0, 1, -xNI[0]])
-
-        zeta_val = self._zeta(xNI, theta)
-
-        kappa_val[0] = - np.abs( np.dot( zeta_val, G[:,0] ) )**(1/3) * np.sign( np.dot( zeta_val, G[:,0] ) )
-        kappa_val[1] = - np.abs( np.dot( zeta_val, G[:,1] ) )**(1/3) * np.sign( np.dot( zeta_val, G[:,1] ) )
-
-        return kappa_val
-
-    def _Fc(self, xNI, eta, theta):
+    def rcost(self, y, u):
         """
-        Marginal function for ENDI constructed by nonsmooth backstepping. See details in the literature mentioned in the class documentation
+        Running cost (a.k.a. utility, reward, instantaneous cost etc.)
+
+        See class documentation
+        """
+        if self.y_target == []:
+            chi = np.concatenate([y, u])
+        else:
+            chi = np.concatenate([y - self.y_target, u])
+
+        r = 0
+
+        if self.rcost_struct == 1:
+            R1 = self.rcost_pars[0]
+            r = chi @ R1 @ chi
+        elif self.rcost_struct == 2:
+            R1 = self.rcost_pars[0]
+            R2 = self.rcost_pars[1]
+            r = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
+
+        return r
+
+    def upd_icost(self, y, u):
+        """
+        Sample-to-sample integrated running cost. This can be handy to evaluate the performance of the agent.
+        If the agent succeeded to stabilize the system, ``icost`` would converge to a finite value which is the performance mark.
+        The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
+
+        """
+        self.icost_val += self.rcost(y, u)*self.sampling_time
+
+    def _phi(self, y):
+        """
+        Feature vector of the critic
+
+        """
+        if self.y_target == []:
+            chi = y
+        else:
+            chi = y - self.y_target
+
+        if self.critic_struct == 1:
+            return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
+        elif self.critic_struct == 2:
+            return np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])
+        elif self.critic_struct == 3:
+            return chi * chi
+
+    def _psi(self, y):
+        """
+        Feature vector of the actor
 
         """
 
-        sigma_tilde = xNI[0]*np.cos(theta) + xNI[1]*np.sin(theta) + np.sqrt(np.abs(xNI[2]))
+        chi = y
 
-        F = xNI[0]**4 + xNI[1]**4 + np.abs( xNI[2] )**3 / sigma_tilde
+        if self.actor_struct == 1:
+            return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
+        elif self.actor_struct == 2:
+            return np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])
+        elif self.actor_struct == 3:
+            return chi * chi
 
-        z = eta - self._kappa(xNI, theta)
-
-        return F + 1/2 * np.dot(z, z)
-
-    def _minimizer_theta(self, xNI, eta):
-        thetaInit = 0
-
-        bnds = sp.optimize.Bounds(-np.pi, np.pi, keep_feasible=False)
-
-        options = {'maxiter': 50, 'disp': False}
-
-        theta_val = minimize(lambda theta: self._Fc(xNI, eta, theta), thetaInit, method='trust-constr', tol=1e-6, bounds=bnds, options=options).x
-
-        return theta_val
-
-    def _Cart2NH(self, coords_Cart):
+    def _actor_critic_cost(self, W_lmbd_u):
         """
-        Transformation from Cartesian coordinates to non-holonomic (NH) coordinates
-        See Section VIII.A in [[1]_]
-
-        The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`
-
-        References
-        ----------
-        .. [1] Watanabe, K., Yamamoto, T., Izumi, K., & Maeyama, S. (2010, October). Underactuated control for nonholonomic mobile robots by using double
-               integrator model and invariant manifold theory. In 2010 IEEE/RSJ International Conference on Intelligent Robots and Systems (pp. 2862-2867)
+        Joint actor-critic cost function
 
         """
 
-        xNI = np.zeros(3)
-        eta = np.zeros(2)
+        Y = self.ybuffer[-self.Ncritic:,:]
 
-        xc = coords_Cart[0]
-        yc = coords_Cart[1]
-        alpha = coords_Cart[2]
-        v = coords_Cart[3]
-        omega = coords_Cart[4]
+        W = W_lmbd_u[:self.dim_critic]
+        # lmbd = W_lmbd_u[self.dim_critic+1]
+        H = W_lmbd_u[-self.dim_actor:]
 
-        xNI[0] = alpha
-        xNI[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
-        xNI[2] = - 2 * ( yc * np.cos(alpha) - xc * np.sin(alpha) ) - alpha * ( xc * np.cos(alpha) + yc * np.sin(alpha) )
+        Jc = 0
 
-        eta[0] = omega
-        eta[1] = ( yc * np.cos(alpha) - xc * np.sin(alpha) ) * omega + v
+        for k in range(self.Ncritic-1, 0, -1):
+            yPrev = Y[k-1, :]
+            yNext = Y[k, :]
 
-        return [xNI, eta]
+            critic_prev = W @ self._phi( yPrev )
+            critic_next = self.Wprev @ self._phi( yNext )
 
-    def _NH2ctrl_Cart(self, xNI, eta, uNI):
+            u = np.reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( yPrev )
+
+            # Temporal difference
+            e = critic_prev - self.gamma * critic_next - self.rcost(yPrev, u)
+
+            Jc += 1/2 * e**2
+
+        return Jc
+
+    def _actor_critic(self, y):
         """
-        Get control for Cartesian NI from NH coordinates
-        See Section VIII.A in [[1]_]
-
-        The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`
-
-        References
-        ----------
-        .. [1] Watanabe, K., Yamamoto, T., Izumi, K., & Maeyama, S. (2010, October). Underactuated control for nonholonomic mobile robots by using double
-               integrator model and invariant manifold theory. In 2010 IEEE/RSJ International Conference on Intelligent Robots and Systems (pp. 2862-2867)
-
+        This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_RL_stab._actor_critic_cost`.
+        It implements the stabilizing constraints
 
         """
 
-        uCart = np.zeros(2)
+        def constr_stab_par_decay(W_lmbd_H, y):
+            W = W_lmbd_H[:self.dim_critic]
+            lmbd = W_lmbd_H[self.dim_critic]
 
-        uCart[0] = self.m * ( uNI[1] + xNI[1] * eta[0]**2 + 1/2 * ( xNI[0] * xNI[1] * uNI[0] + uNI[0] * xNI[2] ) )
-        uCart[1] = self.I * uNI[0]
+            critic_curr = self.lmbd_prev * self.Wprev @ self._phi( y ) + ( 1 - self.lmbd_prev ) * self.safe_ctrl.compute_LF(y)
+            critic_new = lmbd * W @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
 
-        return uCart
+            return critic_new - critic_curr
+
+        def constr_stab_LF_bound(W_lmbd_H, y):
+            W = W_lmbd_H[:self.dim_critic]
+            lmbd = W_lmbd_H[self.dim_critic]
+            H = W_lmbd_H[-self.dim_actor:]
+
+            u = np.reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
+
+            y_next = y + self.pred_step_size * self.sys_rhs([], y, u, [])  # Euler scheme
+
+            critic_next = lmbd * W @ self._phi( y_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( y_next )
+
+            return self.safe_ctrl.compute_LF(y_next) - critic_next
+
+        def constr_stab_decay(W_lmbd_H, y):
+            W = W_lmbd_H[:self.dim_critic]
+            lmbd = W_lmbd_H[self.dim_critic]
+            H = W_lmbd_H[-self.dim_actor:]
+
+            u = np.reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
+
+            y_next = y + self.pred_step_size * self.sys_rhs([], y, u, [])  # Euler scheme
+
+            critic_new = lmbd * W @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
+            critic_next = lmbd * W @ self._phi( y_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( y_next )
+
+            return critic_next - critic_new + self.safe_decay_rate
+
+        def constr_stab_positive(W_lmbd_H, y):
+            W = W_lmbd_H[:self.dim_critic]
+            lmbd = W_lmbd_H[self.dim_critic]
+
+            critic_new = lmbd * W @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
+
+            return - critic_new
+
+        # Constraint violation tolerance
+        eps1 = 1e-3
+        eps2 = 1e-3
+        eps3 = 1e-3
+        eps4 = 1e-3
+
+
+        my_constraints = (
+            NonlinearConstraint(lambda W_lmbd_H: constr_stab_par_decay( W_lmbd_H, y ), -np.inf, eps1),
+            NonlinearConstraint(lambda W_lmbd_H: constr_stab_LF_bound( W_lmbd_H, y ), -np.inf, eps2),
+            NonlinearConstraint(lambda W_lmbd_H: constr_stab_decay( W_lmbd_H, y ), -np.inf, eps3),
+            NonlinearConstraint(lambda W_lmbd_H: constr_stab_positive( W_lmbd_H, y ), -np.inf, eps4)
+            )
+
+        # Optimization methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
+        opt_method = 'SLSQP'
+        if opt_method == 'trust-constr':
+            opt_options = {'maxiter': 10, 'disp': False} #'disp': True, 'verbose': 2}
+        else:
+            opt_options = {'maxiter': 10, 'maxfev': 10, 'disp': False, 'adaptive': True, 'xatol': 1e-4, 'fatol': 1e-4} # 'disp': True, 'verbose': 2}
+
+
+        self.Hinit = np.reshape(np.linalg.lstsq(np.array([self._psi(y)]), np.array([self.safe_ctrl.compute_action_vanila(y)]))[0].T, self.dim_actor)
+
+        W_lmbd_H = minimize(self._actor_critic_cost,
+                            np.hstack([self.Winit,np.array([self.lmbd_init]),self.Hinit]),
+                            method=opt_method, tol=1e-4, options=opt_options).x
+
+        W = W_lmbd_H[:self.dim_critic]
+        lmbd = W_lmbd_H[self.dim_critic]
+        H = W_lmbd_H[-self.dim_actor:]
+
+        u = np.reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
+
+
+        if constr_stab_par_decay(W_lmbd_H, y) >= eps1 or \
+            constr_stab_LF_bound(W_lmbd_H, y) >= eps2 or \
+            constr_stab_decay(W_lmbd_H, y) >= eps3 or \
+            constr_stab_positive(W_lmbd_H, y) >= eps4 :
+
+            W = self.Winit
+            lmbd = self.lmbd_init
+            u = self.safe_ctrl.compute_action_vanila(y)
+            H = np.reshape(np.linalg.lstsq(np.array([self._psi(y)]), np.array([u]))[0].T, self.dim_actor)
+
+
+        return W, lmbd, u
 
     def compute_action(self, t, y):
-        """
-        See algorithm description in [[1]_], [[2]_]
-
-        **This algorithm needs full-state measurement of the robot**
-
-        References
-        ----------
-        .. [1] Matsumoto, R., Nakamura, H., Satoh, Y., and Kimura, S. (2015). Position control of two-wheeled mobile robot
-               via semiconcave function backstepping. In 2015 IEEE Conference on Control Applications (CCA), 882–887
-
-        .. [2] Osinenko, Pavel, Patrick Schmidt, and Stefan Streif. "Nonsmooth stabilization and its computational aspects." arXiv preprint arXiv:2006.14013 (2020)
-
-        """
 
         time_in_sample = t - self.ctrl_clock
 
         if time_in_sample >= self.sampling_time: # New sample
+            # Update controller's internal clock
             self.ctrl_clock = t
-            # This controller needs full-state measurement
-            xNI, eta = self._Cart2NH( y )
-            theta_star = self._minimizer_theta(xNI, eta)
-            kappa_val = self._kappa(xNI, theta_star)
-            z = eta - kappa_val
-            uNI = - self.ctrl_gain * z
-            u = self._NH2ctrl_Cart(xNI, eta, uNI)
 
-            if self.ctrl_bnds.any():
-                for k in range(2):
-                    u[k] = np.clip(u[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
+            # Update data buffers
+            self.ubuffer = push_vec(self.ubuffer, self.uCurr)
+            self.ybuffer = push_vec(self.ybuffer, y)
+
+            W, lmbd, u = self._actor_critic(y)
+
+            self.Wprev = W
+            self.lmbd_prev = lmbd
+
+            for k in range(2):
+                u[k] = np.clip(u[k], self.uMin[k], self.uMax[k])
 
             self.uCurr = u
 
@@ -930,23 +1120,3 @@ class ctrl_endi_nominal_3wrobot:
 
         else:
             return self.uCurr
-
-    def compute_action_vanila(self, y):
-        """
-        Same as :func:`~ctrl_endi_nominal_3wrobot.compute_action`, but without invoking the internal clock
-
-        """
-
-        xNI, eta = self._Cart2NH( y )
-        theta_star = self._minimizer_theta(xNI, eta)
-        kappa_val = self._kappa(xNI, theta_star)
-        z = eta - kappa_val
-        uNI = - self.ctrl_gain * z
-        for k in range(len(uNI)):
-            uNI[k] = np.clip(uNI[k], -1, 1)
-
-        u = self._NH2ctrl_Cart(xNI, eta, uNI)
-
-        self.uCurr = u
-
-        return u

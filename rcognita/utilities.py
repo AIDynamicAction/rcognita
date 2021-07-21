@@ -104,13 +104,14 @@ def uptria2vec(mat):
     """
     n = mat.shape[0]
 
-    vec = np.zeros( n*(n+1)/2, 1 )
+    vec = np.zeros(int(n*(n+1)/2))
 
     k = 0
     for i in range(n):
         for j in range(n):
             vec[j] = mat[i, j]
             k += 1
+    return vec
 
 class ZOH:
     """
@@ -206,7 +207,7 @@ def on_key_press(event, anm):
         anm.running ^= True
     elif event.key=='q':
         plt.close('all')
-        raise Exception('exit')
+        # raise Exception('exit')
 
 def gen_init_coords_angles(R, num):
     alpha = np.linspace(0.001, 2*np.pi, num)

@@ -1,6 +1,6 @@
 import numpy as np
 
-class ctrl_eni_nominal_3wrobot:
+class ctrl_ni_nominal_3wrobot:
     """
     Nominal parking controller for NI using disassembled subgradients
 
@@ -76,10 +76,7 @@ class ctrl_eni_nominal_3wrobot:
             return nablaL
 
     def _kappa(self, xNI):
-        """
-        Stabilizing controller for NI-part
-
-        """
+        """ Stabilizing controller for NI-part """
         kappa_val = np.zeros(2)
 
         G = np.zeros([3, 2])
@@ -94,24 +91,16 @@ class ctrl_eni_nominal_3wrobot:
         return kappa_val
 
     def _F(self, xNI, eta, theta):
-        """
-        Marginal function for NI
-
-        """
+        """ Marginal function for NI """
 
         sigma_tilde = xNI[0]*np.cos(theta) + xNI[1]*np.sin(theta) + np.sqrt(np.abs(xNI[2]))
-
         F = xNI[0]**4 + xNI[1]**4 + np.abs( xNI[2] )**3 / sigma_tilde**2
-
         z = eta - self._kappa(xNI, theta)
 
         return F + 1/2 * np.dot(z, z)
 
     def _Cart2NH(self, coords_Cart):
-        """
-        Transformation from Cartesian coordinates to non-holonomic (NH) coordinates
-
-        """
+        """ Transformation from Cartesian coordinates to non-holonomic (NH) coordinates   """
 
         xNI = np.zeros(3)
 
@@ -126,15 +115,11 @@ class ctrl_eni_nominal_3wrobot:
         return xNI
 
     def _NH2ctrl_Cart(self, xNI, uNI):
-        """
-        Get control for Cartesian NI from NH coordinates
-
-        """
+        """ Get control for Cartesian NI from NH coordinates """
 
         uCart = np.zeros(2)
-
-        uCart[0] = self.ctrl_bnds[0][1] * uNI[1] + 1/2 * uNI[0] * ( xNI[2] + xNI[0] * xNI[1] )
-        uCart[1] = self.ctrl_bnds[1][1] * uNI[0]
+        uCart[0] = uNI[1] + 1/2 * uNI[0] * ( xNI[2] + xNI[0] * xNI[1] )
+        uCart[1] = uNI[0]
 
         return uCart
 
@@ -151,15 +136,14 @@ class ctrl_eni_nominal_3wrobot:
 
             xNI = self._Cart2NH( y )
             kappa_val = self._kappa(xNI)
-            uNI = self.ctrl_gain *kappa_val #self.ctrl_gain *
-
-
-            for k in range(len(uNI)):
-                uNI[k] = np.clip(uNI[k], -1, 1)
-
+            uNI = self.ctrl_gain * kappa_val
             u = self._NH2ctrl_Cart(xNI, uNI)
-            self.uCurr = u
 
+            if self.ctrl_bnds.any():
+                for k in range(2):
+                    u[k] = np.clip(u[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
+
+            self.uCurr = u
 
             return u
 
@@ -167,19 +151,12 @@ class ctrl_eni_nominal_3wrobot:
             return self.uCurr
 
     def compute_action_vanila(self, y):
-        """
-        Same as :func:`~ctrl_ni_nominal_3wrobot.compute_action`, but without invoking the internal clock
-
-        """
+        """ Same as :func:`~ctrl_nominal_3wrobot_NI.compute_action`, but without invoking the internal clock """
 
         xNI = self._Cart2NH( y )
         kappa_val = self._kappa(xNI)
-        uNI =  self.ctrl_gain *kappa_val
-        for k in range(len(uNI)):
-            uNI[k] = np.clip(uNI[k], -1, 1)
-
+        uNI = self.ctrl_gain * kappa_val
         u = self._NH2ctrl_Cart(xNI, uNI)
-
 
         self.uCurr = u
 
@@ -188,7 +165,6 @@ class ctrl_eni_nominal_3wrobot:
     def compute_LF(self, y):
 
         xNI = self._Cart2NH( y )
-
         sigma = np.sqrt( xNI[0]**2 + xNI[1]**2 ) + np.sqrt( np.abs(xNI[2]) )
 
         return xNI[0]**4 + xNI[1]**4 + np.abs( xNI[2] )**3 / sigma**2
