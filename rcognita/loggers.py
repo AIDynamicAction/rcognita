@@ -12,7 +12,7 @@ rcognita
 
 https://github.com/AIDynamicAction/rcognita
 
-Python framework for hybrid simulation of predictive reinforcement learning agents and classical controllers
+Python framework for hybrid simulation of predictive reinforcement learning agents and classical controllers 
 
 =============================================================================
 
@@ -22,7 +22,7 @@ loggers
 
 =============================================================================
 
-Remark:
+Remark: 
 
 All vectors are treated as of type [n,]
 All buffers are treated as of type [L, n] where each row is a vector
@@ -42,86 +42,71 @@ class logger:
         | print a row of data of a single simulation step, typically into the console (required)
         | :func:`~loggers.logger.log_data_row` :
         | same as above, but write to a file (required)
-
+    
     """
-
+    
     def print_sim_step():
         pass
-
+    
     def log_data_row():
         pass
-
-class logger_3wrobot_endi:
+    
+class logger_3wrobot(logger):
     """
-    Data logger for a ENDI 3-wheel robot.
-
+    Data logger for a 3-wheel robot with dynamic actuators.
+    
     """
     def print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, r, icost, u):
-    # alphaDeg = alpha/np.pi*180
-
-        row_header = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'r', 'int r dt', 'F [N]', 'M [N m]']
-        row_data = [t, xCoord, yCoord, alpha, v, omega, r, icost, u[0], u[1]]
-        row_format = ('8.1f', '8.3f', '8.3f', '8.3f', '8.3f', '8.3f', '8.1f', '8.1f', '8.3f', '8.3f')
+    # alphaDeg = alpha/np.pi*180      
+    
+        row_header = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'r', 'int r dt', 'F [N]', 'M [N m]']  
+        row_data = [t, xCoord, yCoord, alpha, v, omega, r, icost, u[0], u[1]]  
+        row_format = ('8.3f', '8.3f', '8.3f', '8.3f', '8.3f', '8.3f', '8.1f', '8.1f', '8.3f', '8.3f')   
         table = tabulate([row_header, row_data], floatfmt=row_format, headers='firstrow', tablefmt='grid')
-
+    
         print(table)
-
+    
     def log_data_row(self, datafile, t, xCoord, yCoord, alpha, v, omega, r, icost, u):
         with open(datafile, 'a', newline='') as outfile:
                 writer = csv.writer(outfile)
                 writer.writerow([t, xCoord, yCoord, alpha, v, omega, r, icost, u[0], u[1]])
 
-class logger_3wrobot_ni:
+class logger_3wrobot_NI(logger):
     """
-    Data logger for a kinematic 3-wheel robot.
-
+    Data logger for a 3-wheel robot with static actuators.
+    
     """
-    def print_sim_step(self, t, xCoord, yCoord, alpha, v, omega, r, icost, u):
-    # alphaDeg = alpha/np.pi*180
-
-        row_header = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'r', 'int r dt', 'v [m/s]', 'omega [rad/s]']
-        row_data = [t, xCoord, yCoord, alpha, r, icost, u[0], u[1]]
-        row_format = ('8.1f', '8.3f', '8.3f', '8.3f', '8.3f', '8.3f', '8.1f', '8.1f')
+    def print_sim_step(self, t, xCoord, yCoord, alpha, r, icost, u):
+    # alphaDeg = alpha/np.pi*180      
+    
+        row_header = ['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'r', 'int r dt', 'v [m/s]', 'omega [rad/s]']  
+        row_data = [t, xCoord, yCoord, alpha, r, icost, u[0], u[1]]  
+        row_format = ('8.3f', '8.3f', '8.3f', '8.3f', '8.1f', '8.1f', '8.3f', '8.3f')   
         table = tabulate([row_header, row_data], floatfmt=row_format, headers='firstrow', tablefmt='grid')
-
+    
         print(table)
-
-    def log_data_row(self, datafile, t, xCoord, yCoord, alpha, v, omega, r, icost, u):
-        with open(datafile, 'a') as outfile:
+    
+    def log_data_row(self, datafile, t, xCoord, yCoord, alpha, r, icost, u):
+        with open(datafile, 'a', newline='') as outfile:
                 writer = csv.writer(outfile)
                 writer.writerow([t, xCoord, yCoord, alpha, r, icost, u[0], u[1]])
-
-class logger_model(logger):
-    """
-    Data loger for NN model.
-    """
-    def print_sim_step(self, t, epoch, xCoord, yCoord, alpha, loss):
-        row_header = ['t [s]', 'epoch', 'x [m]', 'y [m]', 'alpha [rad]', 'loss']
-        row_data = [t, epoch, xCoord, yCoord, alpha, loss]
-        row_format = ('8.1f', '8.1f', '8.3f', '8.3f', '8.3f', '8.6f')
-        table = tabulate([row_header, row_data], floatfmt=row_format, headers='firstrow', tablefmt='grid')
-
-    def log_data_row(self, datafile, t, epoch, xCoord, yCoord, alpha, loss):
-        with open(datafile, 'a') as outfile:
-                writer = csv.writer(outfile)
-                writer.writerow([t, epoch, xCoord, yCoord, alpha, loss])
-
+                
 class logger_2tank(logger):
     """
     Data logger for a 2-tank system.
-
+    
     """
     def print_sim_step(self, t, h1, h2, p, r, icost):
-    # alphaDeg = alpha/np.pi*180
-
-        row_header = ['t [s]', 'h1', 'h2', 'p', 'r', 'int r dt']
-        row_data = [t, h1, h2, p, r, icost]
-        row_format = ('8.1f', '8.4f', '8.4f', '8.4f', '8.4f', '8.2f')
+    # alphaDeg = alpha/np.pi*180      
+    
+        row_header = ['t [s]', 'h1', 'h2', 'p', 'r', 'int r dt']  
+        row_data = [t, h1, h2, p, r, icost]  
+        row_format = ('8.1f', '8.4f', '8.4f', '8.4f', '8.4f', '8.2f')   
         table = tabulate([row_header, row_data], floatfmt=row_format, headers='firstrow', tablefmt='grid')
-
+    
         print(table)
-
+    
     def log_data_row(self, datafile, t, h1, h2, p, r, icost):
         with open(datafile, 'a', newline='') as outfile:
                 writer = csv.writer(outfile)
-                writer.writerow([t, h1, h2, p, r, icost])
+                writer.writerow([t, h1, h2, p, r, icost])                
