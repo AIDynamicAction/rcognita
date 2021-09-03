@@ -1,5 +1,5 @@
-``{{ fullname }}`` 
-{{ underline }}====
+Modules 
+=======
 
 
 .. automodule:: {{ fullname }}
@@ -52,7 +52,7 @@
 
 {% block modules %}
 {% if modules %}
-.. rubric:: Modules
+
 
 .. autosummary::
    :template: module_custom.rst

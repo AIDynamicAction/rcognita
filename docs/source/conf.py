@@ -28,6 +28,7 @@ release = 'v1.8.1'
 
 html_logo="logo.png"
 
+html_show_sourcelink = False
 
 # -- General configuration ---------------------------------------------------
 

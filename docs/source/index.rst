@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to rcognita's documentation!
+Rcognita: A framework for DP and RL algorithm development, testing, and simulation
 ====================================
 Rcognita is a ...
 
@@ -13,22 +13,14 @@ Rcognita is a ...
 
    introduction
 
+.. toctree::
+   :hidden:
+   :caption: API Documentation
+   :maxdepth: 5
+   :glob:
 
-Modules
-===================
-.. autosummary::
-   :template: module_custom.rst
-   :caption: Modules
-   :toctree: stubs
-   :recursive:
-
-   controllers
-   loggers
-   models
-   nominal_controllers
-   simulator
-   systems
-   utilities
-   visual
+   modules/rcognita.*
 
 
+.. include:: modules/rcognita.rst
+    
