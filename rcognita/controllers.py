@@ -596,7 +596,7 @@ class ctrl_RL_pred:
              - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right)=\\sum_{k=1}^{N_a} \\gamma^{k-1} r(y_k, u_k)`
            * - 3, 4 - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
              - :math:`J \\left( y_1, \\{u\}_{1}^{N_a}\\right) =\\sum_{k=1}^{N_a-1} \\gamma^{k-1} r(y_k, u_k) + \\hat Q(y_{N_a}, u_{N_a})` 
-           * - 5, 6 - RL/ADP via normalized stacked Q-learning [[1]_]
+           * - 5, 6 - RL/ADP via normalized stacked Q-learning [1]_
              - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right) =\\frac{1}{N_a} \\sum_{k=1}^{N_a-1} \\hat Q(y_{N_a}, u_{N_a})`               
         
         Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
@@ -700,7 +700,7 @@ class ctrl_RL_pred:
         **When customizing the running cost, add your specification into the table above**
 
     Examples
-    ----------
+    --------
     
     Assuming ``sys`` is a ``system``-object, ``t0, t1`` - start and stop times, and ``ksi0`` - a properly defined initial condition:
     
@@ -1340,8 +1340,8 @@ class ctrl_nominal_3wrobot:
     
     The controller is sampled.
     
-    For a 3-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [[1]_], we use here
-    a controller designed by non-smooth backstepping (read more in [[2]_], [[3]_])
+    For a 3-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [1]_, we use here
+    a controller designed by non-smooth backstepping (read more in [2]_, [3]_)
   
     Attributes
     ----------
@@ -1471,7 +1471,7 @@ class ctrl_nominal_3wrobot:
     def _Cart2NH(self, coords_Cart): 
         """
         Transformation from Cartesian coordinates to non-holonomic (NH) coordinates
-        See Section VIII.A in [[1]_]
+        See Section VIII.A in [1]_
         
         The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`
         
@@ -1503,7 +1503,7 @@ class ctrl_nominal_3wrobot:
     def _NH2ctrl_Cart(self, xNI, eta, uNI): 
         """
         Get control for Cartesian NI from NH coordinates
-        See Section VIII.A in [[1]_]
+        See Section VIII.A in [1]_
         
         The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`
         
@@ -1524,7 +1524,7 @@ class ctrl_nominal_3wrobot:
 
     def compute_action(self, t, y):
         """
-        See algorithm description in [[1]_], [[2]_]
+        See algorithm description in [1]_, [2]_
         
         **This algorithm needs full-state measurement of the robot**
         
