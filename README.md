@@ -1,5 +1,5 @@
 <p align="center">
-	<img src="./docs/rcognita-logo.png" width=40% height=40% />
+	<img src="./docs/source/logo.png" width=40% height=40% />
 </p>
 
 <p align="center">
