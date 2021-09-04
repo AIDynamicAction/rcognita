@@ -5,7 +5,8 @@
 <p align="center">
 <br />
 <br />
-Rcognita is a framework for DP and RL algorithm development, testing, and simulation.
+Rcognita is a framework for DP and RL algorithm development, testing, and simulation. 
+For more info <b>check out our <a href="https://aidynamicaction.github.io/rcognita/">documentation</a></b>.
 </p>
 
 ## Installation:
