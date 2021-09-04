@@ -8,15 +8,15 @@
 Rcognita is a framework for DP and RL algorithm development, testing, and simulation.
 </p>
 
-##Installation:
+## Installation:
 * clone repo
 * run in terminal ```python3 setup.py install```
 
-##Example:
+## Example:
 ```{r, engine='bash', count_lines}
 python3 presets/main_3wrobot.py --mode 5 --ndots 20 --radius 5 --dt 0.05
 ```
-##Arguments for comand line for single run:
+## Arguments for comand line for single run:
 - mode - *default 3*
 - dt - *default 0.05*
 - Nactor - *default 6*
@@ -32,7 +32,7 @@ python3 presets/main_3wrobot.py --mode 5 --ndots 20 --radius 5 --dt 0.05
 - is_visualization - will visualize interface of rcognita and all process *default False*
 
 
-##Building docs:
+## Building docs:
 ```cd docsrc
 make
 ```
