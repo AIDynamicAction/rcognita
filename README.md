@@ -33,7 +33,8 @@ python3 presets/main_3wrobot.py --mode 5 --ndots 20 --radius 5 --dt 0.05
 
 
 ## Building docs:
-```cd docsrc
+```
+cd docsrc
 make
 ```
 Built docs are moved to `/docs`. The docs will not properly compile unless all dependencies for rcognita are statisfied.
