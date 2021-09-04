@@ -1,5 +1,5 @@
 <p align="center">
-	<img src="./docs/source/logo.png" width=40% height=40% />
+	<img src="./docsrc/logo.png" width=40% height=40% />
 </p>
 
 <p align="center">
@@ -8,15 +8,15 @@
 Rcognita is a framework for DP and RL algorithm development, testing, and simulation.
 </p>
 
-Installation:
+##Installation:
 * clone repo
 * run in terminal ```python3 setup.py install```
 
-Example of terminal comand:
+##Example:
 ```{r, engine='bash', count_lines}
-python3 main_3wrobot.py --mode 5 --ndots 20 --radius 5 --dt 0.05
+python3 presets/main_3wrobot.py --mode 5 --ndots 20 --radius 5 --dt 0.05
 ```
-Arguments for comand line for single run:
+##Arguments for comand line for single run:
 - mode - *default 3*
 - dt - *default 0.05*
 - Nactor - *default 6*
@@ -31,3 +31,9 @@ Arguments for comand line for single run:
 - is_print_sim_step - printing info about each step in terminal *default False*
 - is_visualization - will visualize interface of rcognita and all process *default False*
 
+
+##Building docs:
+```cd docsrc
+make
+```
+Built docs are moved to `/docs`. The docs will not properly compile unless all dependencies for rcognita are statisfied.
