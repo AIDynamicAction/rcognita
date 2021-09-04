@@ -368,4 +368,187 @@ class sys_2tank(system):
     
     def out(self, x, u=[]):
         y = x
-        return y   
+        return y
+
+def split_state_vector(x):
+    p = x[0: 3]  # CoM position
+    p_dot = x[3: 6]  # CoM velocity
+
+    R_matrix = np.array([[x[6], x[7], x[8]],  # rotation matrix
+                         [x[9], x[10], x[11]],
+                         [x[12], x[13], x[14]]], np.float64)
+
+    omega = x[15: 18]  # angular velocity
+
+    #old incorrect version
+    #omega_diag = np.array([[omega[0], 0, 0],
+    #                       [0, omega[1], 0],
+    #                       [0, 0, omega[2]]], np.float64)
+
+    omega_skew = np.array([[        0, -omega[2],  omega[1]],
+                           [ omega[2],         0, -omega[0]],
+                           [-omega[1],  omega[0],        0]], np.float64)
+
+    return p, p_dot, R_matrix, omega, omega_skew
+
+class sys_quadrupedal_kinematic(system):
+    """
+    System class: 4-legged robot with torque-controlled actuators.
+
+    Description
+    -----------
+    Robot with 4 legs of 3 torque-controlled DoFs each
+
+    .. math::
+        $\dot{x} = $
+        $\begin{bmatrix}
+        \dot{p}\\
+        \ddot{p}\\
+        \dot{R}\\
+        \dot{\omega}
+        \end{bmatrix}$
+        $=$
+        $\begin{bmatrix}
+        \dot{p}\\
+        \frac{1}{M}F + a_g\\
+        R \hat{\omega}}\\
+        I^{-1} (R^T \tau - \hat{\omega} I \omega)
+
+    **Variables**
+
+    | :math:`p` : CoM position [3 x m]
+    | :math:`p_dot` : CoM velocity [3 x m/s]
+    | :math:`R` : rotation matrix [9 x 1]
+    | :math:`\omega` : angular velocity [3 x rad/s]
+
+    | :math:`\tau_i^j` for i in 1, 2, 3 and j in 1, 2, 3, 4 - actuators torques
+
+    | :math:`F_net` : net force [3 x N]
+    | :math:`tau_net` : net torque [3 x Nm]
+    | :math:`M` : robot mass [kg]
+    | :math:`I` : robot inertia tensor [9 x kg m^2]
+
+    :math:`x = [p, p_dot, R, \omega]`
+    :math:`u = [\tau_i^j]`
+
+    ``pars`` = :math:`[I, J_inv, R, a_grav, M]`
+
+    References
+    ----------
+    Ding, Yanran and Pandala, Abhishek and Li, Chuanzheng and Shin, Young-Ha and Park, Hae-Won.
+    Representation-Free Model Predictive Control for Dynamic Motions in Quadrupeds.
+    IEEE Transactions on Robotics, 2021
+
+    """
+
+    def __init__(self, sys_type, dim_state, dim_input, dim_output, dim_disturb,
+                 pars=[], ctrl_bnds=[], is_dyn_ctrl=0, is_disturb=0, pars_disturb=[]):
+        system.__init__(self, sys_type, dim_state, dim_input, dim_output, dim_disturb, pars,
+                        ctrl_bnds, is_dyn_ctrl, is_disturb, pars_disturb)
+
+        self.I      = pars[0]               #body inertia tensor
+        self.I_inv  = np.linalg.inv(self.I) #inverse body inertia tensor
+
+        #self.J_inv  = pars[1] #inverse feet jacobians
+
+        #self.R      = pars[2] #body rotation matrix in the inertial frame
+        #self.R      = np.identity(3, dtype=np.float64)
+
+        self.a_grav = pars[1] #gravitational acceleration
+        self.M      = pars[2] #body mass
+
+        self.feet = np.array([[1, 1, -1], [1, -1, -1], [-1, -1, -1], [-1, 1, -1]])
+
+    #def _calc_endpoint_positions(self):
+
+    def get_feet(self):
+        return self.feet
+
+    def _calc_ground_forces(self, momenta):
+        return
+        #return [self.J_inv[i] @ m for i, m in enumerate(momenta)]
+
+    def _calc_net_wrench(self, contact_points_forces, foot_positions_rel_to_CoM):
+        F_net, tau_net = [np.zeros([3], np.float64) for _ in range(2)] [:]
+
+        for i, c_p_force in enumerate(contact_points_forces):
+            cross_product = np.cross(contact_points_forces[i], foot_positions_rel_to_CoM[i])
+
+            for j in range(3):
+                F[j] += contact_points_forces[i, j]
+                tau[j] += cross_product[j]
+
+        return F_net, tau_net
+
+    def split_state_vector(self, x):
+        return split_state_vector(x)
+
+    def _state_dyn(self, t, x, u, q):
+        Dx = np.zeros(self.dim_state)
+
+        _, p_dot, R_matrix, omega, omega_diag = self.split_state_vector(x)
+
+        # dynamics calculation
+
+        # ! ахтунг !
+        # contact_points_forces = self._calc_ground_forces(u)
+        # F_net, tau_net = self._calc_net_wrench(contact_points_forces, foot_positions_rel_to_CoM)
+
+        #F = np.array([0, 0, 9.81])
+        #tau = np.array([0, 0, 1])
+        F = np.array([u[0], u[1], u[2]])
+        tau = np.array([u[3], u[4], u[5]])
+
+        Dx[0: 3] = p_dot[0: 3]  # p dot
+
+        p_ddot = np.add(1 / self.M * F, self.a_grav)  # p ddot
+        Dx[3: 6] = p_ddot[0: 3]
+
+        R_dot = R_matrix @ omega_diag  # R dot
+
+        Dx[6: 15] = R_dot.flatten()
+
+        omega_dot = self.I_inv @ (R_matrix @ tau - omega_diag @ self.I @ omega)  # omega dot
+        Dx[15: 18] = omega_dot[0: 3]
+
+        #print("R_dot: ", R_dot)
+        #print("R_matrix: ", R_matrix)
+        #print("omega_diag: ", omega_diag)
+
+        return Dx
+
+    def _disturb_dyn(self, t, q):
+        """
+        Description
+        -----------
+
+        We use here a 1st-order stochastic linear system of the type
+
+        .. math:: \mathrm d Q_t = - \\frac{1}{\\tau_q} \\left( Q_t \\mathrm d t + \\sigma_q
+        ( \\mathrm d B_t + \\mu_q ) \\right) ,
+
+        where :math:`B` is the standard Brownian motion, :math:`Q` is the stochastic process
+        whose realization is :math:`q`, and
+        :math:`\\tau_q, \\sigma_q, \\mu_q` are the time constant, standard deviation and mean, resp.
+
+        ``pars_disturb = [sigma_q, mu_q, tau_q]``, with each being an array of shape ``[dim_disturb, ]``
+
+        """
+        Dq = np.zeros(self.dim_disturb)
+
+        if self.is_disturb:
+            sigma_q = self.pars_disturb[0]
+            mu_q = self.pars_disturb[1]
+            tau_q = self.pars_disturb[2]
+
+            for k in range(0, self.dim_disturb):
+                Dq[k] = - tau_q[k] * ( q[k] + sigma_q[k] * (randn() + mu_q[k]) )
+
+        return Dq
+
+    def out(self, x, u=[]):
+
+        y = np.zeros(self.dim_output)
+        # y = x[:3] + measNoise # <-- Measure only position and orientation
+        y = x  # <-- Position, force and torque sensors on
+        return y
