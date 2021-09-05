@@ -26,7 +26,8 @@ The core data of animator’s subclasses are `objects`, which include entities t
 A concrete realization of a system interface must realize `sys_dyn`, which is the “right-handside” of the environment description, optionally disturbance dynamics via `disturb_dyn`, optionally controller dynamics (if the latter is, e. g., time-varying), and the output function `out`.
 The method `receive_action` gets a control action and stores it.
 Everything is packed together in the `closed_loop_rhs` for the use in `simulator`.
-Finally, the `controllers` module contains various agent types, one of which, namely, `ctrl_RL_stab` – the class of stabilizing reinforcement learning agents as shown in [this flowchart](./docs/flowcharts/rcognita-flowchart-RLstab.pdf).
+Finally, the `controllers` module contains various agent types.
+One of them is `ctrl_RL_stab` – the class of stabilizing reinforcement learning agents as shown in [this flowchart](./docs/flowcharts/rcognita-flowchart-RLstab.pdf).
 Notice it contains an explicit specification of the sampling time.
 The data `safe_ctrl` is required to specify the stabilizing constraints and also to initialize the optimizer inside the `actor_critic` method, which in turns fetches the cost function from the `actor_critic_cost` method.
 The method `compute_action` essentially watches the internal clock and performs an action updates when a time sample has elapsed.
