@@ -5,7 +5,7 @@ This module contains one single class that simulates controller-system (agent-en
 The system can be of three types:
 - discrete-time deterministic
 - continuous-time deterministic or stochastic
-- discrete time stochastic (to model Markov decision processes)
+- discrete-time stochastic (to model Markov decision processes)
 
 Remarks: 
 

@@ -186,7 +186,7 @@ class animator_3wrobot(animator):
             else:
                 datacursor(item)
     
-    def get_sim_data(self, ts, xCoords, yCoords, alphas, vs, omegas, rs, icosts, Fs, Ms):
+    def set_sim_data(self, ts, xCoords, yCoords, alphas, vs, omegas, rs, icosts, Fs, Ms):
         """
         This function is needed for playback purposes when simulation data were generated elsewhere.
         It feeds data into the animator from outside.
@@ -417,7 +417,7 @@ class animator_3wrobot_NI(animator):
             else:
                 datacursor(item)
     
-    def get_sim_data(self, ts, xCoords, yCoords, alphas, rs, icosts, vs, omegas):
+    def set_sim_data(self, ts, xCoords, yCoords, alphas, rs, icosts, vs, omegas):
         """
         This function is needed for playback purposes when simulation data were generated elsewhere.
         It feeds data into the animator from outside.
@@ -635,7 +635,7 @@ class animator_2tank(animator):
             else:
                 datacursor(item)         
                 
-    def get_sim_data(self, ts, h1s, h2s, ps, rs, icosts):
+    def set_sim_data(self, ts, h1s, h2s, ps, rs, icosts):
         """
         This function is needed for playback purposes when simulation data were generated elsewhere.
         It feeds data into the animator from outside.

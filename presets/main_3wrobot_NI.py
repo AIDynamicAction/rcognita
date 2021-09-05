@@ -1,32 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Jan 10 13:40:52 2021
+Preset: kinematic model of a 3-wheel robot
 
-@author: Pavel Osinenko
-"""
-
-"""
-=============================================================================
-rcognita
-
-https://github.com/AIDynamicAction/rcognita
-
-Python framework for hybrid simulation of predictive reinforcement learning agents and classical controllers 
-
-=============================================================================
-
-This module:
-
-main loop for a 3-wheel robot with static actuators
-
-=============================================================================
-
-Remark: 
-
-All vectors are treated as of type [n,]
-All buffers are treated as of type [L, n] where each row is a vector
-Buffers are updated from bottom to top
 """
 
 import warnings
@@ -54,18 +30,15 @@ is_dyn_ctrl = 0
 
 # Control mode
 #
-#   Modes with online model estimation are experimental
+# Modes with online model estimation are experimental
 #
-# 0     - manual constant control (only for basic testing)
-# -1    - nominal parking controller (for benchmarking optimal controllers)
-# 1     - model-predictive control (MPC). Prediction via discretized true model
-# 2     - adaptive MPC. Prediction via estimated model
-# 3     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via discretized true model
-# 4     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via estimated model
-# 5     - RL: stacked Q-learning. Prediction via discretized true model
-# 6     - RL: stacked Q-learning. Prediction via estimated model
-# 7     - Stabilizing RL: joint actor-critic
-ctrl_mode = 7
+# 'manual'      - manual constant control (only for basic testing)
+# 'nominal'     - nominal parking controller (for benchmarking optimal controllers)
+# 'MPC'         - model-predictive control (MPC)
+# 'RQL'         - reinforcement learning: Q-learning with Ncritic roll-outs of running cost
+# 'SQL'         - reinforcement learning: stacked Q-learning
+# 'JACS'        - Joint actor-critic (stabilizing)
+ctrl_mode = 'JACS'
 
 #------------------------------------user settings : : digital elements
 # Digital elements sampling time
@@ -101,6 +74,7 @@ yMin = -10
 yMax = 10
 
 #------------------------------------user settings : : model estimator
+is_est_model = 0
 model_est_stage = 2 # [s]
 model_est_period = 1*dt # [s]
 
@@ -199,7 +173,7 @@ my_ctrl_RL_pred = controllers.ctrl_RL_pred(dim_input, dim_output,
                                            sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
                                            # get_next_state = get_next_state, sys_out = sys_out,
                                            x_sys=x0,
-                                           prob_noise_pow = prob_noise_pow, model_est_stage=model_est_stage, model_est_period=model_est_period,
+                                           prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
                                            buffer_size=buffer_size,
                                            model_order=model_order, model_est_checks=model_est_checks,
                                            gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
@@ -212,7 +186,7 @@ my_ctrl_RL_stab = controllers.ctrl_RL_stab(dim_input, dim_output,
                                            sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
                                            # get_next_state = get_next_state, sys_out = sys_out,
                                            x_sys=x0,
-                                           prob_noise_pow = prob_noise_pow, model_est_stage=model_est_stage, model_est_period=model_est_period,
+                                           prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
                                            buffer_size=buffer_size,
                                            model_order=model_order, model_est_checks=model_est_checks,
                                            gamma=gamma, Ncritic=Ncritic, critic_period=critic_period,
@@ -220,7 +194,7 @@ my_ctrl_RL_stab = controllers.ctrl_RL_stab(dim_input, dim_output,
                                            y_target=[],
                                            safe_ctrl=my_ctrl_nominal_3wrobot_NI, safe_decay_rate=1e-4) 
 
-if ctrl_mode > 6:
+if ctrl_mode == 'JACS':
     my_ctrl_RL = my_ctrl_RL_stab
 else:
     my_ctrl_RL = my_ctrl_RL_pred
@@ -322,7 +296,7 @@ else:
             my_simulator.t = t0
             my_simulator.y = ksi0
             
-            if ctrl_mode > 0:
+            if ctrl_mode != 'nominal':
                 my_ctrl_RL.reset(t0)
             else:
                 my_ctrl_nominal_3wrobot_NI.reset(t0)

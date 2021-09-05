@@ -43,32 +43,28 @@ def ctrl_selector(t, y, uMan, ctrl_nominal, ctrl_benchmarking, mode):
 
     Parameters
     ----------
-    mode : : integer
-        Controller mode, see ``user settings`` section
+    mode : : string
+        Controller mode as acronym of the respective control method
 
     Returns
     -------
     u : : array of shape ``[dim_input, ]``
         Control action
-        
-    Customization
-    -------
-    Include your controller modes in this method    
 
     """
     
-    if mode==0: # Manual control
+    if mode=='manual': 
         u = uMan
-    elif mode==-1: # Nominal controller
+    elif mode=='nominal': 
         u = ctrl_nominal.compute_action(t, y)
-    elif mode > 0: # Controller for benchmakring
+    else: # Controller for benchmakring
         u = ctrl_benchmarking.compute_action(t, y)
         
     return u
 
 class ctrl_RL_stab:
     """
-    Class of agents with stabilizing constraints.
+    Class of reinforcement learning agents with stabilizing constraints.
     
     Needs a nominal controller object ``safe_ctrl`` with a respective Lyapunov function.
     
@@ -90,7 +86,12 @@ class ctrl_RL_stab:
     
     ``W`` : weights
     
-    ``_phi``: regressor    
+    ``_phi``: regressor   
+    
+    Attributes
+    ----------
+    mode : : string
+        Controller mode. Currently available only JACS, joint actor-critic (stabilizing)   
     
     Read more
     ---------
@@ -98,8 +99,8 @@ class ctrl_RL_stab:
     Osinenko, P., Beckenbach, L., Göhrt, T., & Streif, S. (2020). A reinforcement learning method with closed-loop stability guarantee. IFAC-PapersOnLine  
     
     """
-    def __init__(self, dim_input, dim_output, mode=1, ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
-                 sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
+    def __init__(self, dim_input, dim_output, mode='JACS', ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
+                 sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, is_est_model=0, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
                  gamma=1, Ncritic=4, critic_period=0.1, critic_struct=1, actor_struct=1, rcost_struct=1, rcost_pars=[], y_target=[],
                  safe_ctrl=[], safe_decay_rate=[]):
         
@@ -559,13 +560,13 @@ class ctrl_RL_stab:
 
 class ctrl_RL_pred:  
     """
-    Class of predictive reinforcement learning and model-predictive controllers. Multi-modal: can switch between different RL and MPC modes.
+    Class of predictive controllers, primarily MPC and predictive RL
         
     Attributes
     ----------
     dim_input, dim_output : : integer
         Dimension of input and output which should comply with the system-to-be-controlled
-    mode : : natural number
+    mode : : string
         Controller mode. Currently available (:math:`r` is the running cost, :math:`\\gamma` is the discounting factor):
           
         .. list-table:: Controller modes
@@ -574,18 +575,14 @@ class ctrl_RL_pred:
     
            * - Mode
              - Cost function
-           * - 1, 2 - Model-predictive control (MPC)
+           * - 'MPC' - Model-predictive control (MPC)
              - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right)=\\sum_{k=1}^{N_a} \\gamma^{k-1} r(y_k, u_k)`
-           * - 3, 4 - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
+           * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
              - :math:`J \\left( y_1, \\{u\}_{1}^{N_a}\\right) =\\sum_{k=1}^{N_a-1} \\gamma^{k-1} r(y_k, u_k) + \\hat Q(y_{N_a}, u_{N_a})` 
-           * - 5, 6 - RL/ADP via normalized stacked Q-learning [[1]_]
+           * - 'SQL' - RL/ADP via stacked Q-learning [[1]_]
              - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right) =\\frac{1}{N_a} \\sum_{k=1}^{N_a-1} \\hat Q(y_{N_a}, u_{N_a})`               
         
-        Modes 1, 3, 5 use model for prediction, passed into class exogenously. This could be, for instance, a true system model
-        
-        Modes 2, 4, 6 use am estimated online, see :func:`~controllers.ctrl_RL_pred.estimateModel` 
-        
-        **Add your specification into the table when customizing the agent**    
+        *Add your specification into the table when customizing the agent*    
 
     ctrl_bnds : : array of shape ``[dim_input, 2]``
         Box control constraints.
@@ -601,12 +598,14 @@ class ctrl_RL_pred:
         Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
         convenience. Larger prediction step size leads to longer factual horizon
     sys_rhs, sys_out : : functions        
-        Functions that represents the right-hand side, resp., the output of the exogenously passed model.
+        Functions that represent the right-hand side, resp., the output of the exogenously passed model.
         The latter could be, for instance, the true model of the system.
         In turn, ``x_sys`` represents the (true) current state of the system and should be updated accordingly.
-        Parameters ``sys_rhs, sys_out, x_sys`` are used in controller modes which rely on them.
+        Parameters ``sys_rhs, sys_out, x_sys`` are used in those controller modes which rely on them
     prob_noise_pow : : number
-        Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control      
+        Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
+    is_est_model : : number
+        Flag whether to estimate a system model. See :func:`~controllers.ctrl_RL_pred._estimate_model` 
     model_est_stage : : number
         Initial time segment to fill the estimator's buffer before applying optimal control (in seconds)      
     model_est_period : : number
@@ -622,11 +621,9 @@ class ctrl_RL_pred:
     			y^+  & = C \\hat x + D u,
             \\end{array}             
         
-        **See** :func:`~controllers.ctrl_RL_pred._estimateModel` . **This is just a particular model estimator.
-        When customizing,** :func:`~controllers.ctrl_RL_pred._estimateModel`
-        **may be changed and in turn the parameter** ``model_order`` **also. For instance, you might want to use an artifial
-        neural net and specify its layers and numbers
-        of neurons, in which case** ``model_order`` **could be substituted for, say,** ``Nlayers``, ``Nneurons`` 
+        See :func:`~controllers.ctrl_RL_pred._estimate_model`. This is just a particular model estimator.
+        When customizing, :func:`~controllers.ctrl_RL_pred._estimateModel` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
+        neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
     model_est_checks : : natural number
         Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
         May improve the prediction quality somewhat
@@ -659,7 +656,7 @@ class ctrl_RL_pred:
              - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, 
                where :math:`w` is the critic's weight vector
        
-        **Add your specification into the table when customizing the critic** 
+        *Add your specification into the table when customizing the critic* 
     rcost_struct : : natural number
         Choice of the running cost structure.
         
@@ -677,28 +674,9 @@ class ctrl_RL_pred:
              - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcost_pars``
                should be ``[R1, R2]``   
         
-        **Pass correct running cost parameters in** ``rcost_pars`` **(as a list)**
+        *Pass correct running cost parameters in* ``rcost_pars`` *(as a list)*
         
-        **When customizing the running cost, add your specification into the table above**
-
-    Examples
-    ----------
-    
-    Assuming ``sys`` is a ``system``-object, ``t0, t1`` - start and stop times, and ``ksi0`` - a properly defined initial condition:
-    
-    >>> import scipy as sp
-    >>> simulator = sp.integrate.RK45(sys.closedLoop, t0, ksi0, t1)
-    >>> agent = controller(sys.dim_input, sys.dim_output)
-
-    >>> while t < t1:
-            simulator.step()
-            t = simulator.t
-            ksi = simulator.y
-            x = ksi[0:sys.dimState]
-            y = sys.out(x)
-            u = agent.compute_action(t, y)
-            sys.receiveAction(u)
-            agent.update_icost(y, u)
+        *When customizing the running cost, add your specification into the table above*
         
     References
     ----------
@@ -706,8 +684,8 @@ class ctrl_RL_pred:
         
     """    
          
-    def __init__(self, dim_input, dim_output, mode=1, ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
-                 sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
+    def __init__(self, dim_input, dim_output, mode='MPC', ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
+                 sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, is_est_model=0, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
                  gamma=1, Ncritic=4, critic_period=0.1, critic_struct=1, rcost_struct=1, rcost_pars=[], y_target=[]):
         
         self.dim_input = dim_input
@@ -740,6 +718,7 @@ class ctrl_RL_pred:
         self.x_sys = x_sys
         
         # Model estimator's things
+        self.is_est_model = is_est_model
         self.est_clock = t0
         self.is_prob_noise = 1
         self.prob_noise_pow = prob_noise_pow
@@ -894,12 +873,11 @@ class ctrl_RL_pred:
         
         if time_in_sample >= self.sampling_time: # New sample
             # Update buffers when using RL or requiring estimated model
-            if self.mode in (2,3,4,5,6):
+            if self.is_est_model or self.mode in ['RQL', 'SQL']:
                 time_in_est_period = t - self.est_clock
                 
-                # Estimate model if required by ctrlStatMode
-                if (time_in_est_period >= self.model_est_period) and (self.mode in (2,4,6)):
-                # if (time_in_est_period >= self.model_est_period) and (self.is_estimate_model):
+                # Estimate model if required
+                if (time_in_est_period >= self.model_est_period) and self.is_est_model:
                     # Update model estimator's internal clock
                     self.est_clock = t
                     
@@ -1078,7 +1056,7 @@ class ctrl_RL_pred:
         
         return W
     
-    def _actor_cost(self, U, y, N, W, delta, mode):
+    def _actor_cost(self, U, y, N, W, delta):
         """
         See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
         
@@ -1089,18 +1067,12 @@ class ctrl_RL_pred:
 
         """
         
-        # def state_constraint_indicator(x):
-        #     if x >= -1:
-        #         return 0
-        #     else:
-        #         return self.big_number
-        
         myU = np.reshape(U, [N, self.dim_input])
         
         Y = np.zeros([N, self.dim_output])
         
         # System output prediction
-        if (mode==1) or (mode==3) or (mode==5):    # Via exogenously passed model
+        if not self.is_est_model:    # Via exogenously passed model
             Y[0, :] = y
             x = self.x_sys
             for k in range(1, self.Nactor):
@@ -1109,20 +1081,20 @@ class ctrl_RL_pred:
                 
                 Y[k, :] = self.sys_out(x)
 
-        elif (mode==2) or (mode==4) or (mode==6):    # Via estimated model
+        elif self.is_est_model:    # Via estimated model
             myU_upsampled = myU.repeat(int(delta/self.sampling_time), axis=0)
             Yupsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0est, y)
             Y = Yupsampled[::int(delta/self.sampling_time)]
         
         J = 0         
-        if (mode==1) or (mode==2):     # MPC
+        if self.mode=='MPC':
             for k in range(N):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
-        elif (mode==3) or (mode==4):     # RL: Q-learning with Ncritic-1 roll-outs of running cost
+        elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of running cost
              for k in range(N-1):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
              J += W @ self._phi( Y[-1, :], myU[-1, :] )
-        elif (mode==5) or (mode==6):     # RL: stacked Q-learning
+        elif self.mode=='SQL':     # RL: stacked Q-learning
              for k in range(N): 
                 Q = W @ self._phi( Y[k, :], myU[k, :] )
                 
@@ -1141,7 +1113,7 @@ class ctrl_RL_pred:
 
         return J
     
-    def _actor(self, y, Uinit, N, W, delta, mode):
+    def _actor(self, y, Uinit, N, W, delta):
         """
         See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
         
@@ -1198,12 +1170,10 @@ class ctrl_RL_pred:
         try:
             if isGlobOpt:
                 minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                U = basinhopping(lambda U: self._actor_cost(U, y, N, W, delta, mode), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
+                U = basinhopping(lambda U: self._actor_cost(U, y, N, W, delta), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
             else:
-                U = minimize(lambda U: self._actor_cost(U, y, N, W, delta, mode), myUinit, method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x        
-                # With state constraints:
-                # U = minimize(lambda U: self._actor_cost(U, y, N, W, delta, mode), myUinit, method=actor_opt_method, tol=1e-7,
-                             # bounds=bnds, constraints=my_constraints, options=actor_opt_options).x
+                U = minimize(lambda U: self._actor_cost(U, y, N, W, delta), myUinit, method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x        
+
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
             U = myUinit
@@ -1250,19 +1220,19 @@ class ctrl_RL_pred:
             # Update controller's internal clock
             self.ctrl_clock = t
             
-            if self.mode in (1, 2):  
+            if self.mode == 'MPC':  
                 
                 # Apply control when model estimation phase is over  
-                if self.is_prob_noise and (self.mode==2):
+                if self.is_prob_noise and self.is_est_model:
                     return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
                 
-                elif not self.is_prob_noise and (self.mode==2):
+                elif not self.is_prob_noise and self.is_est_model:
                     u = self._actor(y, self.Uinit, self.Nactor, [], self.pred_step_size, self.mode)
 
-                elif (self.mode==1):
+                elif self.mode=='MPC':
                     u = self._actor(y, self.Uinit, self.Nactor, [], self.pred_step_size, self.mode)
                     
-            elif self.mode in (3, 4, 5, 6):
+            elif self.mode in ['RQL', 'SQL']:
                 # Critic
                 timeInCriticPeriod = t - self.critic_clock
                 
@@ -1284,9 +1254,9 @@ class ctrl_RL_pred:
                     W = self.Wprev
                     
                 # Actor. Apply control when model estimation phase is over
-                if self.is_prob_noise and (self.mode in (4, 6)):
+                if self.is_prob_noise and self.is_est_model:
                     u = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
-                elif not self.is_prob_noise and (self.mode in (4, 6)):
+                elif not self.is_prob_noise and self.is_est_model:
                     u = self._actor(y, self.Uinit, self.Nactor, W, self.pred_step_size, self.mode)
                     
                     # [EXPERIMENTAL] Call MATLAB's actor
@@ -1306,7 +1276,7 @@ class ctrl_RL_pred:
                     #                                   dt, matlab.double(self.trueModelPars), self.critic_struct, nargout=1)
                     # u = np.squeeze(np.asarray(u)
                     
-                elif self.mode in (3, 5):
+                elif self.mode in ['RQL', 'SQL']:
                     u = self._actor(y, self.Uinit, self.Nactor, W, self.pred_step_size, self.mode) 
             
             self.uCurr = u
