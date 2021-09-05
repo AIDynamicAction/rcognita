@@ -334,7 +334,7 @@ class sys_2tank(system):
     """
     Two-tank system with nonlinearity
     """
-    def _state_dyn(self, t, x, u, q):     
+    def _state_dyn(self, t, x, u, q=[]):     
         tau1, tau2, K1, K2, K3 = self.pars
 
         Dx = np.zeros(self.dim_state)

@@ -166,8 +166,8 @@ ctrl_bnds = np.array([[v_min, v_max], [omega_min, omega_max]])
 
 my_ctrl_nominal_3wrobot_NI = controllers.ctrl_nominal_3wrobot_NI(ctrl_gain=0.5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
 
-# Predictive RL agent
-my_ctrl_RL_pred = controllers.ctrl_opt_pred(dim_input, dim_output,
+# Predictive optimal controller
+my_ctrl_opt_pred = controllers.ctrl_opt_pred(dim_input, dim_output,
                                             ctrl_mode, ctrl_bnds=ctrl_bnds,
                                             t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
                                             sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
@@ -195,9 +195,9 @@ my_ctrl_RL_stab = controllers.ctrl_RL_stab(dim_input, dim_output,
                                            safe_ctrl=my_ctrl_nominal_3wrobot_NI, safe_decay_rate=1e-4) 
 
 if ctrl_mode == 'JACS':
-    my_ctrl_RL = my_ctrl_RL_stab
+    my_ctrl_benchm = my_ctrl_RL_stab
 else:
-    my_ctrl_RL = my_ctrl_RL_pred
+    my_ctrl_benchm = my_ctrl_opt_pred
     
 #------------------------------------initialization : : simulator
 my_simulator = simulator.simulator(sys_type="diff_eqn",
@@ -231,7 +231,7 @@ if is_visualization:
     
     ksi0 = my_simulator.ksi
     
-    my_animator = visuals.animator_3wrobot_NI(objects=(my_simulator, my_3wrobot_NI, my_ctrl_nominal_3wrobot_NI, my_ctrl_RL, datafiles, controllers.ctrl_selector, my_logger),
+    my_animator = visuals.animator_3wrobot_NI(objects=(my_simulator, my_3wrobot_NI, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, datafiles, controllers.ctrl_selector, my_logger),
                                               pars=(x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrl_mode, uMan, v_min, omega_min, v_max, omega_max, Nruns,
                                                     is_print_sim_step, is_log_data, 0, []))
 
@@ -260,18 +260,18 @@ else:
         
         t, x, y, ksi = my_simulator.get_sim_step_data()
         
-        u = controllers.ctrl_selector(t, y, uMan, my_ctrl_nominal_3wrobot_NI, my_ctrl_RL, ctrl_mode)
+        u = controllers.ctrl_selector(t, y, uMan, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, ctrl_mode)
         
         my_3wrobot_NI.receive_action(u)
-        my_ctrl_RL.receive_sys_state(my_3wrobot_NI._x)
-        my_ctrl_RL.upd_icost(y, u)
+        my_ctrl_benchm.receive_sys_state(my_3wrobot_NI._x)
+        my_ctrl_benchm.upd_icost(y, u)
         
         xCoord = ksi[0]
         yCoord = ksi[1]
         alpha = ksi[2]
         
-        r = my_ctrl_RL.rcost(y, u)
-        icost = my_ctrl_RL.icost_val
+        r = my_ctrl_benchm.rcost(y, u)
+        icost = my_ctrl_benchm.icost_val
         
         if is_print_sim_step:
             my_logger.print_sim_step(t, xCoord, yCoord, alpha, r, icost, u)
@@ -297,7 +297,7 @@ else:
             my_simulator.y = ksi0
             
             if ctrl_mode != 'nominal':
-                my_ctrl_RL.reset(t0)
+                my_ctrl_benchm.reset(t0)
             else:
                 my_ctrl_nominal_3wrobot_NI.reset(t0)
             
