@@ -66,6 +66,8 @@ class ctrl_RL_stab:
     """
     Class of reinforcement learning agents with stabilizing constraints.
     
+    Sampling here is similar to the predictive controller agent, so see it under 
+    
     Needs a nominal controller object ``safe_ctrl`` with a respective Lyapunov function.
     
     Actor
@@ -101,7 +103,7 @@ class ctrl_RL_stab:
     """
     def __init__(self, dim_input, dim_output, mode='JACS', ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
                  sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, is_est_model=0, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
-                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct=1, actor_struct=1, rcost_struct=1, rcost_pars=[], y_target=[],
+                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct=1, actor_struct=1, rcost_struct='quadratic', rcost_pars=[], y_target=[],
                  safe_ctrl=[], safe_decay_rate=[]):
         
         self.dim_input = dim_input
@@ -276,10 +278,10 @@ class ctrl_RL_stab:
         
         r = 0
 
-        if self.rcost_struct == 1:
+        if self.rcost_struct == 'quadratic':
             R1 = self.rcost_pars[0]
             r = chi @ R1 @ chi
-        elif self.rcost_struct == 2:
+        elif self.rcost_struct == 'biquadratic':
             R1 = self.rcost_pars[0]
             R2 = self.rcost_pars[1]
             r = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
@@ -844,10 +846,10 @@ class ctrl_RL_pred:
         
         r = 0
 
-        if self.rcost_struct == 1:
+        if self.rcost_struct == 'quadratic':
             R1 = self.rcost_pars[0]
             r = chi @ R1 @ chi
-        elif self.rcost_struct == 2:
+        elif self.rcost_struct == 'biquadratic':
             R1 = self.rcost_pars[0]
             R2 = self.rcost_pars[1]
             r = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi

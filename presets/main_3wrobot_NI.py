@@ -112,10 +112,10 @@ buffer_size = 4 # 200 -- used for predictive RL
 #------------------------------------user settings : : RL
 # Running cost structure and parameters
 # Notation: chi = [y, u]
-# 1     - quadratic chi.T R1 chi 
-# 2     - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
+# 'quadratic'     - quadratic chi.T R1 chi 
+# 'biquadratic'     - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
 # R1, R2 must be positive-definite
-rcost_struct = 1
+rcost_struct = 'quadratic'
 
 # R1 = np.diag([10, 100, 1, 1, 1])  # "Standard choice"
 R1 = np.diag([10, 10, 1, 0, 0])  # No mixed terms, full-state measurement
