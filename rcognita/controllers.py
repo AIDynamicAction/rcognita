@@ -73,13 +73,13 @@ class ctrl_RL_stab:
     Actor
     -----
     
-    ``H`` : weights
+    ``w_actor`` : weights
     
     ``_psi``: regressor
     
     ``_psi`` is a vector, not a matrix. So, if the environment is multi-input, the input is actually computed as
     
-    ``u = reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )``
+    ``u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )``
     
     where ``y`` is the output.
     
@@ -341,7 +341,7 @@ class ctrl_RL_stab:
         
         W = W_lmbd_u[:self.dim_critic]
         # lmbd = W_lmbd_u[self.dim_critic+1]
-        H = W_lmbd_u[-self.dim_actor:]         
+        w_actor = W_lmbd_u[-self.dim_actor:]         
         
         Jc = 0
         
@@ -352,7 +352,7 @@ class ctrl_RL_stab:
             critic_prev = W @ self._phi( yPrev )
             critic_next = self.Wprev @ self._phi( yNext )
             
-            u = reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( yPrev )
+            u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( yPrev )
             
             # Temporal difference
             e = critic_prev - self.gamma * critic_next - self.rcost(yPrev, u)
@@ -380,9 +380,9 @@ class ctrl_RL_stab:
         def constr_stab_LF_bound(W_lmbd_H, y):
             W = W_lmbd_H[:self.dim_critic]
             lmbd = W_lmbd_H[self.dim_critic]
-            H = W_lmbd_H[-self.dim_actor:] 
+            w_actor = W_lmbd_H[-self.dim_actor:] 
                         
-            u = reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
+            u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
             
             y_next = y + self.pred_step_size * self.sys_rhs([], y, u)  # Euler scheme
             
@@ -393,9 +393,9 @@ class ctrl_RL_stab:
         def constr_stab_decay(W_lmbd_H, y):
             W = W_lmbd_H[:self.dim_critic]
             lmbd = W_lmbd_H[self.dim_critic]
-            H = W_lmbd_H[-self.dim_actor:]   
+            w_actor = W_lmbd_H[-self.dim_actor:]   
             
-            u = reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
+            u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
             
             y_next = y + self.pred_step_size * self.sys_rhs([], y, u)  # Euler scheme
             
@@ -453,9 +453,9 @@ class ctrl_RL_stab:
         
         # W = W_lmbd_H[:self.dim_critic]
         # lmbd = W_lmbd_H[self.dim_critic]
-        # H = W_lmbd_H[-self.dim_actor:] 
+        # w_actor = W_lmbd_H[-self.dim_actor:] 
                     
-        # u = reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
+        # u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
         
         # constr_stab_par_decay(W_lmbd_H, y)
         # constr_stab_LF_bound(W_lmbd_H, y)
@@ -476,9 +476,9 @@ class ctrl_RL_stab:
         
         W = W_lmbd_H[:self.dim_critic]
         lmbd = W_lmbd_H[self.dim_critic]
-        H = W_lmbd_H[-self.dim_actor:]       
+        w_actor = W_lmbd_H[-self.dim_actor:]       
         
-        u = reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )       
+        u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )       
         
         # DEBUG ===================================================================   
         # ================================Constraint debugger
@@ -500,7 +500,7 @@ class ctrl_RL_stab:
             W = self.Winit
             lmbd = self.lmbd_init
             u = self.safe_ctrl.compute_action_vanila(y)
-            H = reshape( lstsq( np.array( [ self._psi( y ) ] ), np.array( [ u ] ) )[0].T, self.dim_actor )
+            w_actor = reshape( lstsq( np.array( [ self._psi( y ) ] ), np.array( [ u ] ) )[0].T, self.dim_actor )
        
         # DEBUG ===================================================================   
         # ================================Put safe controller through        
