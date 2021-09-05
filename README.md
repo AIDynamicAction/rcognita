@@ -13,6 +13,10 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 	<img src="./gfx/demo/3wheel_robot_exm_run.gif" width=40% />
 </p>
 
+# Table of content
+
+- [General description](#General-description)
+
 # General description
 
 `rcognita` Python package is designed for hybrid simulation of agents and environments (generally speaking, not necessarily reinforcement learning agents).
@@ -38,3 +42,9 @@ Notice it contains an explicit specification of the sampling time.
 The data `safe_ctrl` is required to specify the stabilizing constraints and also to initialize the optimizer inside the `actor_critic` method, which in turns fetches the cost function from the `actor_critic_cost` method.
 The method `compute_action` essentially watches the internal clock and performs an action updates when a time sample has elapsed.
 Auxiliary modules of the package are `models` and `utilities` which provide auxiliary functions and data structures, such as neural networks.
+
+# Usage
+
+## Preliminaries
+
+[To table of content](#Table-of-content)
