@@ -94,7 +94,7 @@ Miscellaneous settings:
 
 * **Custom environments**: realize `system` interface in the `systems` module. You might need nominal controllers for that, as well as an animator, a logger etc.
 * **Custom running cost**: adjust `rcost` in controllers
-* **Custom AC method**: simplest way -- by adding a new mode and updating `_actor_cost`, `_critic_cost' and, possibly, `_actor`, `_critic`. For deep net AC structures, use, say, [PyTorch](https://pytorch.org/)
+* **Custom AC method**: simplest way -- by adding a new mode and updating `_actor_cost`, `_critic_cost` and, possibly, `_actor`, `_critic`. For deep net AC structures, use, say, [PyTorch](https://pytorch.org/)
 * **Custom model estimator**: so far, the framework offers a state-space model structure. You may use any other one. In case of neural nets, use, e.g., [PyTorch](https://pytorch.org/)
 
 ## Experimental things
