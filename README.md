@@ -15,9 +15,25 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 
 # Table of content
 
+- [Installation](#Installation)
 - [General description](#General-description)
 
+# Installation
+
+This instruction is for Unix-based systems, assuming a terminal.
+Run:
+
+```
+git clone https://github.com/AIDynamicAction/rcognita
+cd rcognita
+python setup.py install
+```
+
+Notice that your interpreter might be called something else, say, `python3`
+
 # General description
+
+[To table of content](#Table-of-content)
 
 `rcognita` Python package is designed for hybrid simulation of agents and environments (generally speaking, not necessarily reinforcement learning agents).
 Its main idea is to have an explicit implementation of sampled controls with user-defined sampling time specification.
