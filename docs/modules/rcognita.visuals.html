@@ -172,8 +172,13 @@
             
   <section id="module-rcognita.visuals">
 <span id="rcognita-visuals"></span><h1><code class="docutils literal notranslate"><span class="pre">rcognita.visuals</span></code><a class="headerlink" href="#module-rcognita.visuals" title="Permalink to this headline">¶</a></h1>
-<p>Created on Sun Jan 10 12:08:00 2021</p>
-<p>&#64;author: Pavel Osinenko</p>
+<p>This module contains an interface class <cite>animator</cite> along with concrete realizations, each of which is associated with a corresponding system</p>
+<p>Remarks:</p>
+<ul class="simple">
+<li><p>All vectors are treated as of type [n,]</p></li>
+<li><p>All buffers are treated as of type [L, n] where each row is a vector</p></li>
+<li><p>Buffers are updated from bottom to top</p></li>
+</ul>
 <p class="rubric">Classes</p>
 <table class="longtable docutils align-default">
 <colgroup>
