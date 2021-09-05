@@ -24,7 +24,7 @@ copyright = '2021, AIDA Lab'
 author = 'AIDA Lab'
 
 # The full version, including alpha/beta/rc tags
-release = 'v1.8.1'
+release = '0.1'
 
 html_logo="logo.png"
 
