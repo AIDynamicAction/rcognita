@@ -15,7 +15,7 @@ from tabulate import tabulate
 
 import csv
 
-class logger:
+class Logger:
     """
     Interface class for data loggers.
     Concrete loggers, associated with concrete system-controller setups, are should be built upon this class.
@@ -33,7 +33,7 @@ class logger:
     def log_data_row():
         pass
     
-class logger_3wrobot(logger):
+class Logger3WRobot(Logger):
     """
     Data logger for a 3-wheel robot with dynamic actuators.
     
@@ -53,7 +53,7 @@ class logger_3wrobot(logger):
                 writer = csv.writer(outfile)
                 writer.writerow([t, xCoord, yCoord, alpha, v, omega, r, icost, u[0], u[1]])
 
-class logger_3wrobot_NI(logger):
+class Logger3WRobotNI(Logger):
     """
     Data logger for a 3-wheel robot with static actuators.
     
@@ -73,7 +73,7 @@ class logger_3wrobot_NI(logger):
                 writer = csv.writer(outfile)
                 writer.writerow([t, xCoord, yCoord, alpha, r, icost, u[0], u[1]])
                 
-class logger_2tank(logger):
+class Logger2Tank(Logger):
     """
     Data logger for a 2-tank system.
     

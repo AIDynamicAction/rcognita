@@ -20,7 +20,7 @@ import scipy as sp
 
 from .utilities import rej_sampling_rvs
 
-class simulator:
+class Simulator:
     """
     Class for simulating closed loops (system-controllers)
       

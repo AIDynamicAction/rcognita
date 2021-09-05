@@ -113,7 +113,7 @@ class ZOH:
 
         return self.currVal
     
-class dfilter:
+class DFilter:
     """
     Real-time digital filter
     

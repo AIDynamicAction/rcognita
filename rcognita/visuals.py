@@ -29,7 +29,7 @@ from svgpath2mpl import parse_path
 
 from collections import namedtuple
 
-class animator:
+class Animator:
     """
     Interface class of visualization machinery for simulation of system-controller loops.
     To design a concrete animator: inherit this class, override:
@@ -74,7 +74,7 @@ class animator:
         # plt.close('all')
         raise Exception('exit')        
 
-class robot_marker:
+class RobotMarker:
     """
     Robot marker for visualization.
     
@@ -93,7 +93,7 @@ class robot_marker:
         self.marker._transform = self.marker.get_transform().rotate_deg(angle-self.angle)
         self.angle = angle
     
-class animator_3wrobot(animator):
+class Animator3WRobot(Animator):
     """
     Animator class for a 3-wheel robot with dynamic actuators. 
     
@@ -134,7 +134,7 @@ class animator_3wrobot(animator):
         self.axs_xy_plane.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
         self.axs_xy_plane.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
         self.line_traj, = self.axs_xy_plane.plot(xCoord0, yCoord0, 'b--', lw=0.5)
-        self.robot_marker = robot_marker(angle=alpha_deg0)
+        self.robot_marker = RobotMarker(angle=alpha_deg0)
         text_time = 't = {time:2.3f}'.format(time = t0)
         self.text_time_handle = self.axs_xy_plane.text(0.05, 0.95, text_time,
                                                    horizontalalignment='left', verticalalignment='center', transform=self.axs_xy_plane.transAxes)
@@ -324,7 +324,7 @@ class animator_3wrobot(animator):
     
             upd_line(self.line_traj, np.nan, np.nan)
 
-class animator_3wrobot_NI(animator):
+class Animator3WRobotNI(Animator):
     """
     Animator class for a 3-wheel robot with static actuators. 
     
@@ -365,7 +365,7 @@ class animator_3wrobot_NI(animator):
         self.axs_xy_plane.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
         self.axs_xy_plane.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
         self.line_traj, = self.axs_xy_plane.plot(xCoord0, yCoord0, 'b--', lw=0.5)
-        self.robot_marker = robot_marker(angle=alpha_deg0)
+        self.robot_marker = RobotMarker(angle=alpha_deg0)
         text_time = 't = {time:2.3f}'.format(time = t0)
         self.text_time_handle = self.axs_xy_plane.text(0.05, 0.95, text_time,
                                                    horizontalalignment='left', verticalalignment='center', transform=self.axs_xy_plane.transAxes)
@@ -553,7 +553,7 @@ class animator_3wrobot_NI(animator):
     
             upd_line(self.line_traj, np.nan, np.nan)
             
-class animator_2tank(animator):
+class Animator2Tank(Animator):
     """
     Animator class for a 2-tank system. 
     

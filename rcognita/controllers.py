@@ -62,7 +62,7 @@ def ctrl_selector(t, y, uMan, ctrl_nominal, ctrl_benchmarking, mode):
         
     return u
 
-class ctrl_RL_stab:
+class CtrlRLStab:
     """
     Class of reinforcement learning agents with stabilizing constraints.
     
@@ -565,7 +565,7 @@ class ctrl_RL_stab:
         else:
             return self.uCurr        
 
-class ctrl_opt_pred:  
+class CtrlOptPred:
     """
     Class of predictive optimal controllers, primarily MPC and predictive RL, that optimize a finite-horizon cost
         
@@ -1274,7 +1274,7 @@ class ctrl_opt_pred:
         else:
             return self.uCurr
         
-class ctrl_nominal_3wrobot:
+class CtrlNominal3WRobot:
     """
     This is a class of nominal controllers for 3-wheel robots used for benchmarking of other controllers.
     
@@ -1537,7 +1537,7 @@ class ctrl_nominal_3wrobot:
         
         return self._Fc(xNI, eta, theta_star)
     
-class ctrl_nominal_3wrobot_NI:
+class CtrlNominal3WRobotNI:
     """
     Nominal parking controller for NI using disassembled subgradients
     

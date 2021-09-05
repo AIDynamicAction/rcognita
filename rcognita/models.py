@@ -9,7 +9,7 @@ Currently under construction
 
 # class models
 
-class model_SS:
+class ModelSS:
      """
          Class of estimated models
          
@@ -48,6 +48,7 @@ class model_SS:
      def updateIC(self, x0setNew):
          self.x0set = x0setNew
          
-class model_NN:
-    ...
+class ModelNN:
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError(f"Class {self.__class__} is not yet implemented.")
     # if self.dt != dt -> error

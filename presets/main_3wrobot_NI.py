@@ -138,10 +138,10 @@ critic_struct = 'quad-nomix'
 actor_struct = 'quad-nomix'
 
 #------------------------------------initialization : : system
-my_3wrobot_NI = systems.sys_3wrobot_NI(sys_type="diff_eqn", dim_state=dim_state, dim_input=dim_input, dim_output=dim_output, dim_disturb=dim_disturb,
-                                       pars=[],
-                                       ctrl_bnds=np.array([[v_min, v_max], [omega_min, omega_max]]),
-                                       is_dyn_ctrl=is_dyn_ctrl, is_disturb=is_disturb, pars_disturb=[])
+my_3wrobot_NI = systems.Sys3WRobotNI(sys_type="diff_eqn", dim_state=dim_state, dim_input=dim_input, dim_output=dim_output, dim_disturb=dim_disturb,
+                                     pars=[],
+                                     ctrl_bnds=np.array([[v_min, v_max], [omega_min, omega_max]]),
+                                     is_dyn_ctrl=is_dyn_ctrl, is_disturb=is_disturb, pars_disturb=[])
 
 y0 = my_3wrobot_NI.out(x0)
 
@@ -164,23 +164,10 @@ alpha_deg_0 = alpha0/2/np.pi
 #------------------------------------initialization : : controller
 ctrl_bnds = np.array([[v_min, v_max], [omega_min, omega_max]])
 
-my_ctrl_nominal_3wrobot_NI = controllers.ctrl_nominal_3wrobot_NI(ctrl_gain=0.5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
+my_ctrl_nominal_3wrobot_NI = controllers.CtrlNominal3WRobotNI(ctrl_gain=0.5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
 
 # Predictive optimal controller
-my_ctrl_opt_pred = controllers.ctrl_opt_pred(dim_input, dim_output,
-                                            ctrl_mode, ctrl_bnds=ctrl_bnds,
-                                            t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
-                                            sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
-                                            # get_next_state = get_next_state, sys_out = sys_out,
-                                            x_sys=x0,
-                                            prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
-                                            buffer_size=buffer_size,
-                                            model_order=model_order, model_est_checks=model_est_checks,
-                                            gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
-                                            y_target=[])
-
-# Stabilizing RL agent
-my_ctrl_RL_stab = controllers.ctrl_RL_stab(dim_input, dim_output,  
+my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input, dim_output,
                                            ctrl_mode, ctrl_bnds=ctrl_bnds,
                                            t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
                                            sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
@@ -189,10 +176,23 @@ my_ctrl_RL_stab = controllers.ctrl_RL_stab(dim_input, dim_output,
                                            prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
                                            buffer_size=buffer_size,
                                            model_order=model_order, model_est_checks=model_est_checks,
-                                           gamma=gamma, Ncritic=Ncritic, critic_period=critic_period,
-                                           critic_struct=critic_struct, actor_struct=actor_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
-                                           y_target=[],
-                                           safe_ctrl=my_ctrl_nominal_3wrobot_NI, safe_decay_rate=1e-4) 
+                                           gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
+                                           y_target=[])
+
+# Stabilizing RL agent
+my_ctrl_RL_stab = controllers.CtrlRLStab(dim_input, dim_output,
+                                         ctrl_mode, ctrl_bnds=ctrl_bnds,
+                                         t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
+                                         sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
+                                         # get_next_state = get_next_state, sys_out = sys_out,
+                                         x_sys=x0,
+                                         prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
+                                         buffer_size=buffer_size,
+                                         model_order=model_order, model_est_checks=model_est_checks,
+                                         gamma=gamma, Ncritic=Ncritic, critic_period=critic_period,
+                                         critic_struct=critic_struct, actor_struct=actor_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
+                                         y_target=[],
+                                         safe_ctrl=my_ctrl_nominal_3wrobot_NI, safe_decay_rate=1e-4)
 
 if ctrl_mode == 'JACS':
     my_ctrl_benchm = my_ctrl_RL_stab
@@ -200,7 +200,7 @@ else:
     my_ctrl_benchm = my_ctrl_opt_pred
     
 #------------------------------------initialization : : simulator
-my_simulator = simulator.simulator(sys_type="diff_eqn",
+my_simulator = simulator.Simulator(sys_type="diff_eqn",
                                    closed_loop_rhs=my_3wrobot_NI.closed_loop_rhs,
                                    sys_out=my_3wrobot_NI.out,
                                    x0=x0, q0=[], u0=u0, t0=t0, t1=t1, dt=dt, max_step=dt/2, first_step=1e-6, atol=atol, rtol=rtol,
@@ -224,15 +224,15 @@ for k in range(0, Nruns):
 if is_print_sim_step:
     warnings.filterwarnings('ignore')
     
-my_logger = loggers.logger_3wrobot_NI()
+my_logger = loggers.Logger3WRobotNI()
 
 #------------------------------------main loop
 if is_visualization:
     
     ksi0 = my_simulator.ksi
     
-    my_animator = visuals.animator_3wrobot_NI(objects=(my_simulator, my_3wrobot_NI, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, datafiles, controllers.ctrl_selector, my_logger),
-                                              pars=(x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrl_mode, uMan, v_min, omega_min, v_max, omega_max, Nruns,
+    my_animator = visuals.Animator3WRobotNI(objects=(my_simulator, my_3wrobot_NI, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, datafiles, controllers.ctrl_selector, my_logger),
+                                            pars=(x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrl_mode, uMan, v_min, omega_min, v_max, omega_max, Nruns,
                                                     is_print_sim_step, is_log_data, 0, []))
 
     anm = animation.FuncAnimation(my_animator.fig_sim,

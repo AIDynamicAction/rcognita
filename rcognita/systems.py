@@ -14,7 +14,7 @@ Remarks:
 import numpy as np
 from numpy.random import randn
 
-class system:  
+class System:
     """
     Interface class of dynamical systems a.k.a. environments.
     Concrete systems should be built upon this class.
@@ -202,7 +202,7 @@ class system:
         
         return rhs_full_state    
     
-class sys_3wrobot(system):  
+class Sys3WRobot(System):
     """
     System class: 3-wheel robot with dynamical actuators.
     
@@ -294,7 +294,7 @@ class sys_3wrobot(system):
         y = x  # <-- Position, force and torque sensors on
         return y
 
-class sys_3wrobot_NI(system):  
+class Sys3WRobotNI(System):
     """
     System class: 3-wheel robot with static actuators (the NI - non-holonomic integrator).
     
@@ -330,7 +330,7 @@ class sys_3wrobot_NI(system):
         y = x
         return y
 
-class sys_2tank(system):
+class Sys2Tank(System):
     """
     Two-tank system with nonlinearity
     """
