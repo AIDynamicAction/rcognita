@@ -7,6 +7,12 @@
 The hybrid setting here means the actions are updated at discrete moments in time, whereas the environment dynamics are modelled time-continuous.
 A detailed documentation is available [here](https://aidynamicaction.github.io/rcognita/).
 
+## Example run with a mobile robot simulation
+
+<p align="center">
+	<img src="./gfx/demo/3wheel_robot_exm_run.gif" width=40% />
+</p>
+
 # General description
 
 `rcognita` Python package is designed for hybrid simulation of agents and environments (generally speaking, not necessarily reinforcement learning agents).
