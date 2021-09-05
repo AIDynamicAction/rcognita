@@ -66,7 +66,7 @@ class ctrl_RL_stab:
     """
     Class of reinforcement learning agents with stabilizing constraints.
     
-    Sampling here is similar to the predictive controller agent, so see it under 
+    Sampling here is similar to the predictive controller agent ``ctrl_opt_pred``
     
     Needs a nominal controller object ``safe_ctrl`` with a respective Lyapunov function.
     
