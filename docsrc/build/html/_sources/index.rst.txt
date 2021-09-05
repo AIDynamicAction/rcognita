@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Rcognita: A framework for DP and RL algorithm development, testing, and simulation
-====================================
+==================================================================================
 Rcognita is a ...
 
 
