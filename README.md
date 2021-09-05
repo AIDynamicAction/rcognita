@@ -16,6 +16,11 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 
 - [Installation](#Installation)
 - [General description](#General-description)
+- [Usage](#Usage)
+  * [Settings](#Settings)
+  * [Advanced customization](#Advanced-customization)
+  * [Experimental things](#Experimental-things)
+- [Closing remarks](#Closing-remarks)
 
 # Installation
 
@@ -106,7 +111,7 @@ The functionality is implemented and enabled via `is_est_model`.
 Related parameters can be found in the documentation of the `ctrl_opt_pred` class.
 Updates to come.
 
-## Closing remarks
+# Closing remarks
 
 Please contact [me](mailto:p.osinenko@gmail.com) for any inquiries and don't forget to give me credit for usage of this code.
 If you are interested in stacked Q-learning, kindly read the [paper](https://arxiv.org/abs/2007.03999).
