@@ -31,11 +31,11 @@ Buffers are updated from bottom to top
 
 import numpy as np
 import numpy.linalg as la
-from utilities import upd_line
-from utilities import reset_line
-from utilities import upd_scatter
-from utilities import upd_text
-from utilities import to_col_vec
+from .utilities import upd_line
+from .utilities import reset_line
+from .utilities import upd_scatter
+from .utilities import upd_text
+from .utilities import to_col_vec
 
 import matplotlib as mpl 
 import matplotlib.pyplot as plt

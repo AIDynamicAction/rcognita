@@ -32,7 +32,7 @@ Buffers are updated from bottom to top
 import numpy as np
 import scipy as sp
 
-from utilities import rej_sampling_rvs
+from .utilities import rej_sampling_rvs
 
 class simulator:
     """

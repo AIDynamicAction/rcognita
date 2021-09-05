@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Tue Mar  9 11:59:37 2021
-
-@author: pavel
+Module for models
 """
-
 
 # class models
 

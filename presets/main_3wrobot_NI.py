@@ -35,12 +35,12 @@ from datetime import datetime
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
-import simulator
-import systems
-import controllers
-import loggers
-import visuals
-from utilities import on_key_press
+from rcognita import simulator
+from rcognita import systems
+from rcognita import controllers
+from rcognita import loggers
+from rcognita import visuals
+from rcognita.utilities import on_key_press
 
 #------------------------------------user settings : : main switches
 is_log_data = 0

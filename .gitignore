@@ -1,3 +1,8 @@
+# Installation directories
+rcognita.egg-info/
+build/
+dist/
+
 build_script.sh
 test/
 data/

@@ -29,10 +29,10 @@ All buffers are treated as of type [L, n] where each row is a vector
 Buffers are updated from bottom to top
 """
 
-from utilities import dss_sim
-from utilities import rep_mat
-from utilities import uptria2vec
-from utilities import push_vec
+from .utilities import dss_sim
+from .utilities import rep_mat
+from .utilities import uptria2vec
+from .utilities import push_vec
 import numpy as np
 import scipy as sp
 from numpy.random import rand
