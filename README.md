@@ -43,6 +43,8 @@ The data `safe_ctrl` is required to specify the stabilizing constraints and also
 The method `compute_action` essentially watches the internal clock and performs an action updates when a time sample has elapsed.
 Auxiliary modules of the package are `models` and `utilities` which provide auxiliary functions and data structures, such as neural networks.
 
+# Usage
 
+## Preliminaries
 
 [To table of content](#Table-of-content)
