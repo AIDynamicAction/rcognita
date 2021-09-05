@@ -13,6 +13,10 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 	<img src="./gfx/demo/3wheel_robot_exm_run.gif" width=40% />
 </p>
 
+# Table of content
+
+- [General description](#General-description)
+
 # General description
 
 `rcognita` Python package is designed for hybrid simulation of agents and environments (generally speaking, not necessarily reinforcement learning agents).
@@ -40,4 +44,5 @@ The method `compute_action` essentially watches the internal clock and performs 
 Auxiliary modules of the package are `models` and `utilities` which provide auxiliary functions and data structures, such as neural networks.
 
 
-[To top](#Example-run-with-a-mobile-robot-simulation)
+
+[To table of content](#Table-of-content)
