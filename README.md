@@ -5,37 +5,12 @@
 <p align="center">
 <br />
 <br />
-Rcognita is a framework for DP and RL algorithm development, testing, and simulation. <br>
-For more info <b>check out our <a href="https://aidynamicaction.github.io/rcognita/">documentation</a></b>.
+`rcognita` is a framework for hybrid agent-enviroment simultion.
+The hybrid setting here means the actions are updated at discrete moments in time, whereas the environment dynamics are modelled time-continuous.<br>
+A detailed documentation is available at <a href="https://aidynamicaction.github.io/rcognita/">documentation</a>.
 </p>
 
-## Installation:
-* clone repo
-* run in terminal ```python3 setup.py install```
+## Installation
 
-## Example:
-```{r, engine='bash', count_lines}
-python3 presets/main_3wrobot.py --mode 5 --ndots 20 --radius 5 --dt 0.05
-```
-## Arguments for comand line for single run:
-- mode - *default 3*
-- dt - *default 0.05*
-- Nactor - *default 6*
-- pred_step_size - *default 5*
-- init_x - used only if one point required and only with init_y and init_alpha *default None*
-- init_y - used only if one point required and only with init_x and init_alpha *default None*
-- init_alpha - could be used separetely for one point (without init_x and init_y) *default None*
-- ndots - number of dots for simulation *default 25*
-- radius - *default 5*
-- folder - *default None will be created folder with name of current hour*
-- is_log_data - saving date in csv file in folder data/date/hour(or_name) *default True*
-- is_print_sim_step - printing info about each step in terminal *default False*
-- is_visualization - will visualize interface of rcognita and all process *default False*
-
-
-## Building docs:
-```
-cd docsrc
-make
-```
-Built docs are moved to `/docs`. The docs will not properly compile unless all dependencies for `rcognita` are statisfied.
+* Clone repo
+* Run in terminal ```python3 setup.py install```
