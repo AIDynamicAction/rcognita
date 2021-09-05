@@ -167,17 +167,17 @@ ctrl_bnds = np.array([[v_min, v_max], [omega_min, omega_max]])
 my_ctrl_nominal_3wrobot_NI = controllers.ctrl_nominal_3wrobot_NI(ctrl_gain=0.5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
 
 # Predictive RL agent
-my_ctrl_RL_pred = controllers.ctrl_RL_pred(dim_input, dim_output,
-                                           ctrl_mode, ctrl_bnds=ctrl_bnds,
-                                           t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
-                                           sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
-                                           # get_next_state = get_next_state, sys_out = sys_out,
-                                           x_sys=x0,
-                                           prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
-                                           buffer_size=buffer_size,
-                                           model_order=model_order, model_est_checks=model_est_checks,
-                                           gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
-                                           y_target=[])
+my_ctrl_RL_pred = controllers.ctrl_opt_pred(dim_input, dim_output,
+                                            ctrl_mode, ctrl_bnds=ctrl_bnds,
+                                            t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
+                                            sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
+                                            # get_next_state = get_next_state, sys_out = sys_out,
+                                            x_sys=x0,
+                                            prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
+                                            buffer_size=buffer_size,
+                                            model_order=model_order, model_est_checks=model_est_checks,
+                                            gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
+                                            y_target=[])
 
 # Stabilizing RL agent
 my_ctrl_RL_stab = controllers.ctrl_RL_stab(dim_input, dim_output,  

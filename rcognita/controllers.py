@@ -88,7 +88,7 @@ class ctrl_RL_stab:
     Critic
     -----
     
-    ``W`` : weights
+    ``w_critic`` : weights
     
     ``_phi``: regressor   
     
@@ -186,8 +186,8 @@ class ctrl_RL_stab:
             self.Wmin = np.zeros(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)
  
-        self.Wprev = self.Wmin
-        self.Winit = np.ones(self.dim_critic)
+        self.w_critic_prev = self.Wmin
+        self.w_critic_init = np.ones(self.dim_critic)
         
         self.lmbd_prev = 0
         self.lmbd_init = 0
@@ -339,7 +339,7 @@ class ctrl_RL_stab:
         
         Y = self.ybuffer[-self.Ncritic:,:]
         
-        W = W_lmbd_u[:self.dim_critic]
+        w_critic = W_lmbd_u[:self.dim_critic]
         # lmbd = W_lmbd_u[self.dim_critic+1]
         w_actor = W_lmbd_u[-self.dim_actor:]         
         
@@ -349,8 +349,8 @@ class ctrl_RL_stab:
             yPrev = Y[k-1, :]
             yNext = Y[k, :]
             
-            critic_prev = W @ self._phi( yPrev )
-            critic_next = self.Wprev @ self._phi( yNext )
+            critic_prev = w_critic @ self._phi( yPrev )
+            critic_next = self.w_critic_prev @ self._phi( yNext )
             
             u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( yPrev )
             
@@ -369,16 +369,16 @@ class ctrl_RL_stab:
         """  
 
         def constr_stab_par_decay(W_lmbd_H, y):
-            W = W_lmbd_H[:self.dim_critic]
+            w_critic = W_lmbd_H[:self.dim_critic]
             lmbd = W_lmbd_H[self.dim_critic]
             
-            critic_curr = self.lmbd_prev * self.Wprev @ self._phi( y ) + ( 1 - self.lmbd_prev ) * self.safe_ctrl.compute_LF(y)
-            critic_new = lmbd * W @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
+            critic_curr = self.lmbd_prev * self.w_critic_prev @ self._phi( y ) + ( 1 - self.lmbd_prev ) * self.safe_ctrl.compute_LF(y)
+            critic_new = lmbd * w_critic @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
             
             return critic_new - critic_curr
             
         def constr_stab_LF_bound(W_lmbd_H, y):
-            W = W_lmbd_H[:self.dim_critic]
+            w_critic = W_lmbd_H[:self.dim_critic]
             lmbd = W_lmbd_H[self.dim_critic]
             w_actor = W_lmbd_H[-self.dim_actor:] 
                         
@@ -386,12 +386,12 @@ class ctrl_RL_stab:
             
             y_next = y + self.pred_step_size * self.sys_rhs([], y, u)  # Euler scheme
             
-            critic_next = lmbd * W @ self._phi( y_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( y_next )
+            critic_next = lmbd * w_critic @ self._phi( y_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( y_next )
             
             return self.safe_ctrl.compute_LF(y_next) - critic_next        
         
         def constr_stab_decay(W_lmbd_H, y):
-            W = W_lmbd_H[:self.dim_critic]
+            w_critic = W_lmbd_H[:self.dim_critic]
             lmbd = W_lmbd_H[self.dim_critic]
             w_actor = W_lmbd_H[-self.dim_actor:]   
             
@@ -399,16 +399,16 @@ class ctrl_RL_stab:
             
             y_next = y + self.pred_step_size * self.sys_rhs([], y, u)  # Euler scheme
             
-            critic_new = lmbd * W @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
-            critic_next = lmbd * W @ self._phi( y_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( y_next )
+            critic_new = lmbd * w_critic @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
+            critic_next = lmbd * w_critic @ self._phi( y_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( y_next )
             
             return critic_next - critic_new + self.safe_decay_rate
 
         def constr_stab_positive(W_lmbd_H, y):
-            W = W_lmbd_H[:self.dim_critic]
+            w_critic = W_lmbd_H[:self.dim_critic]
             lmbd = W_lmbd_H[self.dim_critic]
             
-            critic_new = lmbd * W @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
+            critic_new = lmbd * w_critic @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
             
             return - critic_new
 
@@ -449,9 +449,9 @@ class ctrl_RL_stab:
         # DEBUG ===================================================================
         # ================================Constraint debugger
 
-        # W_lmbd_H = np.concatenate([self.Winit, np.array([self.lmbd_init]), self.Hinit])
+        # W_lmbd_H = np.concatenate([self.w_critic_init, np.array([self.lmbd_init]), self.Hinit])
         
-        # W = W_lmbd_H[:self.dim_critic]
+        # w_critic = W_lmbd_H[:self.dim_critic]
         # lmbd = W_lmbd_H[self.dim_critic]
         # w_actor = W_lmbd_H[-self.dim_actor:] 
                     
@@ -467,14 +467,14 @@ class ctrl_RL_stab:
         # Notice `bounds=bnds` is removed from arguments of minimize.
         # It is because bounds are not practically necessary for stabilizing joint actor-critic to function
         # W_lmbd_H = minimize(self._actor_critic_cost,
-        #                     np.hstack([self.Winit,np.array([self.lmbd_init]),self.Hinit]),
+        #                     np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.Hinit]),
         #                     method=opt_method, tol=1e-4, constraints=my_constraints, options=opt_options).x
         
         W_lmbd_H = minimize(self._actor_critic_cost,
-                            np.hstack([self.Winit,np.array([self.lmbd_init]),self.Hinit]),
+                            np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.Hinit]),
                             method=opt_method, tol=1e-4, options=opt_options).x        
         
-        W = W_lmbd_H[:self.dim_critic]
+        w_critic = W_lmbd_H[:self.dim_critic]
         lmbd = W_lmbd_H[self.dim_critic]
         w_actor = W_lmbd_H[-self.dim_actor:]       
         
@@ -497,14 +497,14 @@ class ctrl_RL_stab:
             constr_stab_decay(W_lmbd_H, y) >= eps3 or \
             constr_stab_positive(W_lmbd_H, y) >= eps4 :
                 
-            W = self.Winit
+            w_critic = self.w_critic_init
             lmbd = self.lmbd_init
             u = self.safe_ctrl.compute_action_vanila(y)
             w_actor = reshape( lstsq( np.array( [ self._psi( y ) ] ), np.array( [ u ] ) )[0].T, self.dim_actor )
        
         # DEBUG ===================================================================   
         # ================================Put safe controller through        
-        # W = self.Winit
+        # w_critic = self.w_critic_init
         # lmbd = self.lmbd_init
         # u = self.safe_ctrl.compute_action_vanila(y)        
         # /DEBUG ===================================================================         
@@ -533,7 +533,7 @@ class ctrl_RL_stab:
         
         # /STUB ===================================================================
         
-        return W, lmbd, u
+        return w_critic, lmbd, u
         
     def compute_action(self, t, y):
 
@@ -547,9 +547,9 @@ class ctrl_RL_stab:
             self.ubuffer = push_vec(self.ubuffer, self.uCurr)
             self.ybuffer = push_vec(self.ybuffer, y)          
             
-            W, lmbd, u = self._actor_critic(y)
+            w_critic, lmbd, u = self._actor_critic(y)
             
-            self.Wprev = W            
+            self.w_critic_prev = w_critic            
             self.lmbd_prev = lmbd
 
             for k in range(2):
@@ -774,8 +774,8 @@ class ctrl_opt_pred:
             self.Wmin = -1e3*np.ones(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)
             
-        self.Wprev = np.ones(self.dim_critic)  
-        self.Winit = self.Wprev
+        self.w_critic_prev = np.ones(self.dim_critic)  
+        self.w_critic_init = self.w_critic_prev
         
         # self.big_number = 1e4
 
@@ -989,7 +989,7 @@ class ctrl_opt_pred:
         -------------
         
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
-        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``W @ self._phi( y, u )`` 
+        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``w_critic @ self._phi( y, u )`` 
         within :func:`~controllers.ctrl_opt_pred._critic_cost`
         
         """
@@ -1007,7 +1007,7 @@ class ctrl_opt_pred:
         elif self.critic_struct == 'quad-mix':
             return np.concatenate([ y**2, np.kron(y, u), u**2 ]) 
     
-    def _critic_cost(self, W):
+    def _critic_cost(self, w_critic):
         """
         Cost function of the critic
         
@@ -1028,7 +1028,7 @@ class ctrl_opt_pred:
             uNext = self.ubuffer[k, :]
             
             # Temporal difference
-            e = W @ self._phi( yPrev, uPrev ) - self.gamma * self.Wprev @ self._phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
+            e = w_critic @ self._phi( yPrev, uPrev ) - self.gamma * self.w_critic_prev @ self._phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
             
             Jc += 1/2 * e**2
             
@@ -1051,14 +1051,14 @@ class ctrl_opt_pred:
         
         bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
     
-        W = minimize(lambda W: self._critic_cost(W), self.Winit, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
+        w_critic = minimize(lambda w_critic: self._critic_cost(w_critic), self.w_critic_init, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
         
         # DEBUG ===================================================================
         # print('-----------------------Critic parameters--------------------------')
-        # print( W )
+        # print( w_critic )
         # /DEBUG ==================================================================
         
-        return W
+        return w_critic
     
     def _actor_cost(self, U, y):
         """
@@ -1097,13 +1097,13 @@ class ctrl_opt_pred:
         elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of running cost
              for k in range(self.Nactor-1):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
-             J += self.Wcurr @ self._phi( Y[-1, :], myU[-1, :] )
+             J += self.w_critic @ self._phi( Y[-1, :], myU[-1, :] )
         elif self.mode=='SQL':     # RL: stacked Q-learning
              for k in range(self.Nactor): 
-                Q = self.Wcurr @ self._phi( Y[k, :], myU[k, :] )
+                Q = self.w_critic @ self._phi( Y[k, :], myU[k, :] )
                 
                 # With state constraints via indicator function
-                # Q = W @ self._phi( Y[k, :], myU[k, :] ) + state_constraint_indicator(Y[k, 0])
+                # Q = w_critic @ self._phi( Y[k, :], myU[k, :] ) + state_constraint_indicator(Y[k, 0])
                 
                 # DEBUG ===================================================================
                 # =========================================================================
@@ -1246,14 +1246,14 @@ class ctrl_opt_pred:
                     # Update critic's internal clock
                     self.critic_clock = t
                     
-                    self.Wcurr = self._critic()
-                    self.Wprev = self.Wcurr
+                    self.w_critic = self._critic()
+                    self.w_critic_prev = self.w_critic
                     
                     # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
-                    # self.Winit = self.Wprev
+                    # self.w_critic_init = self.w_critic_prev
                     
                 else:
-                    self.Wcurr = self.Wprev
+                    self.w_critic = self.w_critic_prev
                     
                 # Actor. Apply control when model estimation phase is over
                 if self.is_prob_noise and self.is_est_model:
