@@ -365,22 +365,25 @@ class ctrl_RL_stab:
         """
         This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_RL_stab._actor_critic_cost`.
         It implements the stabilizing constraints
+        
+        The variable ``w_all`` here is a stack of actor, critic and auxiliary critic weights
+        
 
         """  
 
-        def constr_stab_par_decay(W_lmbd_H, y):
-            w_critic = W_lmbd_H[:self.dim_critic]
-            lmbd = W_lmbd_H[self.dim_critic]
+        def constr_stab_par_decay(w_all, y):
+            w_critic = w_all[:self.dim_critic]
+            lmbd = w_all[self.dim_critic]
             
             critic_curr = self.lmbd_prev * self.w_critic_prev @ self._phi( y ) + ( 1 - self.lmbd_prev ) * self.safe_ctrl.compute_LF(y)
             critic_new = lmbd * w_critic @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
             
             return critic_new - critic_curr
             
-        def constr_stab_LF_bound(W_lmbd_H, y):
-            w_critic = W_lmbd_H[:self.dim_critic]
-            lmbd = W_lmbd_H[self.dim_critic]
-            w_actor = W_lmbd_H[-self.dim_actor:] 
+        def constr_stab_LF_bound(w_all, y):
+            w_critic = w_all[:self.dim_critic]
+            lmbd = w_all[self.dim_critic]
+            w_actor = w_all[-self.dim_actor:] 
                         
             u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
             
@@ -390,10 +393,10 @@ class ctrl_RL_stab:
             
             return self.safe_ctrl.compute_LF(y_next) - critic_next        
         
-        def constr_stab_decay(W_lmbd_H, y):
-            w_critic = W_lmbd_H[:self.dim_critic]
-            lmbd = W_lmbd_H[self.dim_critic]
-            w_actor = W_lmbd_H[-self.dim_actor:]   
+        def constr_stab_decay(w_all, y):
+            w_critic = w_all[:self.dim_critic]
+            lmbd = w_all[self.dim_critic]
+            w_actor = w_all[-self.dim_actor:]   
             
             u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
             
@@ -404,9 +407,9 @@ class ctrl_RL_stab:
             
             return critic_next - critic_new + self.safe_decay_rate
 
-        def constr_stab_positive(W_lmbd_H, y):
-            w_critic = W_lmbd_H[:self.dim_critic]
-            lmbd = W_lmbd_H[self.dim_critic]
+        def constr_stab_positive(w_all, y):
+            w_critic = w_all[:self.dim_critic]
+            lmbd = w_all[self.dim_critic]
             
             critic_new = lmbd * w_critic @ self._phi( y ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF(y)
             
@@ -419,17 +422,17 @@ class ctrl_RL_stab:
         eps4 = 1e-3
         
         # my_constraints = (
-        #     NonlinearConstraint(lambda W_lmbd_H: constr_stab_par_decay( W_lmbd_H, y ), -np.inf, eps1, keep_feasible=True),
-        #     NonlinearConstraint(lambda W_lmbd_H: constr_stab_LF_bound( W_lmbd_H, y ), -np.inf, eps2, keep_feasible=True),
-        #     NonlinearConstraint(lambda W_lmbd_H: constr_stab_decay( W_lmbd_H, y ), -np.inf, eps3, keep_feasible=True),
-        #     NonlinearConstraint(lambda W_lmbd_H: constr_stab_positive( W_lmbd_H, y ), -np.inf, eps4, keep_feasible=True)
+        #     NonlinearConstraint(lambda w_all: constr_stab_par_decay( w_all, y ), -np.inf, eps1, keep_feasible=True),
+        #     NonlinearConstraint(lambda w_all: constr_stab_LF_bound( w_all, y ), -np.inf, eps2, keep_feasible=True),
+        #     NonlinearConstraint(lambda w_all: constr_stab_decay( w_all, y ), -np.inf, eps3, keep_feasible=True),
+        #     NonlinearConstraint(lambda w_all: constr_stab_positive( w_all, y ), -np.inf, eps4, keep_feasible=True)
         #     )
         
         my_constraints = (
-            NonlinearConstraint(lambda W_lmbd_H: constr_stab_par_decay( W_lmbd_H, y ), -np.inf, eps1),
-            NonlinearConstraint(lambda W_lmbd_H: constr_stab_LF_bound( W_lmbd_H, y ), -np.inf, eps2),
-            NonlinearConstraint(lambda W_lmbd_H: constr_stab_decay( W_lmbd_H, y ), -np.inf, eps3),
-            NonlinearConstraint(lambda W_lmbd_H: constr_stab_positive( W_lmbd_H, y ), -np.inf, eps4)
+            NonlinearConstraint(lambda w_all: constr_stab_par_decay( w_all, y ), -np.inf, eps1),
+            NonlinearConstraint(lambda w_all: constr_stab_LF_bound( w_all, y ), -np.inf, eps2),
+            NonlinearConstraint(lambda w_all: constr_stab_decay( w_all, y ), -np.inf, eps3),
+            NonlinearConstraint(lambda w_all: constr_stab_positive( w_all, y ), -np.inf, eps4)
             )        
 
         # Optimization methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
@@ -449,34 +452,34 @@ class ctrl_RL_stab:
         # DEBUG ===================================================================
         # ================================Constraint debugger
 
-        # W_lmbd_H = np.concatenate([self.w_critic_init, np.array([self.lmbd_init]), self.Hinit])
+        # w_all = np.concatenate([self.w_critic_init, np.array([self.lmbd_init]), self.Hinit])
         
-        # w_critic = W_lmbd_H[:self.dim_critic]
-        # lmbd = W_lmbd_H[self.dim_critic]
-        # w_actor = W_lmbd_H[-self.dim_actor:] 
+        # w_critic = w_all[:self.dim_critic]
+        # lmbd = w_all[self.dim_critic]
+        # w_actor = w_all[-self.dim_actor:] 
                     
         # u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )
         
-        # constr_stab_par_decay(W_lmbd_H, y)
-        # constr_stab_LF_bound(W_lmbd_H, y)
-        # constr_stab_decay(W_lmbd_H, y)
-        # constr_stab_positive(W_lmbd_H, y)
+        # constr_stab_par_decay(w_all, y)
+        # constr_stab_LF_bound(w_all, y)
+        # constr_stab_decay(w_all, y)
+        # constr_stab_positive(w_all, y)
 
         # /DEBUG ===================================================================         
         
         # Notice `bounds=bnds` is removed from arguments of minimize.
         # It is because bounds are not practically necessary for stabilizing joint actor-critic to function
-        # W_lmbd_H = minimize(self._actor_critic_cost,
+        # w_all = minimize(self._actor_critic_cost,
         #                     np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.Hinit]),
         #                     method=opt_method, tol=1e-4, constraints=my_constraints, options=opt_options).x
         
-        W_lmbd_H = minimize(self._actor_critic_cost,
+        w_all = minimize(self._actor_critic_cost,
                             np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.Hinit]),
                             method=opt_method, tol=1e-4, options=opt_options).x        
         
-        w_critic = W_lmbd_H[:self.dim_critic]
-        lmbd = W_lmbd_H[self.dim_critic]
-        w_actor = W_lmbd_H[-self.dim_actor:]       
+        w_critic = w_all[:self.dim_critic]
+        lmbd = w_all[self.dim_critic]
+        w_actor = w_all[-self.dim_actor:]       
         
         u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )       
         
@@ -485,17 +488,17 @@ class ctrl_RL_stab:
         # R  = '\033[31m'
         # Bl  = '\033[30m'
         # headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']  
-        # dataRow = [constr_stab_par_decay(W_lmbd_H, y), constr_stab_LF_bound(W_lmbd_H, y), constr_stab_decay(W_lmbd_H, y), constr_stab_positive(W_lmbd_H, y)]
+        # dataRow = [constr_stab_par_decay(w_all, y), constr_stab_LF_bound(w_all, y), constr_stab_decay(w_all, y), constr_stab_positive(w_all, y)]
         # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
         # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
         # print(R+table+Bl)
         # /DEBUG ===================================================================        
         
         # Safety checker!
-        if constr_stab_par_decay(W_lmbd_H, y) >= eps1 or \
-            constr_stab_LF_bound(W_lmbd_H, y) >= eps2 or \
-            constr_stab_decay(W_lmbd_H, y) >= eps3 or \
-            constr_stab_positive(W_lmbd_H, y) >= eps4 :
+        if constr_stab_par_decay(w_all, y) >= eps1 or \
+            constr_stab_LF_bound(w_all, y) >= eps2 or \
+            constr_stab_decay(w_all, y) >= eps3 or \
+            constr_stab_positive(w_all, y) >= eps4 :
                 
             w_critic = self.w_critic_init
             lmbd = self.lmbd_init
@@ -514,7 +517,7 @@ class ctrl_RL_stab:
         R  = '\033[31m'
         Bl  = '\033[30m'
         headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']  
-        dataRow = [constr_stab_par_decay(W_lmbd_H, y), constr_stab_LF_bound(W_lmbd_H, y), constr_stab_decay(W_lmbd_H, y), constr_stab_positive(W_lmbd_H, y)]
+        dataRow = [constr_stab_par_decay(w_all, y), constr_stab_LF_bound(w_all, y), constr_stab_decay(w_all, y), constr_stab_positive(w_all, y)]
         rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
         table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
         print(R+table+Bl)
