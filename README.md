@@ -10,7 +10,7 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 ## Example run with a mobile robot simulation
 
 <p align="center">
-	<img src="./gfx/demo/3wheel_robot_exm_run.gif.gif" width=40% />
+	<img src="./gfx/demo/3wheel_robot_exm_run.gif" width=40% />
 </p>
 
 # General description
