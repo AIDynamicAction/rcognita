@@ -38,7 +38,7 @@ is_dyn_ctrl = 0
 # 'RQL'         - reinforcement learning: Q-learning with Ncritic roll-outs of running cost
 # 'SQL'         - reinforcement learning: stacked Q-learning
 # 'JACS'        - Joint actor-critic (stabilizing)
-ctrl_mode = 'JACS'
+ctrl_mode = 'SQL'
 
 #------------------------------------user settings : : digital elements
 # Digital elements sampling time

@@ -1003,7 +1003,7 @@ class ctrl_RL_pred:
         elif self.critic_struct == 4:
             return np.concatenate([ y**2, np.kron(y, u), u**2 ]) 
     
-    def _critic_cost(self, W, U, Y):
+    def _critic_cost(self, W):
         """
         Cost function of the critic
         
@@ -1014,14 +1014,14 @@ class ctrl_RL_pred:
         
         Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation 
        
-        """        
+        """
         Jc = 0
         
         for k in range(self.Ncritic-1, 0, -1):
-            yPrev = Y[k-1, :]
-            yNext = Y[k, :]
-            uPrev = U[k-1, :]
-            uNext = U[k, :]
+            yPrev = self.ybuffer[k-1, :]
+            yNext = self.ybuffer[k, :]
+            uPrev = self.ubuffer[k-1, :]
+            uNext = self.ubuffer[k, :]
             
             # Temporal difference
             e = W @ self._phi( yPrev, uPrev ) - self.gamma * self.Wprev @ self._phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
@@ -1031,7 +1031,7 @@ class ctrl_RL_pred:
         return Jc
         
         
-    def _critic(self, Wprev, Winit, U, Y):
+    def _critic(self):
         """
         This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_RL_pred._critic_cost`
 
@@ -1047,7 +1047,7 @@ class ctrl_RL_pred:
         
         bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
     
-        W = minimize(lambda W: self._critic_cost(W, U, Y), Winit, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
+        W = minimize(lambda W: self._critic_cost(W), self.Winit, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
         
         # DEBUG ===================================================================
         # print('-----------------------Critic parameters--------------------------')
@@ -1056,20 +1056,20 @@ class ctrl_RL_pred:
         
         return W
     
-    def _actor_cost(self, U, y, N, W, delta):
+    def _actor_cost(self, U, y):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
+        See class documentation
         
         Customization
         -------------        
         
-        Introduce your mode and the respective actor function in this method. Don't forget to provide description in the class documentation
+        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation
 
         """
         
-        myU = np.reshape(U, [N, self.dim_input])
+        myU = np.reshape(U, [self.Nactor, self.dim_input])
         
-        Y = np.zeros([N, self.dim_output])
+        Y = np.zeros([self.Nactor, self.dim_output])
         
         # System output prediction
         if not self.is_est_model:    # Via exogenously passed model
@@ -1077,26 +1077,26 @@ class ctrl_RL_pred:
             x = self.x_sys
             for k in range(1, self.Nactor):
                 # x = get_next_state(x, myU[k-1, :], delta)         TODO
-                x = x + delta * self.sys_rhs([], x, myU[k-1, :])  # Euler scheme
+                x = x + self.pred_step_size * self.sys_rhs([], x, myU[k-1, :])  # Euler scheme
                 
                 Y[k, :] = self.sys_out(x)
 
         elif self.is_est_model:    # Via estimated model
-            myU_upsampled = myU.repeat(int(delta/self.sampling_time), axis=0)
+            myU_upsampled = myU.repeat(int(self.pred_step_size/self.sampling_time), axis=0)
             Yupsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0est, y)
-            Y = Yupsampled[::int(delta/self.sampling_time)]
+            Y = Yupsampled[::int(self.pred_step_size/self.sampling_time)]
         
         J = 0         
         if self.mode=='MPC':
-            for k in range(N):
+            for k in range(self.Nactor):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
         elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of running cost
-             for k in range(N-1):
+             for k in range(self.Nactor-1):
                 J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
-             J += W @ self._phi( Y[-1, :], myU[-1, :] )
+             J += self.Wcurr @ self._phi( Y[-1, :], myU[-1, :] )
         elif self.mode=='SQL':     # RL: stacked Q-learning
-             for k in range(N): 
-                Q = W @ self._phi( Y[k, :], myU[k, :] )
+             for k in range(self.Nactor): 
+                Q = self.Wcurr @ self._phi( Y[k, :], myU[k, :] )
                 
                 # With state constraints via indicator function
                 # Q = W @ self._phi( Y[k, :], myU[k, :] ) + state_constraint_indicator(Y[k, 0])
@@ -1113,14 +1113,14 @@ class ctrl_RL_pred:
 
         return J
     
-    def _actor(self, y, Uinit, N, W, delta):
+    def _actor(self, y):
         """
-        See class documentation. Parameter ``delta`` here is a shorthand for ``pred_step_size``
+        See class documentation
         
         Customization
         -------------         
         
-        This method normally should not be altered, adjust :func:`~controllers.ctrl_RL_pred._actor_cost`, :func:`~controllers.ctrl_RL_pred._actor` instead.
+        This method normally should not be altered, adjust :func:`~controllers.ctrl_RL_pred._actor_cost` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -1161,18 +1161,16 @@ class ctrl_RL_pred:
        
         isGlobOpt = 0
         
-        myUinit = np.reshape(Uinit, [N*self.dim_input,])
-        
-        # state_constraint(myUinit, 1)
+        myUinit = np.reshape(self.Uinit, [self.Nactor*self.dim_input,])
         
         bnds = sp.optimize.Bounds(self.Umin, self.Umax, keep_feasible=True)
         
         try:
             if isGlobOpt:
                 minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                U = basinhopping(lambda U: self._actor_cost(U, y, N, W, delta), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
+                U = basinhopping(lambda U: self._actor_cost(U, y), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
             else:
-                U = minimize(lambda U: self._actor_cost(U, y, N, W, delta), myUinit, method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x        
+                U = minimize(lambda U: self._actor_cost(U, y), myUinit, method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x        
 
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
@@ -1227,10 +1225,10 @@ class ctrl_RL_pred:
                     return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
                 
                 elif not self.is_prob_noise and self.is_est_model:
-                    u = self._actor(y, self.Uinit, self.Nactor, [], self.pred_step_size, self.mode)
+                    u = self._actor(y)
 
                 elif self.mode=='MPC':
-                    u = self._actor(y, self.Uinit, self.Nactor, [], self.pred_step_size, self.mode)
+                    u = self._actor(y)
                     
             elif self.mode in ['RQL', 'SQL']:
                 # Critic
@@ -1244,40 +1242,23 @@ class ctrl_RL_pred:
                     # Update critic's internal clock
                     self.critic_clock = t
                     
-                    W = self._critic(self.Wprev, self.Winit, self.ubuffer[-self.Ncritic:,:], self.ybuffer[-self.Ncritic:,:])
-                    self.Wprev = W
+                    self.Wcurr = self._critic()
+                    self.Wprev = self.Wcurr
                     
                     # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
                     # self.Winit = self.Wprev
                     
                 else:
-                    W = self.Wprev
+                    self.Wcurr = self.Wprev
                     
                 # Actor. Apply control when model estimation phase is over
                 if self.is_prob_noise and self.is_est_model:
                     u = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
                 elif not self.is_prob_noise and self.is_est_model:
-                    u = self._actor(y, self.Uinit, self.Nactor, W, self.pred_step_size, self.mode)
-                    
-                    # [EXPERIMENTAL] Call MATLAB's actor
-                    # R1 = self.rcost_pars[0]
-                    # u = eng.optCtrl(eng.transpose(matlab.double(y.tolist())), eng.transpose(matlab.double(self.Uinit.tolist())), 
-                    #                                   matlab.double(R1[:dim_output,:dim_output].tolist()), matlab.double(R1[dim_output:,dim_output:].tolist()), self.gamma,
-                    #                                   self.Nactor,
-                    #                                   eng.transpose(matlab.double(W.tolist())), 
-                    #                                   matlab.double(self.my_model.A.tolist()), 
-                    #                                   matlab.double(self.my_model.B.tolist()), 
-                    #                                   matlab.double(self.my_model.C.tolist()), 
-                    #                                   matlab.double(self.my_model.D.tolist()), 
-                    #                                   eng.transpose(matlab.double(self.my_model.x0est.tolist())),
-                    #                                   self.mode, 
-                    #                                   eng.transpose(matlab.double(self.uMin.tolist())), 
-                    #                                   eng.transpose(matlab.double(self.uMax.tolist())), 
-                    #                                   dt, matlab.double(self.trueModelPars), self.critic_struct, nargout=1)
-                    # u = np.squeeze(np.asarray(u)
+                    u = self._actor(y)
                     
                 elif self.mode in ['RQL', 'SQL']:
-                    u = self._actor(y, self.Uinit, self.Nactor, W, self.pred_step_size, self.mode) 
+                    u = self._actor(y) 
             
             self.uCurr = u
             
