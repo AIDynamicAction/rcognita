@@ -77,11 +77,13 @@ class ctrl_RL_stab:
     
     ``_psi``: regressor
     
-    ``_psi`` is a vector, not matrix. So, if the environment is multi-input, the input is actually computed as
+    ``_psi`` is a vector, not a matrix. So, if the environment is multi-input, the input is actually computed as
     
     ``u = reshape(H, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )``
     
-    where ``y`` is the output
+    where ``y`` is the output.
+    
+    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.ctrl_RL_pred``
     
     Critic
     -----
@@ -103,7 +105,7 @@ class ctrl_RL_stab:
     """
     def __init__(self, dim_input, dim_output, mode='JACS', ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
                  sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, is_est_model=0, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
-                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct=1, actor_struct=1, rcost_struct='quadratic', rcost_pars=[], y_target=[],
+                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct='quad-nomix', actor_struct='quad-nomix', rcost_struct='quadratic', rcost_pars=[], y_target=[],
                  safe_ctrl=[], safe_decay_rate=[]):
         
         self.dim_input = dim_input
@@ -171,15 +173,15 @@ class ctrl_RL_stab:
         
         self.icost_val = 0
 
-        if self.critic_struct == 1:
+        if self.critic_struct == 'quad-lin':
             self.dim_critic = int( (  self.dim_output  + 1 ) *  self.dim_output / 2 + self.dim_output )
             self.Wmin = -1e3*np.ones(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic) 
-        elif self.critic_struct == 2:
+        elif self.critic_struct == 'quadratic':
             self.dim_critic = int( ( self.dim_output + 1 ) * self.dim_output / 2 ).astype(int)
             self.Wmin = np.zeros(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)    
-        elif self.critic_struct == 3:
+        elif self.critic_struct == 'quad-nomix':
             self.dim_critic = self.dim_output
             self.Wmin = np.zeros(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)
@@ -193,11 +195,11 @@ class ctrl_RL_stab:
         self.lmbd_min = 0
         self.lmbd_max = 1
            
-        if self.actor_struct == 1:
+        if self.actor_struct == 'quad-lin':
             self.dim_actor_per_input = int( ( self.dim_output  + 1 ) *  self.dim_output / 2 + self.dim_output ) 
-        elif self.actor_struct == 2:
+        elif self.actor_struct == 'quadratic':
             self.dim_actor_per_input = int( ( self.dim_output + 1 ) * self.dim_output / 2 )
-        elif self.actor_struct == 3:
+        elif self.actor_struct == 'quad-nomix':
             self.dim_actor_per_input = self.dim_output
           
         self.dim_actor = self.dim_actor_per_input * self.dim_input   
@@ -307,11 +309,11 @@ class ctrl_RL_stab:
         else:
             chi = y - self.y_target
         
-        if self.critic_struct == 1:
+        if self.critic_struct == 'quad-lin':
             return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
-        elif self.critic_struct == 2:
+        elif self.critic_struct == 'quadratic':
             return np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
-        elif self.critic_struct == 3:
+        elif self.critic_struct == 'quad-nomix':
             return chi * chi
         
     def _psi(self, y):
@@ -322,11 +324,11 @@ class ctrl_RL_stab:
 
         chi = y
 
-        if self.actor_struct == 1:
+        if self.actor_struct == 'quad-lin':
             return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
-        elif self.actor_struct == 2:
+        elif self.actor_struct == 'quadratic':
             return np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
-        elif self.actor_struct == 3:
+        elif self.actor_struct == 'quad-nomix':
             return chi * chi        
 
     def _actor_critic_cost(self, W_lmbd_u):
@@ -624,7 +626,7 @@ class ctrl_RL_pred:
             \\end{array}             
         
         See :func:`~controllers.ctrl_RL_pred._estimate_model`. This is just a particular model estimator.
-        When customizing, :func:`~controllers.ctrl_RL_pred._estimateModel` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
+        When customizing, :func:`~controllers.ctrl_RL_pred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
         neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
     model_est_checks : : natural number
         Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
@@ -648,18 +650,18 @@ class ctrl_RL_pred:
     
            * - Mode
              - Structure
-           * - 1
+           * - 'quad-lin'
              - Quadratic-linear
-           * - 2
+           * - 'quadratic'
              - Quadratic
-           * - 3
+           * - 'quad-nomix'
              - Quadratic, no mixed terms
-           * - 4
+           * - 'quad-mix'
              - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, 
                where :math:`w` is the critic's weight vector
        
         *Add your specification into the table when customizing the critic* 
-    rcost_struct : : natural number
+    rcost_struct : : string
         Choice of the running cost structure.
         
         Currently available:
@@ -670,9 +672,9 @@ class ctrl_RL_pred:
     
            * - Mode
              - Structure
-           * - 1
+           * - 'quadratic'
              - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcost_pars`` should be ``[R1]``
-           * - 2
+           * - 'biquadratic'
              - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcost_pars``
                should be ``[R1, R2]``   
         
@@ -688,7 +690,7 @@ class ctrl_RL_pred:
          
     def __init__(self, dim_input, dim_output, mode='MPC', ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
                  sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, is_est_model=0, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
-                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct=1, rcost_struct=1, rcost_pars=[], y_target=[]):
+                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct='quad-nomix', rcost_struct='quadratic', rcost_pars=[], y_target=[]):
         
         self.dim_input = dim_input
         self.dim_output = dim_output
@@ -755,19 +757,19 @@ class ctrl_RL_pred:
         
         self.icost_val = 0
 
-        if self.critic_struct == 1:
+        if self.critic_struct == 'quad-lin':
             self.dim_critic = int( ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 + (self.dim_output + self.dim_input) ) 
             self.Wmin = -1e3*np.ones(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic) 
-        elif self.critic_struct == 2:
+        elif self.critic_struct == 'quadratic':
             self.dim_critic = int( ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 )
             self.Wmin = np.zeros(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)    
-        elif self.critic_struct == 3:
+        elif self.critic_struct == 'quad-nomix':
             self.dim_critic = self.dim_output + self.dim_input
             self.Wmin = np.zeros(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)    
-        elif self.critic_struct == 4:
+        elif self.critic_struct == 'quad-mix':
             self.dim_critic = int( self.dim_output + self.dim_output * self.dim_input + self.dim_input )
             self.Wmin = -1e3*np.ones(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)
@@ -996,13 +998,13 @@ class ctrl_RL_pred:
         else:
             chi = np.concatenate([y - self.y_target, u])
         
-        if self.critic_struct == 1:
+        if self.critic_struct == 'quad-lin':
             return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
-        elif self.critic_struct == 2:
+        elif self.critic_struct == 'quadratic':
             return np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
-        elif self.critic_struct == 3:
+        elif self.critic_struct == 'quad-nomix':
             return chi * chi    
-        elif self.critic_struct == 4:
+        elif self.critic_struct == 'quad-mix':
             return np.concatenate([ y**2, np.kron(y, u), u**2 ]) 
     
     def _critic_cost(self, W):

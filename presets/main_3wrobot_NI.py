@@ -38,7 +38,7 @@ is_dyn_ctrl = 0
 # 'RQL'         - reinforcement learning: Q-learning with Ncritic roll-outs of running cost
 # 'SQL'         - reinforcement learning: stacked Q-learning
 # 'JACS'        - Joint actor-critic (stabilizing)
-ctrl_mode = 'SQL'
+ctrl_mode = 'JACS'
 
 #------------------------------------user settings : : digital elements
 # Digital elements sampling time
@@ -130,12 +130,12 @@ gamma = 1
 critic_period = 5*dt # [s]
 
 # Actor and critic structure choice
-# 1 - quadratic-linear
-# 2 - quadratic
-# 3 - quadratic, no mixed terms
-# 4 - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...] u[0]^2 + ... (only Q-function critic)
-critic_struct = 3
-actor_struct = 3
+# 'quad-lin' - quadratic-linear
+# 'quadratic' - quadratic
+# 'quad-nomix' - quadratic, no mixed terms
+# 'quad-mix' - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...] u[0]^2 + ... (only Q-function critic)
+critic_struct = 'quad-nomix'
+actor_struct = 'quad-nomix'
 
 #------------------------------------initialization : : system
 my_3wrobot_NI = systems.sys_3wrobot_NI(sys_type="diff_eqn", dim_state=dim_state, dim_input=dim_input, dim_output=dim_output, dim_disturb=dim_disturb,
