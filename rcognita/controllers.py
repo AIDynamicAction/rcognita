@@ -39,7 +39,7 @@ from tabulate import tabulate
 
 def ctrl_selector(t, y, uMan, ctrl_nominal, ctrl_benchmarking, mode):
     """
-    Main interface for different controllers
+    Main interface for various controllers
 
     Parameters
     ----------
@@ -83,7 +83,7 @@ class ctrl_RL_stab:
     
     where ``y`` is the output.
     
-    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.ctrl_RL_pred``
+    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.ctrl_opt_pred``
     
     Critic
     -----
@@ -562,9 +562,9 @@ class ctrl_RL_stab:
         else:
             return self.uCurr        
 
-class ctrl_RL_pred:  
+class ctrl_opt_pred:  
     """
-    Class of predictive controllers, primarily MPC and predictive RL
+    Class of predictive optimal controllers, primarily MPC and predictive RL, that optimize a finite-horizon cost
         
     Attributes
     ----------
@@ -609,7 +609,7 @@ class ctrl_RL_pred:
     prob_noise_pow : : number
         Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
     is_est_model : : number
-        Flag whether to estimate a system model. See :func:`~controllers.ctrl_RL_pred._estimate_model` 
+        Flag whether to estimate a system model. See :func:`~controllers.ctrl_opt_pred._estimate_model` 
     model_est_stage : : number
         Initial time segment to fill the estimator's buffer before applying optimal control (in seconds)      
     model_est_period : : number
@@ -625,8 +625,8 @@ class ctrl_RL_pred:
     			y^+  & = C \\hat x + D u,
             \\end{array}             
         
-        See :func:`~controllers.ctrl_RL_pred._estimate_model`. This is just a particular model estimator.
-        When customizing, :func:`~controllers.ctrl_RL_pred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
+        See :func:`~controllers.ctrl_opt_pred._estimate_model`. This is just a particular model estimator.
+        When customizing, :func:`~controllers.ctrl_opt_pred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
         neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
     model_est_checks : : natural number
         Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
@@ -990,7 +990,7 @@ class ctrl_RL_pred:
         
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
         If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``W @ self._phi( y, u )`` 
-        within :func:`~controllers.ctrl_RL_pred._critic_cost`
+        within :func:`~controllers.ctrl_opt_pred._critic_cost`
         
         """
         if self.y_target == []:
@@ -1037,7 +1037,7 @@ class ctrl_RL_pred:
         
     def _critic(self):
         """
-        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_RL_pred._critic_cost`
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_opt_pred._critic_cost`
 
         """        
         
@@ -1124,7 +1124,7 @@ class ctrl_RL_pred:
         Customization
         -------------         
         
-        This method normally should not be altered, adjust :func:`~controllers.ctrl_RL_pred._actor_cost` instead.
+        This method normally should not be altered, adjust :func:`~controllers.ctrl_opt_pred._actor_cost` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -1212,7 +1212,7 @@ class ctrl_RL_pred:
         Customization
         -------------         
         
-        Add your modes, that you introduced in :func:`~controllers.ctrl_RL_pred._actor_cost`, here
+        Add your modes, that you introduced in :func:`~controllers.ctrl_opt_pred._actor_cost`, here
 
         """       
         
