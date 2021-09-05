@@ -85,12 +85,16 @@ Miscellaneous settings:
 
 ## Advanced customization
 
+[To table of content](#Table-of-content)
+
 * **Custom environments**: realize `system` interface in the `systems` module. You might need nominal controllers for that, as well as an animator, a logger etc.
 * **Custom running cost**: adjust `rcost` in controllers
 * **Custom AC method**: simplest way -- by adding a new mode and updating `_actor_cost`, `_critic_cost' and, possibly, `_actor`, `_critic`. For deep net AC structures, use, say, [PyTorch](https://pytorch.org/)
 * **Custom model estimator**: so far, the framework offers a state-space model structure. You may use any other one. In case of neural nets, use, e.g., [PyTorch](https://pytorch.org/)
 
 ## Experimental things
+
+[To table of content](#Table-of-content)
 
 An interface for dynamical controllers, which can be considered as extensions of the system state vector, is provided in `_ctrl_dyn` of the `systems` module.
 RL is usually understood as a static controller, i.e., a one which assigns actions directly to outputs.
@@ -104,5 +108,9 @@ Updates to come.
 
 ## Closing remarks
 
-Please contact [me](mailto:p.osinenko@skoltech.ru) for any inquiries and don't forget to give me credit for usage of this code.
+Please contact [me](mailto:p.osinenko@gmail.com) for any inquiries and don't forget to give me credit for usage of this code.
 If you are interested in stacked Q-learning, kindly read the [paper](https://arxiv.org/abs/2007.03999).
+
+[To table of content](#Table-of-content)
+
+Original author: P. Osinenko, 2020
