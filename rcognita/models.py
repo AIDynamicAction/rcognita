@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Module for models
+This module contains classes to be used in fitting system models
+
+Currently under construction
+
 """
 
 # class models

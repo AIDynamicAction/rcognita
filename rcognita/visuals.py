@@ -1,32 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Jan 10 12:08:00 2021
+This module contains an interface class `animator` along with concrete realizations, each of which is associated with a corresponding system
 
-@author: Pavel Osinenko
-"""
+Remarks: 
 
-"""
-=============================================================================
-rcognita
+- All vectors are treated as of type [n,]
+- All buffers are treated as of type [L, n] where each row is a vector
+- Buffers are updated from bottom to top
 
-https://github.com/AIDynamicAction/rcognita
-
-Python framework for hybrid simulation of predictive reinforcement learning agents and classical controllers 
-
-=============================================================================
-
-This module:
-
-visuals
-
-=============================================================================
-
-Remark: 
-
-All vectors are treated as of type [n,]
-All buffers are treated as of type [L, n] where each row is a vector
-Buffers are updated from bottom to top
 """
 
 import numpy as np

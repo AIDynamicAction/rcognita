@@ -1,34 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Jan 10 12:38:59 2021
+This module contains the logger interface along with concrete realizations for each separate system
 
-@author: Pavel Osinenko
+Remarks: 
+
+- All vectors are treated as of type [n,]
+- All buffers are treated as of type [L, n] where each row is a vector
+- Buffers are updated from bottom to top
+
 """
 
-"""
-=============================================================================
-rcognita
-
-https://github.com/AIDynamicAction/rcognita
-
-Python framework for hybrid simulation of predictive reinforcement learning agents and classical controllers 
-
-=============================================================================
-
-This module:
-
-loggers
-
-=============================================================================
-
-Remark: 
-
-All vectors are treated as of type [n,]
-All buffers are treated as of type [L, n] where each row is a vector
-Buffers are updated from bottom to top
-"""
-# !pip install tabulate <-- to install this
 from tabulate import tabulate
 
 import csv

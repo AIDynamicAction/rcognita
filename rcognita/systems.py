@@ -1,32 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jan  8 12:22:22 2021
+This module contains a generic interface for systems (environments) as well as concrete systems as realizations of the former
 
-@author: Pavel Osinenko
-"""
+Remarks: 
 
-"""
-=============================================================================
-rcognita
+- All vectors are treated as of type [n,]
+- All buffers are treated as of type [L, n] where each row is a vector
+- Buffers are updated from bottom to top
 
-https://github.com/AIDynamicAction/rcognita
-
-Python framework for hybrid simulation of predictive reinforcement learning agents and classical controllers 
-
-=============================================================================
-
-This module:
-
-systems (a.k.a. environments)
-
-=============================================================================
-
-Remark: 
-
-All vectors are treated as of type [n,]
-All buffers are treated as of type [L, n] where each row is a vector
-Buffers are updated from bottom to top
 """
 
 import numpy as np

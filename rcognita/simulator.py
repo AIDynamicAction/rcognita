@@ -1,32 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jan  8 15:06:03 2021
+This module contains one single class that simulates controller-system (agent-environment) loops.
+The system can be of three types:
+- discrete-time deterministic
+- continuous-time deterministic or stochastic
+- discrete time stochastic (to model Markov decision processes)
 
-@author: Pavel Osinenko
-"""
+Remarks: 
 
-"""
-=============================================================================
-rcognita
+- All vectors are treated as of type [n,]
+- All buffers are treated as of type [L, n] where each row is a vector
+- Buffers are updated from bottom to top
 
-https://github.com/AIDynamicAction/rcognita
-
-Python framework for hybrid simulation of predictive reinforcement learning agents and classical controllers 
-
-=============================================================================
-
-This module:
-
-simulator
-
-=============================================================================
-
-Remark: 
-
-All vectors are treated as of type [n,]
-All buffers are treated as of type [L, n] where each row is a vector
-Buffers are updated from bottom to top
 """
 
 import numpy as np
