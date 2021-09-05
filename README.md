@@ -1,11 +1,10 @@
 <p align="center">
-	<img src="./gfx/logo/rcognita-logo.png" width=40% height=40% />
+<img src="./gfx/logo/rcognita-logo.png" width=40% height=40% />
 </p>
-
 
 `rcognita` is a framework for hybrid agent-enviroment simultion.
 The hybrid setting here means the actions are updated at discrete moments in time, whereas the environment dynamics are modelled time-continuous.
-**A detailed documentation is available [here](https://aidynamicaction.github.io/rcognita/)**.
+A detailed documentation is available [here](https://aidynamicaction.github.io/rcognita/).
 
 ## Example run with a mobile robot simulation
 
@@ -61,6 +60,49 @@ Auxiliary modules of the package are `models` and `utilities` which provide auxi
 
 # Usage
 
-## Preliminaries
-
 [To table of content](#Table-of-content)
+
+After the package is installed, you may just `python` run one of the presets found [here](./presets).
+The naming concention is `main_ACRONYM`, where `ACRONYM` is actually related to the system (environment). 
+You may create your own by analogy.
+
+## Settings
+
+These are made in a preset file.
+Some are more or less self-evident, like `is_log_data`.
+The crucial ones are:
+
+* `dt`: [in seconds] controller sampling time. Relevant if the system itself is continuous as a physical process while the controller is digital
+* `Nactor`: number of prediction steps. `Nactor=1` means the controller is purely **data-driven** and doesn't use prediction. Say, stacked QL will turn into the usual SARSA (in VI form)
+* `pred_step_size`: [in seconds] determines how fine the resolution of the prediction horizon is. Larger `pred_step_size` will result in a larger effective horizon length
+* 
+
+Miscellaneous settings:
+
+* `t0`, `t1`: start time and stop time of one episode (usually, `t0=0` and `t1` is the episode duration)
+* `atol, rtol`: sensitivity of the solver. The lower the values, the more accurate the simulation results are
+* `Nruns`: number of episodes. After an episode, the system is reset to the initial state, whereas all the learned parameters continue to get updated. This emulates multi-episode RL
+
+## Advanced customization
+
+* **Custom environments**: realize `system` interface in the `systems` module. You might need nominal controllers for that, as well as an animator, a logger etc.
+* **Custom running cost**: adjust `rcost` in controllers
+* **Custom AC method**: simplest way -- by adding a new mode and updating `_actor_cost`, `_critic_cost' and, possibly, `_actor`, `_critic`. For deep net AC structures, use, say, [PyTorch](https://pytorch.org/)
+* **Custom model estimator**: so far, the framework offers a state-space model structure. You may use any other one. In case of neural nets, use, e.g., [PyTorch](https://pytorch.org/)
+
+## Experimental things
+
+An interface for dynamical controllers, which can be considered as extensions of the system state vector, is provided in `_ctrl_dyn` of the `systems` module.
+RL is usually understood as a static controller, i.e., a one which assigns actions directly to outputs.
+A dynamical controller does this indirectly, via an internal state as intermediate link. 
+ynamical controllers can overcome some limitations of static controllers.
+
+The package was tested with online model estimation using [SIPPY](https://github.com/CPCLAB-UNIPI/SIPPY). So far, there is no straightforward way to install it (under Windows at least).
+The functionality is implemented and enabled via `is_est_model`.
+Related parameters can be found in the documentation of the `ctrl_opt_pred` class.
+Updates to come.
+
+## Closing remarks
+
+Please contact [me](mailto:p.osinenko@skoltech.ru) for any inquiries and don't forget to give me credit for usage of this code.
+If you are interested in stacked Q-learning, kindly read the [paper](https://arxiv.org/abs/2007.03999).
