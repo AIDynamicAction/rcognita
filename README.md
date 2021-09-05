@@ -21,7 +21,7 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 # Installation
 
 This instruction is for Unix-based systems, assuming a terminal.
-Run:
+Run (you might need superuser privileges for this):
 
 ```
 git clone https://github.com/AIDynamicAction/rcognita
