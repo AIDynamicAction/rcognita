@@ -19,10 +19,10 @@
    .. autosummary::
       :toctree: sub
    
-      sys_2tank
-      sys_3wrobot
-      sys_3wrobot_NI
-      system
+      Sys2Tank
+      Sys3WRobot
+      Sys3WRobotNI
+      System
    
    
 

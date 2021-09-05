@@ -19,7 +19,7 @@
    .. autosummary::
       :toctree: sub
    
-      simulator
+      Simulator
    
    
 

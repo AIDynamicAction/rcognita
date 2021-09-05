@@ -36,8 +36,8 @@
    .. autosummary::
       :toctree: sub
    
+      DFilter
       ZOH
-      dfilter
    
    
 

@@ -19,11 +19,11 @@
    .. autosummary::
       :toctree: sub
    
-      animator
-      animator_2tank
-      animator_3wrobot
-      animator_3wrobot_NI
-      robot_marker
+      Animator
+      Animator2Tank
+      Animator3WRobot
+      Animator3WRobotNI
+      RobotMarker
    
    
 

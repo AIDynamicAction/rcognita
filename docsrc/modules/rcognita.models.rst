@@ -19,8 +19,8 @@
    .. autosummary::
       :toctree: sub
    
-      model_NN
-      model_SS
+      ModelNN
+      ModelSS
    
    
 

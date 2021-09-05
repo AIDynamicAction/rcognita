@@ -38,8 +38,8 @@
   <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="rcognita.loggers.logger" href="sub/rcognita.loggers.logger.html" />
-    <link rel="prev" title="rcognita.controllers.ctrl_nominal_3wrobot_NI" href="sub/rcognita.controllers.ctrl_nominal_3wrobot_NI.html" /> 
+    <link rel="next" title="rcognita.loggers.Logger" href="sub/rcognita.loggers.Logger.html" />
+    <link rel="prev" title="rcognita.controllers.CtrlRLStab" href="sub/rcognita.controllers.CtrlRLStab.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -96,10 +96,10 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="rcognita.controllers.html"><code class="docutils literal notranslate"><span class="pre">rcognita.controllers</span></code></a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#"><code class="docutils literal notranslate"><span class="pre">rcognita.loggers</span></code></a><ul>
-<li class="toctree-l2"><a class="reference internal" href="sub/rcognita.loggers.logger.html">rcognita.loggers.logger</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sub/rcognita.loggers.logger_2tank.html">rcognita.loggers.logger_2tank</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sub/rcognita.loggers.logger_3wrobot.html">rcognita.loggers.logger_3wrobot</a></li>
-<li class="toctree-l2"><a class="reference internal" href="sub/rcognita.loggers.logger_3wrobot_NI.html">rcognita.loggers.logger_3wrobot_NI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sub/rcognita.loggers.Logger.html">rcognita.loggers.Logger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sub/rcognita.loggers.Logger2Tank.html">rcognita.loggers.Logger2Tank</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sub/rcognita.loggers.Logger3WRobot.html">rcognita.loggers.Logger3WRobot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sub/rcognita.loggers.Logger3WRobotNI.html">rcognita.loggers.Logger3WRobotNI</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="rcognita.models.html"><code class="docutils literal notranslate"><span class="pre">rcognita.models</span></code></a></li>
@@ -185,16 +185,16 @@
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.loggers.logger.html#rcognita.loggers.logger" title="rcognita.loggers.logger"><code class="xref py py-obj docutils literal notranslate"><span class="pre">logger</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.loggers.Logger.html#rcognita.loggers.Logger" title="rcognita.loggers.Logger"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Logger</span></code></a>()</p></td>
 <td><p>Interface class for data loggers. Concrete loggers, associated with concrete system-controller setups, are should be built upon this class. To design a concrete logger: inherit this class, override:     | <code class="xref py py-func docutils literal notranslate"><span class="pre">print_sim_step()</span></code> :     | print a row of data of a single simulation step, typically into the console (required)     | <code class="xref py py-func docutils literal notranslate"><span class="pre">log_data_row()</span></code> :     | same as above, but write to a file (required).</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.loggers.logger_2tank.html#rcognita.loggers.logger_2tank" title="rcognita.loggers.logger_2tank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">logger_2tank</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.loggers.Logger2Tank.html#rcognita.loggers.Logger2Tank" title="rcognita.loggers.Logger2Tank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Logger2Tank</span></code></a>()</p></td>
 <td><p>Data logger for a 2-tank system.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.loggers.logger_3wrobot.html#rcognita.loggers.logger_3wrobot" title="rcognita.loggers.logger_3wrobot"><code class="xref py py-obj docutils literal notranslate"><span class="pre">logger_3wrobot</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.loggers.Logger3WRobot.html#rcognita.loggers.Logger3WRobot" title="rcognita.loggers.Logger3WRobot"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Logger3WRobot</span></code></a>()</p></td>
 <td><p>Data logger for a 3-wheel robot with dynamic actuators.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.loggers.logger_3wrobot_NI.html#rcognita.loggers.logger_3wrobot_NI" title="rcognita.loggers.logger_3wrobot_NI"><code class="xref py py-obj docutils literal notranslate"><span class="pre">logger_3wrobot_NI</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.loggers.Logger3WRobotNI.html#rcognita.loggers.Logger3WRobotNI" title="rcognita.loggers.Logger3WRobotNI"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Logger3WRobotNI</span></code></a>()</p></td>
 <td><p>Data logger for a 3-wheel robot with static actuators.</p></td>
 </tr>
 </tbody>
@@ -209,10 +209,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="sub/rcognita.loggers.logger.html" class="btn btn-neutral float-right" title="rcognita.loggers.logger" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="sub/rcognita.loggers.Logger.html" class="btn btn-neutral float-right" title="rcognita.loggers.Logger" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="sub/rcognita.controllers.ctrl_nominal_3wrobot_NI.html" class="btn btn-neutral float-left" title="rcognita.controllers.ctrl_nominal_3wrobot_NI" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="sub/rcognita.controllers.CtrlRLStab.html" class="btn btn-neutral float-left" title="rcognita.controllers.CtrlRLStab" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

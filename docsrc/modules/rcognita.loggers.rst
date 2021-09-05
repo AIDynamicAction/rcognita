@@ -19,10 +19,10 @@
    .. autosummary::
       :toctree: sub
    
-      logger
-      logger_2tank
-      logger_3wrobot
-      logger_3wrobot_NI
+      Logger
+      Logger2Tank
+      Logger3WRobot
+      Logger3WRobotNI
    
    
 

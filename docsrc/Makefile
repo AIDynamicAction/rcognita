@@ -16,7 +16,7 @@ BUILDDIR      = build
 
 
 github:
-    @make clean
+	@make clean
 	@rm -rf ./modules/*
 	@make html
 	@rm -rf ../docs/*
