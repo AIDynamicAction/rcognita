@@ -1,5 +1,5 @@
 <p align="center">
-<img src="./gfx/logo/rcognita-logo.png" width=40% height=40% />
+<img src="https://raw.githubusercontent.com/AIDynamicAction/rcognita/master/gfx/logo/rcognita-logo.png" width=40% height=40% />
 </p>
 
 `rcognita` is a framework for hybrid agent-enviroment simultion.
@@ -9,7 +9,7 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 ## Example run with a mobile robot simulation
 
 <p align="center">
-	<img src="./gfx/demo/3wheel_robot_exm_run.gif" width=40% />
+	<img src="https://raw.githubusercontent.com/AIDynamicAction/rcognita/master/gfx/demo/3wheel_robot_exm_run.gif" width=40% />
 </p>
 
 # Table of content

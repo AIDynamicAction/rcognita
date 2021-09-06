@@ -12,6 +12,7 @@ setup(
     ],
     packages=find_packages(),
     long_description=open(join(dirname(__file__), 'README.md')).read(),
+    long_description_content_type='text/markdown',
     install_requires=[
         "matplotlib >= 3.2.2",
         "mpldatacursor == 0.7.1",
