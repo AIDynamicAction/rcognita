@@ -24,16 +24,16 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 
 # Installation
 
-This instruction is for Unix-based systems, assuming a terminal.
+This instruction is for Unix-based systems, assuming a terminal and Python3 interpreter.
 Run (you might need superuser privileges for this):
 
 ```
 git clone https://github.com/AIDynamicAction/rcognita
 cd rcognita
-python setup.py install
+python3 setup.py install
 ```
 
-Notice that your interpreter might be called something else, say, `python3`
+Notice that your Python 3 interpreter might be called something else, say, just `python`
 
 # General description
 
