@@ -5,6 +5,13 @@ Preset: kinematic model of a 3-wheel robot
 
 """
 
+try:
+    import rcognita
+except ModuleNotFoundError:
+    import os, sys
+    sys.path.insert(0, os.path.abspath(__file__ + '/../..'))
+
+
 import warnings
 import csv
 from datetime import datetime
