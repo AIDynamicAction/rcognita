@@ -151,5 +151,3 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
-main_2tank.py
-main_3wrobot.py
