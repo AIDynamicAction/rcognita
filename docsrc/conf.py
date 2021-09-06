@@ -12,19 +12,19 @@
 #
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
-sys.path.insert(0, os.path.abspath('../rcognita'))
+sys.path.insert(0, os.path.abspath(__file__ + '/../..'))
+sys.path.insert(0, os.path.abspath(__file__ + '/../../rcognita'))
 
 # -- Project information -----------------------------------------------------
 
-
+from rcognita import __version__
 
 project = 'rcognita'
 copyright = '2021, AIDA Lab'
 author = 'AIDA Lab'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = __version__
 
 html_logo="logo.png"
 

@@ -1,8 +1,14 @@
 from setuptools import setup, find_packages
 from os.path import join, dirname
+import sys, os
+
+sys.path.insert(0, os.path.abspath(__file__ + '/..'))
+from rcognita import __version__
+# import rcognita; print(rcognita.__file__)
+
 setup(
     name='rcognita',
-    version='0.1',
+    version=__version__,
     author="AIDynamicAction",
     description="rcognita is a framework for hybrid agent-environment loop simulation, with a library of predictive and stabilizing reinforcement learning setups",
     url="https://github.com/AIDynamicAction/rcognita",
