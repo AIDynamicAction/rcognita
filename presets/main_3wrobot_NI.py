@@ -13,7 +13,10 @@ import rcognita
 if os.path.abspath(rcognita.__file__ + "/../..") == PARENT_DIR:
     info = f"this script is being run using " \
            f"rcognita ({rcognita.__version__}) " \
-           f"from cloned repository at '{PARENT_DIR}'."
+           f"located in cloned repository at '{PARENT_DIR}'. " \
+           f"If you are willing to use your locally installed rcognita, " \
+           f"remove this script ('{os.path.basename(__file__)}') from " \
+           f"'rcognita/presets'."
 else:
     info = f"this script is being run using " \
            f"locally installed rcognita ({rcognita.__version__})."         
