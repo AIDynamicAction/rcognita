@@ -1,42 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Jan 10 13:40:52 2021
-
-@author: Pavel Osinenko
-"""
+Preset: nonlinear double-tank system
 
 """
-=============================================================================
-rcognita
-
-https://github.com/AIDynamicAction/rcognita
-
-Python framework for hybrid simulation of predictive reinforcement learning agents and classical controllers 
-
-=============================================================================
-
-This module:
-
-main loop for a 2-wheel system with nonlinearity
-
-Reference: https://apmonitor.com/do/index.php/Main/LevelControl
-
-=============================================================================
-
-Remark: 
-
-All vectors are treated as of type [n,]
-All buffers are treated as of type [L, n] where each row is a vector
-Buffers are updated from bottom to top
-"""
-
-try:
-    import rcognita
-except ModuleNotFoundError:
-    import os, sys
-    sys.path.insert(0, os.path.abspath(__file__ + '/../..'))
-
 
 import warnings
 import csv
@@ -50,6 +17,28 @@ from rcognita import controllers
 from rcognita import loggers
 from rcognita import visuals
 from rcognita.utilities import on_key_press
+
+#------------------------------------user settings : : main switches
+is_log_data = 0
+is_visualization = 1
+is_print_sim_step = 1
+
+is_disturb = 0
+
+# Static or dynamic controller
+is_dyn_ctrl = 0
+
+# Control mode
+#
+# Modes with online model estimation are experimental
+#
+# 'manual'      - manual constant control (only for basic testing)
+# 'nominal'     - nominal parking controller (for benchmarking optimal controllers)
+# 'MPC'         - model-predictive control (MPC)
+# 'RQL'         - reinforcement learning: Q-learning with Ncritic roll-outs of running cost
+# 'SQL'         - reinforcement learning: stacked Q-learning
+# 'JACS'        - Joint actor-critic (stabilizing)
+ctrl_mode = 'MPC'
 
 #------------------------------------user settings : : system
 # System
@@ -93,6 +82,7 @@ dt = 0.1 # [s], controller sampling time
 # diffFiltOrd = 4
 
 #------------------------------------user settings : : model estimator
+is_est_model = 0
 model_est_stage = 2 # [s]
 model_est_period = 1*dt # [s]
 
@@ -126,10 +116,10 @@ buffer_size = 200
 #------------------------------------user settings : : RL
 # Running cost structure and parameters
 # Notation: chi = [y, u]
-# 1     - quadratic chi.T R1 chi 
-# 2     - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
+# 'quadratic'     - quadratic chi.T R1 chi 
+# 'biquadratic'     - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
 # R1, R2 must be positive-definite
-rcost_struct = 1
+rcost_struct = 'quadratic'
 
 R1 = np.diag([10, 10, 0])  # No mixed terms, full-state measurement
 
@@ -145,36 +135,13 @@ gamma = 1
 # Critic is updated every critic_period seconds
 critic_period = 5*dt # [s]
 
-# Critic structure choice
-# 1 - quadratic-linear
-# 2 - quadratic
-# 3 - quadratic, no mixed terms
-# 4 - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...] u[0]^2 + ... 
-critic_struct = 3
-
-#------------------------------------user settings : : main switches
-is_log_data = 0
-is_visualization = 1
-is_print_sim_step = 1
-
-is_disturb = 0
-
-# Static or dynamic controller
-is_dyn_ctrl = 0
-
-# Control mode
-#
-#   Modes with online model estimation are experimental
-#
-# 0     - manual constant control (only for basic testing)
-# -1    - nominal controller (for benchmarking optimal controllers)
-# 1     - model-predictive control (MPC). Prediction via discretized true model
-# 2     - adaptive MPC. Prediction via estimated model
-# 3     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via discretized true model
-# 4     - RL: Q-learning with Ncritic roll-outs of running cost. Prediction via estimated model
-# 5     - RL: stacked Q-learning. Prediction via discretized true model
-# 6     - RL: stacked Q-learning. Prediction via estimated model
-ctrl_mode = 1
+# Actor and critic structure choice
+# 'quad-lin' - quadratic-linear
+# 'quadratic' - quadratic
+# 'quad-nomix' - quadratic, no mixed terms
+# 'quad-mix' - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...] u[0]^2 + ... (only Q-function critic)
+critic_struct = 'quad-nomix'
+actor_struct = 'quad-nomix'
 
 #------------------------------------initialization : : system
 ctrl_bnds = np.array([[u_min], [u_max]]).T
@@ -197,18 +164,18 @@ y0 = my_2tank.out(x0)
 # ... 2 # NN
 
 #------------------------------------initialization : : controller
-my_ctrl_RL = controllers.CtrlOptPred(dim_input, dim_output,
-                                      ctrl_mode, ctrl_bnds=ctrl_bnds,
-                                      t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
-                                      sys_rhs=my_2tank._state_dyn, sys_out=my_2tank.out,
-                                      # get_next_state = get_next_state, sys_out = sys_out,
-                                      x_sys=x0,
-                                      prob_noise_pow = prob_noise_pow, model_est_stage=model_est_stage, model_est_period=model_est_period,
-                                      buffer_size=buffer_size,
-                                      model_order=model_order, model_est_checks=model_est_checks,
-                                      gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct,
-                                      rcost_pars=[R1],
-                                      y_target=y_target)
+my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input, dim_output,
+                                            ctrl_mode, ctrl_bnds=ctrl_bnds,
+                                            t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
+                                            sys_rhs=my_2tank._state_dyn, sys_out=my_2tank.out,
+                                            # get_next_state = get_next_state, sys_out = sys_out,
+                                            x_sys=x0,
+                                            prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
+                                            buffer_size=buffer_size,
+                                            model_order=model_order, model_est_checks=model_est_checks,
+                                            gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct,
+                                            rcost_pars=[R1],
+                                            y_target=y_target)
 
 #------------------------------------initialization : : simulator
 my_simulator = simulator.Simulator(sys_type="diff_eqn",
@@ -241,7 +208,7 @@ if is_visualization:
     
     ksi0 = my_simulator.ksi
     
-    my_animator = visuals.Animator2Tank(objects=(my_simulator, my_2tank, [], my_ctrl_RL, datafiles, controllers.ctrl_selector, my_logger),
+    my_animator = visuals.Animator2Tank(objects=(my_simulator, my_2tank, [], my_ctrl_opt_pred, datafiles, controllers.ctrl_selector, my_logger),
                                            pars=(x0, u0, t0, t1, ksi0, ctrl_mode, uMan, u_min, u_max, Nruns,
                                                  is_print_sim_step, is_log_data, 0, [], y_target))
 
@@ -268,18 +235,18 @@ else:
         
         t, x, y, ksi = my_simulator.get_sim_step_data()
         
-        u = controllers.ctrl_selector(t, y, uMan, [], my_ctrl_RL, ctrl_mode)
+        u = controllers.ctrl_selector(t, y, uMan, [], my_ctrl_opt_pred, ctrl_mode)
         
         my_2tank.receive_action(u)
-        my_ctrl_RL.receive_sys_state(my_2tank._x)
-        my_ctrl_RL.upd_icost(y, u)
+        my_ctrl_opt_pred.receive_sys_state(my_2tank._x)
+        my_ctrl_opt_pred.upd_icost(y, u)
         
         h1 = ksi[0]
         h2 = ksi[1]
         p = u
         
-        r = my_ctrl_RL.rcost(y, u)
-        icost = my_ctrl_RL.icost_val
+        r = my_ctrl_opt_pred.rcost(y, u)
+        icost = my_ctrl_opt_pred.icost_val
         
         if is_print_sim_step:
             my_logger.print_sim_step(t, h1, h2, p, r, icost)
@@ -305,7 +272,7 @@ else:
             my_simulator.y = ksi0
             
             if ctrl_mode > 0:
-                my_ctrl_RL.reset(t0)
+                my_ctrl_opt_pred.reset(t0)
             else:
                 pass
             
