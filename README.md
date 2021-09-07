@@ -81,6 +81,8 @@ You may create your own by analogy.
 
 ## Settings
 
+[To table of content](#Table-of-content)
+
 These are made in a preset file.
 Some are more or less self-evident, like `is_log_data`.
 The crucial ones are:
