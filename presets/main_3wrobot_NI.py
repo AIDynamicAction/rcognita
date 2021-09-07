@@ -5,12 +5,20 @@ Preset: kinematic model of a 3-wheel robot
 
 """
 
-try:
-    import rcognita
-except ModuleNotFoundError:
-    import os, sys
-    sys.path.insert(0, os.path.abspath(__file__ + '/../..'))
+import os, sys
+PARENT_DIR = os.path.abspath(__file__ + '/../..')
+sys.path.insert(0, PARENT_DIR)
+import rcognita
 
+if os.path.abspath(rcognita.__file__ + "/../..") == PARENT_DIR:
+    info = f"this script is being run using " \
+           f"rcognita ({rcognita.__version__}) " \
+           f"from cloned repository at '{PARENT_DIR}'."
+else:
+    info = f"this script is being run using " \
+           f"locally installed rcognita ({rcognita.__version__})."         
+print("INFO:", info)
+    
 
 import warnings
 import csv
