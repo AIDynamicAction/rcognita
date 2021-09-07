@@ -121,10 +121,10 @@ Updates to come.
 
 # Closing remarks
 
+[To table of content](#Table-of-content)
+
 Please contact [me](mailto:p.osinenko@gmail.com) for any inquiries and don't forget to give me credit for usage of this code.
 If you are interested in stacked Q-learning, kindly read the [paper](https://arxiv.org/abs/2007.03999).
-
-[To table of content](#Table-of-content)
 
 ```
 @misc{rcognita00,
