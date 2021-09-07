@@ -126,4 +126,13 @@ If you are interested in stacked Q-learning, kindly read the [paper](https://arx
 
 [To table of content](#Table-of-content)
 
+```
+@misc{rcognita00,
+author =   {Pavel Osinenko},
+title =    {Rcognita: a framework for hybrid agent-enviroment simultion},
+howpublished = {\url{https://github.com/AIDynamicAction/rcognita}},
+year = {2020}
+}
+```
+
 Original author: P. Osinenko, 2020
