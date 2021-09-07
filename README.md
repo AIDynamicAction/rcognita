@@ -135,7 +135,7 @@ Please contact [me](mailto:p.osinenko@gmail.com) for any inquiries and don't for
 If you are interested in stacked Q-learning, kindly read the [paper](https://arxiv.org/abs/2007.03999).
 
 ```
-@misc{rcognita00,
+@misc{rcognita2020,
 author =   {Pavel Osinenko},
 title =    {Rcognita: a framework for hybrid agent-enviroment simultion},
 howpublished = {\url{https://github.com/AIDynamicAction/rcognita}},
