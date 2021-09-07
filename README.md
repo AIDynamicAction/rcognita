@@ -24,7 +24,13 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 
 # Installation
 
-This instruction is for Unix-based systems, assuming a terminal and Python3 interpreter.
+Run in terminal:
+```
+pip3 install rcognita
+```
+
+Alternatively one can install the package direcly form the 'master' branch.
+The following instruction is for Unix-based systems, assuming a terminal and Python3 interpreter.
 
 ```
 git clone https://github.com/AIDynamicAction/rcognita
