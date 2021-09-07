@@ -19,7 +19,8 @@ if os.path.abspath(rcognita.__file__ + "/../..") == PARENT_DIR:
            f"'rcognita/presets'."
 else:
     info = f"this script is being run using " \
-           f"locally installed rcognita ({rcognita.__version__})."         
+           f"locally installed rcognita ({rcognita.__version__}). " \
+           f"Make sure the versions match."
 print("INFO:", info)
 
 
