@@ -1,8 +1,7 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Preset: kinematic model of a 3-wheel robot
+Preset: nonlinear double-tank system
 
 """
 
@@ -23,7 +22,7 @@ else:
            f"locally installed rcognita ({rcognita.__version__}). " \
            f"Make sure the versions match."
 print("INFO:", info)
-    
+
 
 import warnings
 import csv
@@ -58,40 +57,48 @@ is_dyn_ctrl = 0
 # 'RQL'         - reinforcement learning: Q-learning with Ncritic roll-outs of running cost
 # 'SQL'         - reinforcement learning: stacked Q-learning
 # 'JACS'        - Joint actor-critic (stabilizing)
-ctrl_mode = 'JACS'
-
-#------------------------------------user settings : : digital elements
-# Digital elements sampling time
-dt = 0.01 # [s], controller sampling time
+ctrl_mode = 'MPC'
 
 #------------------------------------user settings : : system
 # System
-dim_state = 3
-dim_input = 2
-dim_output = dim_state
-dim_disturb = 0
+dim_state = 2
+dim_input = 1
+dim_output = 2
+dim_disturb = 1
+
+# System parameters
+tau1 = 18.4
+tau2 = 24.4
+K1 = 1.3
+K2 = 1
+K3 = 0.2
 
 #------------------------------------user settings : : simulation
 t0 = 0
-t1 = 5
+t1 = 100
 Nruns = 1
 
-x0 = np.zeros(dim_state)
-x0[0] = 5
-x0[1] = 5
-x0[2] = -3*np.pi/4
+# x0 = np.ones(dim_state)
+x0 = np.array([0.25, 0.75])
 
-u0 = 0 * np.ones(dim_input)
+u0 = 0.5 * np.ones(dim_input)
+
+q0 = 0 * np.ones(dim_disturb)
 
 # Solver
 atol = 1e-5
 rtol = 1e-3
 
-# xy-plane
-xMin = -10
-xMax = 10
-yMin = -10
-yMax = 10
+#------------------------------------user settings : : digital elements
+# Digital elements sampling time
+dt = 0.1 # [s], controller sampling time
+# sampleFreq = 1/dt # [Hz]
+
+# Parameters
+# cutoff = 1 # [Hz]
+
+# Digital differentiator filter order
+# diffFiltOrd = 4
 
 #------------------------------------user settings : : model estimator
 is_est_model = 0
@@ -110,24 +117,20 @@ model_est_checks = 0
 # u[1]: Steering torque M [N m]
 
 # Manual control
-v_man = -3
-omega_man = -1
-uMan = np.array([v_man, omega_man])
+uMan = np.array([0.1])
 
 # Control constraints
-v_min = -25
-v_max = 25
-omega_min = -5
-omega_max = 5
+u_min = 0
+u_max = 1
 
 # Control horizon length
-Nactor = 3
+Nactor = 5
 
 # Should be a multiple of dt
-pred_step_size = 0.25*dt # [s]
+pred_step_size = 5*dt # [s]
 
 # Size of data buffers (used, e.g., in model estimation and critic)
-buffer_size = 4 # 200 -- used for predictive RL
+buffer_size = 200
 
 #------------------------------------user settings : : RL
 # Running cost structure and parameters
@@ -137,11 +140,13 @@ buffer_size = 4 # 200 -- used for predictive RL
 # R1, R2 must be positive-definite
 rcost_struct = 'quadratic'
 
-# R1 = np.diag([10, 100, 1, 1, 1])  # "Standard choice"
-R1 = np.diag([10, 10, 1, 0, 0])  # No mixed terms, full-state measurement
+R1 = np.diag([10, 10, 0])  # No mixed terms, full-state measurement
+
+# Target filling of the tanks
+y_target = np.array([0.5, 0.5])
 
 # Critic stack size, not greater than buffer_size
-Ncritic = 4 # 50 -- used for predictive RL
+Ncritic = 50
 
 # Discounting factor
 gamma = 1
@@ -158,17 +163,13 @@ critic_struct = 'quad-nomix'
 actor_struct = 'quad-nomix'
 
 #------------------------------------initialization : : system
-my_3wrobot_NI = systems.Sys3WRobotNI(sys_type="diff_eqn", dim_state=dim_state, dim_input=dim_input, dim_output=dim_output, dim_disturb=dim_disturb,
-                                     pars=[],
-                                     ctrl_bnds=np.array([[v_min, v_max], [omega_min, omega_max]]),
-                                     is_dyn_ctrl=is_dyn_ctrl, is_disturb=is_disturb, pars_disturb=[])
+ctrl_bnds = np.array([[u_min], [u_max]]).T
 
-y0 = my_3wrobot_NI.out(x0)
+my_2tank = systems.Sys2Tank(sys_type="diff_eqn", dim_state=dim_state, dim_input=dim_input, dim_output=dim_output, dim_disturb=dim_disturb,
+                             pars=[tau1, tau2, K1, K2, K3],
+                             ctrl_bnds=ctrl_bnds)
 
-xCoord0 = x0[0]
-yCoord0 = x0[1]
-alpha0 = x0[2]
-alpha_deg_0 = alpha0/2/np.pi
+y0 = my_2tank.out(x0)
 
 #------------------------------------initialization : : model
 
@@ -182,49 +183,24 @@ alpha_deg_0 = alpha0/2/np.pi
 # ... 2 # NN
 
 #------------------------------------initialization : : controller
-ctrl_bnds = np.array([[v_min, v_max], [omega_min, omega_max]])
-
-my_ctrl_nominal_3wrobot_NI = controllers.CtrlNominal3WRobotNI(ctrl_gain=0.5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
-
-# Predictive optimal controller
 my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input, dim_output,
-                                           ctrl_mode, ctrl_bnds=ctrl_bnds,
-                                           t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
-                                           sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
-                                           # get_next_state = get_next_state, sys_out = sys_out,
-                                           x_sys=x0,
-                                           prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
-                                           buffer_size=buffer_size,
-                                           model_order=model_order, model_est_checks=model_est_checks,
-                                           gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
-                                           y_target=[])
+                                            ctrl_mode, ctrl_bnds=ctrl_bnds,
+                                            t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
+                                            sys_rhs=my_2tank._state_dyn, sys_out=my_2tank.out,
+                                            # get_next_state = get_next_state, sys_out = sys_out,
+                                            x_sys=x0,
+                                            prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
+                                            buffer_size=buffer_size,
+                                            model_order=model_order, model_est_checks=model_est_checks,
+                                            gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct,
+                                            rcost_pars=[R1],
+                                            y_target=y_target)
 
-# Stabilizing RL agent
-my_ctrl_RL_stab = controllers.CtrlRLStab(dim_input, dim_output,
-                                         ctrl_mode, ctrl_bnds=ctrl_bnds,
-                                         t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
-                                         sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
-                                         # get_next_state = get_next_state, sys_out = sys_out,
-                                         x_sys=x0,
-                                         prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
-                                         buffer_size=buffer_size,
-                                         model_order=model_order, model_est_checks=model_est_checks,
-                                         gamma=gamma, Ncritic=Ncritic, critic_period=critic_period,
-                                         critic_struct=critic_struct, actor_struct=actor_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
-                                         y_target=[],
-                                         safe_ctrl=my_ctrl_nominal_3wrobot_NI, safe_decay_rate=1e-4)
-
-if ctrl_mode == 'JACS':
-    my_ctrl_benchm = my_ctrl_RL_stab
-else:
-    my_ctrl_benchm = my_ctrl_opt_pred
-    
 #------------------------------------initialization : : simulator
 my_simulator = simulator.Simulator(sys_type="diff_eqn",
-                                   closed_loop_rhs=my_3wrobot_NI.closed_loop_rhs,
-                                   sys_out=my_3wrobot_NI.out,
-                                   x0=x0, q0=[], u0=u0, t0=t0, t1=t1, dt=dt, max_step=dt/2, first_step=1e-6, atol=atol, rtol=rtol,
-                                   is_disturb=is_disturb, is_dyn_ctrl=is_dyn_ctrl)
+                                   closed_loop_rhs=my_2tank.closed_loop_rhs,
+                                   sys_out=my_2tank.out,
+                                   x0=x0, q0=q0, u0=u0, t0=t0, t1=t1, dt=dt, max_step=dt/2, first_step=1e-6, atol=atol, rtol=rtol, is_dyn_ctrl=is_dyn_ctrl)
 
 #------------------------------------initialization : : logger
 data_folder = 'data'
@@ -233,34 +209,32 @@ date = datetime.now().strftime("%Y-%m-%d")
 time = datetime.now().strftime("%Hh%Mm%Ss")
 datafiles = [None] * Nruns
 for k in range(0, Nruns):
-    datafiles[k] = data_folder + '/RLsim__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+    datafiles[k] = data_folder + '/RLsim__2tank' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
     
     if is_log_data:
         with open(datafiles[k], 'w', newline='') as outfile:
             writer = csv.writer(outfile)
-            writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'r', 'int r dt', 'v [m/s]', 'omega [rad/s]'] )
+            writer.writerow(['t [s]', 'h1', 'h2', 'p', 'r', 'int r dt'])
 
 # Do not display annoying warnings when print is on
 if is_print_sim_step:
     warnings.filterwarnings('ignore')
     
-my_logger = loggers.Logger3WRobotNI()
+my_logger = loggers.Logger2Tank()
 
 #------------------------------------main loop
 if is_visualization:
     
     ksi0 = my_simulator.ksi
     
-    my_animator = visuals.Animator3WRobotNI(objects=(my_simulator, my_3wrobot_NI, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, datafiles, controllers.ctrl_selector, my_logger),
-                                            pars=(x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrl_mode, uMan, v_min, omega_min, v_max, omega_max, Nruns,
-                                                    is_print_sim_step, is_log_data, 0, []))
+    my_animator = visuals.Animator2Tank(objects=(my_simulator, my_2tank, [], my_ctrl_opt_pred, datafiles, controllers.ctrl_selector, my_logger),
+                                           pars=(x0, u0, t0, t1, ksi0, ctrl_mode, uMan, u_min, u_max, Nruns,
+                                                 is_print_sim_step, is_log_data, 0, [], y_target))
 
     anm = animation.FuncAnimation(my_animator.fig_sim,
                                   my_animator.animate,
                                   init_func=my_animator.init_anim,
                                   blit=False, interval=dt/1e6, repeat=False)
-    
-    my_animator.get_anm(anm)
     
     cId = my_animator.fig_sim.canvas.mpl_connect('key_press_event', lambda event: on_key_press(event, anm))
     
@@ -280,24 +254,24 @@ else:
         
         t, x, y, ksi = my_simulator.get_sim_step_data()
         
-        u = controllers.ctrl_selector(t, y, uMan, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, ctrl_mode)
+        u = controllers.ctrl_selector(t, y, uMan, [], my_ctrl_opt_pred, ctrl_mode)
         
-        my_3wrobot_NI.receive_action(u)
-        my_ctrl_benchm.receive_sys_state(my_3wrobot_NI._x)
-        my_ctrl_benchm.upd_icost(y, u)
+        my_2tank.receive_action(u)
+        my_ctrl_opt_pred.receive_sys_state(my_2tank._x)
+        my_ctrl_opt_pred.upd_icost(y, u)
         
-        xCoord = ksi[0]
-        yCoord = ksi[1]
-        alpha = ksi[2]
+        h1 = ksi[0]
+        h2 = ksi[1]
+        p = u
         
-        r = my_ctrl_benchm.rcost(y, u)
-        icost = my_ctrl_benchm.icost_val
+        r = my_ctrl_opt_pred.rcost(y, u)
+        icost = my_ctrl_opt_pred.icost_val
         
         if is_print_sim_step:
-            my_logger.print_sim_step(t, xCoord, yCoord, alpha, r, icost, u)
+            my_logger.print_sim_step(t, h1, h2, p, r, icost)
             
         if is_log_data:
-            my_logger.log_data_row(datafile, t, xCoord, yCoord, alpha, r, icost, u)
+            my_logger.log_data_row(datafile, t, h1, h2, p, r, icost)
         
         if t >= t1:  
             if is_print_sim_step:
@@ -316,9 +290,9 @@ else:
             my_simulator.t = t0
             my_simulator.y = ksi0
             
-            if ctrl_mode != 'nominal':
-                my_ctrl_benchm.reset(t0)
+            if ctrl_mode > 0:
+                my_ctrl_opt_pred.reset(t0)
             else:
-                my_ctrl_nominal_3wrobot_NI.reset(t0)
+                pass
             
             icost = 0  
