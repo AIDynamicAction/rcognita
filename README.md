@@ -96,7 +96,6 @@ The crucial ones are:
 * `dt`: [in seconds] controller sampling time. Relevant if the system itself is continuous as a physical process while the controller is digital
 * `Nactor`: number of prediction steps. `Nactor=1` means the controller is purely **data-driven** and doesn't use prediction. Say, stacked QL will turn into the usual SARSA (in VI form)
 * `pred_step_size`: [in seconds] determines how fine the resolution of the prediction horizon is. Larger `pred_step_size` will result in a larger effective horizon length
-* 
 
 Miscellaneous settings:
 
