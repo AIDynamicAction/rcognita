@@ -121,10 +121,19 @@ RL is usually understood as a static controller, i.e., a one which assigns actio
 A dynamical controller does this indirectly, via an internal state as intermediate link. 
 ynamical controllers can overcome some limitations of static controllers.
 
-The package was tested with online model estimation using [SIPPY](https://github.com/CPCLAB-UNIPI/SIPPY). So far, there is no straightforward way to install it (under Windows at least).
-The functionality is implemented and enabled via `is_est_model`.
-Related parameters can be found in the documentation of the `ctrl_opt_pred` class.
-Updates to come.
+The package was tested with online model estimation using [SIPPY](https://github.com/CPCLAB-UNIPI/SIPPY). 
+The respective functionality is implemented and enabled via `is_est_model`.
+Related parameters can be found in the documentation of the `CtrlOptPred` class.
+
+To install `SIPPY`, install `scikit-build` first.
+For instance, if you're using Anaconda, type :
+
+```
+conda install scikit-build
+git clone https://github.com/CPCLAB-UNIPI/SIPPY
+cd SIPPY
+python3 setup.py install
+```
 
 # Closing remarks
 
@@ -132,6 +141,10 @@ Updates to come.
 
 Please contact [me](mailto:p.osinenko@gmail.com) for any inquiries and don't forget to give me credit for usage of this code.
 If you are interested in stacked Q-learning, kindly read the [paper](https://arxiv.org/abs/2007.03999).
+
+Original author: P. Osinenko, 2020
+
+## Bibtex reference
 
 ```
 @misc{rcognita2020,
@@ -141,5 +154,3 @@ howpublished = {\url{https://github.com/AIDynamicAction/rcognita}},
 year = {2020}
 }
 ```
-
-Original author: P. Osinenko, 2020
