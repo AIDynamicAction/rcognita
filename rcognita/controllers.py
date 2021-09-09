@@ -599,13 +599,13 @@ class CtrlRLStab:
         
         # DEBUG ===================================================================   
         # ================================Constraint debugger
-        R  = '\033[31m'
-        Bl  = '\033[30m'
-        headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']  
-        dataRow = [constr_stab_par_decay(w_all, observation), constr_stab_LF_bound(w_all, observation), constr_stab_decay(w_all, observation), constr_stab_positive(w_all, observation)]
-        rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
-        table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
-        print(R+table+Bl)
+        # R  = '\033[31m'
+        # Bl  = '\033[30m'
+        # headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']  
+        # dataRow = [constr_stab_par_decay(w_all, observation), constr_stab_LF_bound(w_all, observation), constr_stab_decay(w_all, observation), constr_stab_positive(w_all, observation)]
+        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
+        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+        # print(R+table+Bl)
         # /DEBUG ===================================================================  
         
         # STUB ===================================================================   
@@ -1686,13 +1686,13 @@ class CtrlNominal3WRobot:
 
             # DEBUG ===================================================================   
             # ================================LF debugger
-            R  = '\033[31m'
-            Bl  = '\033[30m'
-            headerRow = ['L']  
-            dataRow = [self.compute_LF(observation)]
-            rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
-            table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
-            print(R+table+Bl)
+            # R  = '\033[31m'
+            # Bl  = '\033[30m'
+            # headerRow = ['L']  
+            # dataRow = [self.compute_LF(observation)]
+            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
+            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+            # print(R+table+Bl)
             # /DEBUG ===================================================================             
 
             return action    

@@ -76,12 +76,12 @@ t0 = 0
 t1 = 5
 Nruns = 1
 
-x0 = np.zeros(dim_state)
-x0[0] = 5
-x0[1] = 5
-x0[2] = -3*np.pi/4
+state_init = np.zeros(dim_state)
+state_init[0] = 5
+state_init[1] = 5
+state_init[2] = -3*np.pi/4
 
-u0 = 0 * np.ones(dim_input)
+action_init = 0 * np.ones(dim_input)
 
 # Solver
 atol = 1e-5
@@ -106,13 +106,13 @@ prob_noise_pow = 8
 model_est_checks = 0
 
 #------------------------------------user settings : : controller
-# u[0]: Pushing force F [N]
-# u[1]: Steering torque M [N m]
+# action[0]: Pushing force F [N]
+# action[1]: Steering torque M [N m]
 
 # Manual control
 v_man = -3
 omega_man = -1
-uMan = np.array([v_man, omega_man])
+action_manual = np.array([v_man, omega_man])
 
 # Control constraints
 v_min = -25
@@ -131,7 +131,7 @@ buffer_size = 4 # 200 -- used for predictive RL
 
 #------------------------------------user settings : : RL
 # Running cost structure and parameters
-# Notation: chi = [y, u]
+# Notation: chi = [observation, action]
 # 'quadratic'     - quadratic chi.T R1 chi 
 # 'biquadratic'     - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
 # R1, R2 must be positive-definite
@@ -153,33 +153,30 @@ critic_period = 5*dt # [s]
 # 'quad-lin' - quadratic-linear
 # 'quadratic' - quadratic
 # 'quad-nomix' - quadratic, no mixed terms
-# 'quad-mix' - W[0] y[0]^2 + ... W[p-1] y[p-1]^2 + W[p] y[0] u[0] + ... W[...] u[0]^2 + ... (only Q-function critic)
+# 'quad-mix' - w_critic[0] observation[0]^2 + ... w_critic[p-1] observation[p-1]^2 + w_critic[p] observation[0] action[0] + ... w_critic[...] action[0]^2 + ... (only Q-function critic)
 critic_struct = 'quad-nomix'
 actor_struct = 'quad-nomix'
 
 #------------------------------------initialization : : system
-my_3wrobot_NI = systems.Sys3WRobotNI(sys_type="diff_eqn", dim_state=dim_state, dim_input=dim_input, dim_output=dim_output, dim_disturb=dim_disturb,
+my_3wrobot_NI = systems.Sys3WRobotNI(sys_type="diff_eqn",
+                                     dim_state=dim_state,
+                                     dim_input=dim_input,
+                                     dim_output=dim_output,
+                                     dim_disturb=dim_disturb,
                                      pars=[],
                                      ctrl_bnds=np.array([[v_min, v_max], [omega_min, omega_max]]),
-                                     is_dyn_ctrl=is_dyn_ctrl, is_disturb=is_disturb, pars_disturb=[])
+                                     is_dyn_ctrl=is_dyn_ctrl,
+                                     is_disturb=is_disturb,
+                                     pars_disturb=[])
 
-y0 = my_3wrobot_NI.out(x0)
+observation_init = my_3wrobot_NI.out(state_init)
 
-xCoord0 = x0[0]
-yCoord0 = x0[1]
-alpha0 = x0[2]
+xCoord0 = state_init[0]
+yCoord0 = state_init[1]
+alpha0 = state_init[2]
 alpha_deg_0 = alpha0/2/np.pi
 
 #------------------------------------initialization : : model
-
-# Euler scheme
-# get_next_state = lambda x: x + dt * self.sys_rhs([], x, myU[k-1, :], [])
-# sys_out = my_3wrobot.out
-
-# If is_use_offline_est_model
-# if model_type == 1 # SS
-# get_next_state = lambda x: my_NN.get_next(x, ...dt)
-# ... 2 # NN
 
 #------------------------------------initialization : : controller
 ctrl_bnds = np.array([[v_min, v_max], [omega_min, omega_max]])
@@ -187,32 +184,61 @@ ctrl_bnds = np.array([[v_min, v_max], [omega_min, omega_max]])
 my_ctrl_nominal_3wrobot_NI = controllers.CtrlNominal3WRobotNI(ctrl_gain=0.5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
 
 # Predictive optimal controller
-my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input, dim_output,
-                                           ctrl_mode, ctrl_bnds=ctrl_bnds,
-                                           t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
-                                           sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
-                                           # get_next_state = get_next_state, sys_out = sys_out,
-                                           state_sys=x0,
-                                           prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
+my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
+                                           dim_output,
+                                           ctrl_mode,
+                                           ctrl_bnds=ctrl_bnds,
+                                           t0=t0,
+                                           sampling_time=dt,
+                                           Nactor=Nactor,
+                                           pred_step_size=pred_step_size,
+                                           sys_rhs=my_3wrobot_NI._state_dyn,
+                                           sys_out=my_3wrobot_NI.out,
+                                           state_sys=state_init,
+                                           prob_noise_pow = prob_noise_pow,
+                                           is_est_model=is_est_model,
+                                           model_est_stage=model_est_stage,
+                                           model_est_period=model_est_period,
                                            buffer_size=buffer_size,
-                                           model_order=model_order, model_est_checks=model_est_checks,
-                                           gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
+                                           model_order=model_order,
+                                           model_est_checks=model_est_checks,
+                                           gamma=gamma,
+                                           Ncritic=Ncritic,
+                                           critic_period=critic_period,
+                                           critic_struct=critic_struct,
+                                           rcost_struct=rcost_struct,
+                                           rcost_pars=[R1],
                                            observation_target=[])
 
 # Stabilizing RL agent
-my_ctrl_RL_stab = controllers.CtrlRLStab(dim_input, dim_output,
-                                         ctrl_mode, ctrl_bnds=ctrl_bnds,
-                                         t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
-                                         sys_rhs=my_3wrobot_NI._state_dyn, sys_out=my_3wrobot_NI.out,
-                                         # get_next_state = get_next_state, sys_out = sys_out,
-                                         state_sys=x0,
-                                         prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
+my_ctrl_RL_stab = controllers.CtrlRLStab(dim_input,
+                                         dim_output,
+                                         ctrl_mode,
+                                         ctrl_bnds=ctrl_bnds,
+                                         t0=t0,
+                                         sampling_time=dt,
+                                         Nactor=Nactor,
+                                         pred_step_size=pred_step_size,
+                                         sys_rhs=my_3wrobot_NI._state_dyn,
+                                         sys_out=my_3wrobot_NI.out,
+                                         state_sys=state_init,
+                                         prob_noise_pow = prob_noise_pow,
+                                         is_est_model=is_est_model,
+                                         model_est_stage=model_est_stage,
+                                         model_est_period=model_est_period,
                                          buffer_size=buffer_size,
-                                         model_order=model_order, model_est_checks=model_est_checks,
-                                         gamma=gamma, Ncritic=Ncritic, critic_period=critic_period,
-                                         critic_struct=critic_struct, actor_struct=actor_struct, rcost_struct=rcost_struct, rcost_pars=[R1],
+                                         model_order=model_order,
+                                         model_est_checks=model_est_checks,
+                                         gamma=gamma,
+                                         Ncritic=Ncritic,
+                                         critic_period=critic_period,
+                                         critic_struct=critic_struct,
+                                         actor_struct=actor_struct,
+                                         rcost_struct=rcost_struct,
+                                         rcost_pars=[R1],
                                          observation_target=[],
-                                         safe_ctrl=my_ctrl_nominal_3wrobot_NI, safe_decay_rate=1e-4)
+                                         safe_ctrl=my_ctrl_nominal_3wrobot_NI,
+                                         safe_decay_rate=1e-4)
 
 if ctrl_mode == 'JACS':
     my_ctrl_benchm = my_ctrl_RL_stab
@@ -223,8 +249,18 @@ else:
 my_simulator = simulator.Simulator(sys_type="diff_eqn",
                                    closed_loop_rhs=my_3wrobot_NI.closed_loop_rhs,
                                    sys_out=my_3wrobot_NI.out,
-                                   x0=x0, q0=[], u0=u0, t0=t0, t1=t1, dt=dt, max_step=dt/2, first_step=1e-6, atol=atol, rtol=rtol,
-                                   is_disturb=is_disturb, is_dyn_ctrl=is_dyn_ctrl)
+                                   state_init=state_init,
+                                   disturb_init=[],
+                                   action_init=action_init,
+                                   t0=t0,
+                                   t1=t1,
+                                   dt=dt,
+                                   max_step=dt/2,
+                                   first_step=1e-6,
+                                   atol=atol,
+                                   rtol=rtol,
+                                   is_disturb=is_disturb,
+                                   is_dyn_ctrl=is_dyn_ctrl)
 
 #------------------------------------initialization : : logger
 data_folder = 'data'
@@ -249,10 +285,31 @@ my_logger = loggers.Logger3WRobotNI()
 #------------------------------------main loop
 if is_visualization:
     
-    ksi0 = my_simulator.ksi
+    state_full_init = my_simulator.state_full
     
-    my_animator = visuals.Animator3WRobotNI(objects=(my_simulator, my_3wrobot_NI, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, datafiles, controllers.ctrl_selector, my_logger),
-                                            pars=(x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrl_mode, uMan, v_min, omega_min, v_max, omega_max, Nruns,
+    my_animator = visuals.Animator3WRobotNI(objects=(my_simulator,
+                                                     my_3wrobot_NI,
+                                                     my_ctrl_nominal_3wrobot_NI,
+                                                     my_ctrl_benchm,
+                                                     datafiles,
+                                                     controllers.ctrl_selector,
+                                                     my_logger),
+                                            pars=(state_init,
+                                                  action_init,
+                                                  t0,
+                                                  t1,
+                                                  state_full_init,
+                                                  xMin,
+                                                  xMax,
+                                                  yMin,
+                                                  yMax,
+                                                  ctrl_mode,
+                                                  action_manual,
+                                                  v_min,
+                                                  omega_min,
+                                                  v_max,
+                                                  omega_max,
+                                                  Nruns,
                                                     is_print_sim_step, is_log_data, 0, []))
 
     anm = animation.FuncAnimation(my_animator.fig_sim,
@@ -278,26 +335,26 @@ else:
         
         my_simulator.sim_step()
         
-        t, x, y, ksi = my_simulator.get_sim_step_data()
+        t, state, observation, state_full = my_simulator.get_sim_step_data()
         
-        u = controllers.ctrl_selector(t, y, uMan, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, ctrl_mode)
+        action = controllers.ctrl_selector(t, observation, action_manual, my_ctrl_nominal_3wrobot_NI, my_ctrl_benchm, ctrl_mode)
         
-        my_3wrobot_NI.receive_action(u)
-        my_ctrl_benchm.receive_sys_state(my_3wrobot_NI._x)
-        my_ctrl_benchm.upd_icost(y, u)
+        my_3wrobot_NI.receive_action(action)
+        my_ctrl_benchm.receive_sys_state(my_3wrobot_NI._state)
+        my_ctrl_benchm.upd_icost(observation, action)
         
-        xCoord = ksi[0]
-        yCoord = ksi[1]
-        alpha = ksi[2]
+        xCoord = state_full[0]
+        yCoord = state_full[1]
+        alpha = state_full[2]
         
-        r = my_ctrl_benchm.rcost(y, u)
+        r = my_ctrl_benchm.rcost(observation, action)
         icost = my_ctrl_benchm.icost_val
         
         if is_print_sim_step:
-            my_logger.print_sim_step(t, xCoord, yCoord, alpha, r, icost, u)
+            my_logger.print_sim_step(t, xCoord, yCoord, alpha, r, icost, action)
             
         if is_log_data:
-            my_logger.log_data_row(datafile, t, xCoord, yCoord, alpha, r, icost, u)
+            my_logger.log_data_row(datafile, t, xCoord, yCoord, alpha, r, icost, action)
         
         if t >= t1:  
             if is_print_sim_step:
@@ -314,7 +371,7 @@ else:
             # Reset simulator
             my_simulator.status = 'running'
             my_simulator.t = t0
-            my_simulator.y = ksi0
+            my_simulator.observation = state_full_init
             
             if ctrl_mode != 'nominal':
                 my_ctrl_benchm.reset(t0)

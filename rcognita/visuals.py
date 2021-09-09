@@ -105,22 +105,41 @@ class Animator3WRobot(Animator):
         # Unpack entities
         self.simulator, self.sys, self.ctrl_nominal, self.ctrl_benchmarking, self.datafiles, self.ctrl_selector, self.logger = self.objects
         
-        x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrl_mode, uMan, Fmin, Mmin, Fmax, Mmax, Nruns, is_print_sim_step, is_log_data, is_playback, r0 = self.pars
+        state_init, \
+        action_init, \
+        t0,  \
+        t1, \
+        state_full_init, \
+        xMin, \
+        xMax, \
+        yMin, \
+        yMax, \
+        ctrl_mode, \
+        action_manual, \
+        Fmin, \
+        Mmin, \
+        Fmax, \
+        Mmax, \
+        Nruns, \
+        is_print_sim_step, \
+        is_log_data, \
+        is_playback, \
+        r0 = self.pars
         
         # Store some parameters for later use
         self.t0 = t0
-        self.ksi0 = ksi0
+        self.state_full_init = state_full_init
         self.t1 = t1
         self.ctrl_mode = ctrl_mode
-        self.uMan = uMan
+        self.action_manual = action_manual
         self.Nruns = Nruns
         self.is_print_sim_step = is_print_sim_step
         self.is_log_data = is_log_data
         self.is_playback = is_playback
         
-        xCoord0 = x0[0]
-        yCoord0 = x0[1]
-        alpha0 = x0[2]
+        xCoord0 = state_init[0]
+        yCoord0 = state_init[1]
+        alpha0 = state_init[2]
         alpha_deg0 = alpha0/2/np.pi
         
         plt.close('all')
@@ -129,7 +148,7 @@ class Animator3WRobot(Animator):
             
         # xy plane  
         self.axs_xy_plane = self.fig_sim.add_subplot(221, autoscale_on=False, xlim=(xMin,xMax), ylim=(yMin,yMax),
-                                                  xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+                                                  xlabel='state [m]', ylabel='observation [m]', title='Pause - space, q - quit, click - data cursor')
         self.axs_xy_plane.set_aspect('equal', adjustable='box')
         self.axs_xy_plane.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
         self.axs_xy_plane.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
@@ -138,22 +157,22 @@ class Animator3WRobot(Animator):
         text_time = 't = {time:2.3f}'.format(time = t0)
         self.text_time_handle = self.axs_xy_plane.text(0.05, 0.95, text_time,
                                                    horizontalalignment='left', verticalalignment='center', transform=self.axs_xy_plane.transAxes)
-        self.axs_xy_plane.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+        self.axs_xy_plane.format_coord = lambda state,observation: '%2.2f, %2.2f' % (state,observation)
         
         # Solution
         self.axs_sol = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
         self.axs_sol.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-        self.line_norm, = self.axs_sol.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+        self.line_norm, = self.axs_sol.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(state,observation)\Vert$ [m]')
         self.line_alpha, = self.axs_sol.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
         self.axs_sol.legend(fancybox=True, loc='upper right')
-        self.axs_sol.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+        self.axs_sol.format_coord = lambda state,observation: '%2.2f, %2.2f' % (state,observation)
         
         # Cost
         if is_playback:
             r = r0
         else:
-            y0 = self.sys.out(x0)
-            r = self.ctrl_benchmarking.rcost(y0, u0)
+            y0 = self.sys.out(state_init)
+            r = self.ctrl_benchmarking.rcost(y0, action_init)
         
         self.axs_cost = self.fig_sim.add_subplot(223, autoscale_on=False, xlim=(t0,t1), ylim=(0, 1e4*r), yscale='symlog', xlabel='t [s]')
         
@@ -166,7 +185,7 @@ class Animator3WRobot(Animator):
         # Control
         self.axs_ctrl = self.fig_sim.add_subplot(224, autoscale_on=False, xlim=(t0,t1), ylim=(1.1*np.min([Fmin, Mmin]), 1.1*np.max([Fmax, Mmax])), xlabel='t [s]')
         self.axs_ctrl.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-        self.lines_ctrl = self.axs_ctrl.plot(t0, to_col_vec(u0).T, lw=0.5)
+        self.lines_ctrl = self.axs_ctrl.plot(t0, to_col_vec(action_init).T, lw=0.5)
         self.axs_ctrl.legend(iter(self.lines_ctrl), ('F [N]', 'M [Nm]'), fancybox=True, loc='upper right')
         
         # Pack all lines together
@@ -199,18 +218,18 @@ class Animator3WRobot(Animator):
         
     def upd_sim_data_row(self):
         self.t = self.ts[self.curr_step]
-        self.ksi = np.array([self.xCoords[self.curr_step], self.yCoords[self.curr_step], self.alphas[self.curr_step], self.vs[self.curr_step], self.omegas[self.curr_step]])
+        self.state_full = np.array([self.xCoords[self.curr_step], self.yCoords[self.curr_step], self.alphas[self.curr_step], self.vs[self.curr_step], self.omegas[self.curr_step]])
         self.r = self.rs[self.curr_step]
         self.icost = self.icosts[self.curr_step]
-        self.u = np.array([self.Fs[self.curr_step], self.Ms[self.curr_step]])
+        self.action = np.array([self.Fs[self.curr_step], self.Ms[self.curr_step]])
         
         self.curr_step = self.curr_step + 1
     
     def init_anim(self):
-        x0, *_ = self.pars
+        state_init, *_ = self.pars
         
-        xCoord0 = x0[0]
-        yCoord0 = x0[1]       
+        xCoord0 = state_init[0]
+        yCoord0 = state_init[1]       
         
         self.scatter_sol = self.axs_xy_plane.scatter(xCoord0, yCoord0, marker=self.robot_marker.marker, s=400, c='b')
         self.run_curr = 1
@@ -221,37 +240,37 @@ class Animator3WRobot(Animator):
         if self.is_playback:
             self.upd_sim_data_row()
             t = self.t
-            ksi = self.ksi
-            u = self.u
+            state_full = self.state_full
+            action = self.action
             r = self.r
             icost = self.icost        
             
         else:
             self.simulator.sim_step()
             
-            t, x, y, ksi = self.simulator.get_sim_step_data()
+            t, state, observation, state_full = self.simulator.get_sim_step_data()
             
-            u = self.ctrl_selector(t, y, self.uMan, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
+            action = self.ctrl_selector(t, observation, self.action_manual, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
         
-            self.sys.receive_action(u)
-            self.ctrl_benchmarking.receive_sys_state(self.sys._x) 
-            self.ctrl_benchmarking.upd_icost(y, u)
+            self.sys.receive_action(action)
+            self.ctrl_benchmarking.receive_sys_state(self.sys._state) 
+            self.ctrl_benchmarking.upd_icost(observation, action)
             
-            r = self.ctrl_benchmarking.rcost(y, u)
+            r = self.ctrl_benchmarking.rcost(observation, action)
             icost = self.ctrl_benchmarking.icost_val
         
-        xCoord = ksi[0]
-        yCoord = ksi[1]
-        alpha = ksi[2]
+        xCoord = state_full[0]
+        yCoord = state_full[1]
+        alpha = state_full[2]
         alpha_deg = alpha/np.pi*180
-        v = ksi[3]
-        omega = ksi[4]
+        v = state_full[3]
+        omega = state_full[4]
 
         if self.is_print_sim_step:
-            self.logger.print_sim_step(t, xCoord, yCoord, alpha, v, omega, r, icost, u)
+            self.logger.print_sim_step(t, xCoord, yCoord, alpha, v, omega, r, icost, action)
             
         if self.is_log_data:
-            self.logger.log_data_row(self.datafile_curr, t, xCoord, yCoord, alpha, v, omega, r, icost, u)
+            self.logger.log_data_row(self.datafile_curr, t, xCoord, yCoord, alpha, v, omega, r, icost, action)
         
         # xy plane  
         text_time = 't = {time:2.3f}'.format(time = t)
@@ -277,8 +296,8 @@ class Animator3WRobot(Animator):
         upd_text(self.text_icost_handle, text_icost)
         
         # Control
-        for (line, uSingle) in zip(self.lines_ctrl, u):
-            upd_line(line, t, uSingle)
+        for (line, action_single) in zip(self.lines_ctrl, action):
+            upd_line(line, t, action_single)
     
         # Run done
         if t >= self.t1:  
@@ -336,22 +355,41 @@ class Animator3WRobotNI(Animator):
         # Unpack entities
         self.simulator, self.sys, self.ctrl_nominal, self.ctrl_benchmarking, self.datafiles, self.ctrl_selector, self.logger = self.objects
         
-        x0, u0, t0, t1, ksi0, xMin, xMax, yMin, yMax, ctrl_mode, uMan, v_min, omega_min, v_max, omega_max, Nruns, is_print_sim_step, is_log_data, is_playback, r0 = self.pars
+        state_init, \
+        action_init, \
+        t0, \
+        t1, \
+        state_full_init, \
+        xMin, \
+        xMax, \
+        yMin, \
+        yMax, \
+        ctrl_mode, \
+        action_manual, \
+        v_min, \
+        omega_min, \
+        v_max, \
+        omega_max, \
+        Nruns, \
+        is_print_sim_step, \
+        is_log_data, \
+        is_playback, \
+        r0 = self.pars
         
         # Store some parameters for later use
         self.t0 = t0
-        self.ksi0 = ksi0
+        self.state_full_init = state_full_init
         self.t1 = t1
         self.ctrl_mode = ctrl_mode
-        self.uMan = uMan
+        self.action_manual = action_manual
         self.Nruns = Nruns
         self.is_print_sim_step = is_print_sim_step
         self.is_log_data = is_log_data
         self.is_playback = is_playback
         
-        xCoord0 = x0[0]
-        yCoord0 = x0[1]
-        alpha0 = x0[2]
+        xCoord0 = state_init[0]
+        yCoord0 = state_init[1]
+        alpha0 = state_init[2]
         alpha_deg0 = alpha0/2/np.pi
         
         plt.close('all')
@@ -360,7 +398,7 @@ class Animator3WRobotNI(Animator):
             
         # xy plane  
         self.axs_xy_plane = self.fig_sim.add_subplot(221, autoscale_on=False, xlim=(xMin,xMax), ylim=(yMin,yMax),
-                                                  xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
+                                                  xlabel='state [m]', ylabel='observation [m]', title='Pause - space, q - quit, click - data cursor')
         self.axs_xy_plane.set_aspect('equal', adjustable='box')
         self.axs_xy_plane.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
         self.axs_xy_plane.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
@@ -369,22 +407,22 @@ class Animator3WRobotNI(Animator):
         text_time = 't = {time:2.3f}'.format(time = t0)
         self.text_time_handle = self.axs_xy_plane.text(0.05, 0.95, text_time,
                                                    horizontalalignment='left', verticalalignment='center', transform=self.axs_xy_plane.transAxes)
-        self.axs_xy_plane.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+        self.axs_xy_plane.format_coord = lambda state,observation: '%2.2f, %2.2f' % (state,observation)
         
         # Solution
         self.axs_sol = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
         self.axs_sol.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-        self.line_norm, = self.axs_sol.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
+        self.line_norm, = self.axs_sol.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(state,observation)\Vert$ [m]')
         self.line_alpha, = self.axs_sol.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
         self.axs_sol.legend(fancybox=True, loc='upper right')
-        self.axs_sol.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+        self.axs_sol.format_coord = lambda state,observation: '%2.2f, %2.2f' % (state,observation)
         
         # Cost
         if is_playback:
             r = r0
         else:
-            y0 = self.sys.out(x0)
-            r = self.ctrl_benchmarking.rcost(y0, u0)
+            y0 = self.sys.out(state_init)
+            r = self.ctrl_benchmarking.rcost(y0, action_init)
         
         self.axs_cost = self.fig_sim.add_subplot(223, autoscale_on=False, xlim=(t0,t1), ylim=(0, 1e4*r), yscale='symlog', xlabel='t [s]')
         
@@ -397,7 +435,7 @@ class Animator3WRobotNI(Animator):
         # Control
         self.axs_ctrl = self.fig_sim.add_subplot(224, autoscale_on=False, xlim=(t0,t1), ylim=(1.1*np.min([v_min, omega_min]), 1.1*np.max([v_max, omega_max])), xlabel='t [s]')
         self.axs_ctrl.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
-        self.lines_ctrl = self.axs_ctrl.plot(t0, to_col_vec(u0).T, lw=0.5)
+        self.lines_ctrl = self.axs_ctrl.plot(t0, to_col_vec(action_init).T, lw=0.5)
         self.axs_ctrl.legend(iter(self.lines_ctrl), ('v [m/s]', r'$\omega$ [rad/s]'), fancybox=True, loc='upper right')
         
         # Pack all lines together
@@ -430,18 +468,18 @@ class Animator3WRobotNI(Animator):
         
     def upd_sim_data_row(self):
         self.t = self.ts[self.curr_step]
-        self.ksi = np.array([self.xCoords[self.curr_step], self.yCoords[self.curr_step], self.alphas[self.curr_step]])
+        self.state_full = np.array([self.xCoords[self.curr_step], self.yCoords[self.curr_step], self.alphas[self.curr_step]])
         self.r = self.rs[self.curr_step]
         self.icost = self.icosts[self.curr_step]
-        self.u = np.array([self.vs[self.curr_step], self.omegas[self.curr_step]])
+        self.action = np.array([self.vs[self.curr_step], self.omegas[self.curr_step]])
         
         self.curr_step = self.curr_step + 1
     
     def init_anim(self):
-        x0, *_ = self.pars
+        state_init, *_ = self.pars
         
-        xCoord0 = x0[0]
-        yCoord0 = x0[1]       
+        xCoord0 = state_init[0]
+        yCoord0 = state_init[1]       
         
         self.scatter_sol = self.axs_xy_plane.scatter(xCoord0, yCoord0, marker=self.robot_marker.marker, s=400, c='b')
         self.run_curr = 1
@@ -452,35 +490,35 @@ class Animator3WRobotNI(Animator):
         if self.is_playback:
             self.upd_sim_data_row()
             t = self.t
-            ksi = self.ksi
-            u = self.u
+            state_full = self.state_full
+            action = self.action
             r = self.r
             icost = self.icost        
             
         else:
             self.simulator.sim_step()
             
-            t, x, y, ksi = self.simulator.get_sim_step_data()
+            t, state, observation, state_full = self.simulator.get_sim_step_data()
             
-            u = self.ctrl_selector(t, y, self.uMan, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
+            action = self.ctrl_selector(t, observation, self.action_manual, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
         
-            self.sys.receive_action(u)
-            self.ctrl_benchmarking.receive_sys_state(self.sys._x) 
-            self.ctrl_benchmarking.upd_icost(y, u)
+            self.sys.receive_action(action)
+            self.ctrl_benchmarking.receive_sys_state(self.sys._state) 
+            self.ctrl_benchmarking.upd_icost(observation, action)
             
-            r = self.ctrl_benchmarking.rcost(y, u)
+            r = self.ctrl_benchmarking.rcost(observation, action)
             icost = self.ctrl_benchmarking.icost_val
         
-        xCoord = ksi[0]
-        yCoord = ksi[1]
-        alpha = ksi[2]
+        xCoord = state_full[0]
+        yCoord = state_full[1]
+        alpha = state_full[2]
         alpha_deg = alpha/np.pi*180
 
         if self.is_print_sim_step:
-            self.logger.print_sim_step(t, xCoord, yCoord, alpha, r, icost, u)
+            self.logger.print_sim_step(t, xCoord, yCoord, alpha, r, icost, action)
             
         if self.is_log_data:
-            self.logger.log_data_row(self.datafile_curr, t, xCoord, yCoord, alpha, r, icost, u)
+            self.logger.log_data_row(self.datafile_curr, t, xCoord, yCoord, alpha, r, icost, action)
         
         # xy plane  
         text_time = 't = {time:2.3f}'.format(time = t)
@@ -506,8 +544,8 @@ class Animator3WRobotNI(Animator):
         upd_text(self.text_icost_handle, text_icost)
         
         # Control
-        for (line, uSingle) in zip(self.lines_ctrl, u):
-            upd_line(line, t, uSingle)
+        for (line, action_single) in zip(self.lines_ctrl, action):
+            upd_line(line, t, action_single)
     
         # Run done
         if t >= self.t1:  
@@ -565,14 +603,28 @@ class Animator2Tank(Animator):
         # Unpack entities
         self.simulator, self.sys, self.ctrl_nominal, self.ctrl_benchmarking, self.datafiles, self.ctrl_selector, self.logger = self.objects
         
-        x0, u0, t0, t1, ksi0, ctrl_mode, uMan, u_min, u_max, Nruns, is_print_sim_step, is_log_data, is_playback, r0, level_target = self.pars
+        state_init, \
+        action_init, \
+        t0, \
+        t1, \
+        state_full_init, \
+        ctrl_mode, \
+        action_manual, \
+        action_min, \
+        action_max, \
+        Nruns, \
+        is_print_sim_step, \
+        is_log_data, \
+        is_playback, \
+        r0, \
+        level_target = self.pars
         
         # Store some parameters for later use
         self.t0 = t0
-        self.ksi0 = ksi0
+        self.state_full_init = state_full_init
         self.t1 = t1
         self.ctrl_mode = ctrl_mode
-        self.uMan = uMan
+        self.action_manual = action_manual
         self.Nruns = Nruns
         self.is_print_sim_step = is_print_sim_step
         self.is_log_data = is_log_data
@@ -580,9 +632,9 @@ class Animator2Tank(Animator):
         
         self.level_target = level_target
         
-        h1_0 = x0[0]
-        h2_0 = x0[1]
-        p0 = u0
+        h1_0 = state_init[0]
+        h2_0 = state_init[1]
+        p0 = action_init
         
         plt.close('all')
      
@@ -596,14 +648,14 @@ class Animator2Tank(Animator):
         self.line_h1, = self.axs_sol.plot(t0, h1_0, 'b-', lw=0.5, label=r'$h_1$')
         self.line_h2, = self.axs_sol.plot(t0, h2_0, 'r-', lw=0.5, label=r'$h_2$') 
         self.axs_sol.legend(fancybox=True, loc='upper right')
-        self.axs_sol.format_coord = lambda x,y: '%2.2f, %2.2f' % (x,y)
+        self.axs_sol.format_coord = lambda state,observation: '%2.2f, %2.2f' % (state,observation)
         
         # Cost
         if is_playback:
             r = r0
         else:
-            y0 = self.sys.out(x0)
-            r = self.ctrl_benchmarking.rcost(y0, u0)
+            y0 = self.sys.out(state_init)
+            r = self.ctrl_benchmarking.rcost(y0, action_init)
         
         self.axs_cost = self.fig_sim.add_subplot(223, autoscale_on=False, xlim=(t0,t1), ylim=(0, 1e4*r), yscale='symlog', xlabel='t [s]')
         
@@ -614,7 +666,7 @@ class Animator2Tank(Animator):
         self.axs_cost.legend(fancybox=True, loc='upper right')
         
         # Control
-        self.axs_ctrl = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=(u_min-0.1, u_max+0.1), xlabel='t [s]')
+        self.axs_ctrl = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=(action_min-0.1, action_max+0.1), xlabel='t [s]')
         self.axs_ctrl.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
         self.line_ctrl, = self.axs_ctrl.plot(t0, p0, lw=0.5, label='p') 
         self.axs_cost.legend(fancybox=True, loc='upper right')
@@ -648,15 +700,15 @@ class Animator2Tank(Animator):
         
     def upd_sim_data_row(self):
         self.t = self.ts[self.curr_step]
-        self.ksi = np.array([self.h1s[self.curr_step], self.h2s[self.curr_step]])
+        self.state_full = np.array([self.h1s[self.curr_step], self.h2s[self.curr_step]])
         self.r = self.rs[self.curr_step]
         self.icost = self.icosts[self.curr_step]
-        self.u = np.array([self.ps[self.curr_step]])
+        self.action = np.array([self.ps[self.curr_step]])
         
         self.curr_step = self.curr_step + 1
     
     def init_anim(self):
-        x0, *_ = self.pars      
+        state_init, *_ = self.pars      
         
         self.run_curr = 1
         self.datafile_curr = self.datafiles[0]
@@ -666,28 +718,28 @@ class Animator2Tank(Animator):
         if self.is_playback:
             self.upd_sim_data_row()
             t = self.t
-            ksi = self.ksi
-            u = self.u
+            state_full = self.state_full
+            action = self.action
             r = self.r
             icost = self.icost        
             
         else:
             self.simulator.sim_step()
             
-            t, x, y, ksi = self.simulator.get_sim_step_data()
+            t, state, observation, state_full = self.simulator.get_sim_step_data()
             
-            u = self.ctrl_selector(t, y, self.uMan, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
+            action = self.ctrl_selector(t, observation, self.action_manual, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
         
-            self.sys.receive_action(u)
-            self.ctrl_benchmarking.receive_sys_state(self.sys._x) 
-            self.ctrl_benchmarking.upd_icost(y, u)
+            self.sys.receive_action(action)
+            self.ctrl_benchmarking.receive_sys_state(self.sys._state) 
+            self.ctrl_benchmarking.upd_icost(observation, action)
             
-            r = self.ctrl_benchmarking.rcost(y, u)
+            r = self.ctrl_benchmarking.rcost(observation, action)
             icost = self.ctrl_benchmarking.icost_val
         
-        h1 = ksi[0]
-        h2 = ksi[1]
-        p = u
+        h1 = state_full[0]
+        h2 = state_full[1]
+        p = action
 
         if self.is_print_sim_step:
             self.logger.print_sim_step(t, h1, h2, p, r, icost)

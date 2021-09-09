@@ -33,15 +33,15 @@ class System:
     sys_type : : string
         Type of system by description:
             
-        | ``diff_eqn`` : differential equation :math:`\mathcal D x = f(x, u, q)`
-        | ``discr_fnc`` : difference equation :math:`x^+ = f(x, u, q)`
-        | ``discr_prob`` :  by probability distribution :math:`X^+ \sim P_X(x^+| x, u, q)`
+        | ``diff_eqn`` : differential equation :math:`\mathcal D state = f(state, action, disturb)`
+        | ``discr_fnc`` : difference equation :math:`state^+ = f(state, action, disturb)`
+        | ``discr_prob`` :  by probability distribution :math:`X^+ \sim P_X(state^+| state, action, disturb)`
     
     where:
         
-        | :math:`x` : state
-        | :math:`u` : input
-        | :math:`q` : disturbance
+        | :math:`state` : state
+        | :math:`action` : input
+        | :math:`disturb` : disturbance
         
     The time variable ``t`` is commonly used by ODE solvers, and you shouldn't have it explicitly referenced in the definition, unless your system is non-autonomous.
     For the latter case, however, you already have the input and disturbance at your disposal.
@@ -78,10 +78,10 @@ class System:
         self.pars_disturb = pars_disturb
         
         # Track system's state
-        self._x = np.zeros(dim_state)
+        self._state = np.zeros(dim_state)
         
         # Current input (a.k.a. action)
-        self.u = np.zeros(dim_input)
+        self.action = np.zeros(dim_input)
         
         if is_dyn_ctrl:
             if is_disturb:
@@ -94,7 +94,7 @@ class System:
             else:
                 self._dim_full_state = self.dim_state
             
-    def _state_dyn(self, t, x, u, q):
+    def _state_dyn(self, t, state, action, disturb):
         """
         Description of the system internal dynamics.
         Depending on the system type, may be either the right-hand side of the respective differential or difference equation, or a probability distribution.
@@ -103,18 +103,18 @@ class System:
         """
         pass
 
-    def _disturb_dyn(self, t, q):
+    def _disturb_dyn(self, t, disturb):
         """
         Dynamical disturbance model depending on the system type:
             
-        | ``sys_type = "diff_eqn"`` : :math:`\mathcal D q = f_q(q)`    
-        | ``sys_type = "discr_fnc"`` : :math:`q^+ = f_q(q)`
-        | ``sys_type = "discr_prob"`` : :math:`q^+ \sim P_Q(q^+|q)`
+        | ``sys_type = "diff_eqn"`` : :math:`\mathcal D disturb = f_q(disturb)`    
+        | ``sys_type = "discr_fnc"`` : :math:`disturb^+ = f_q(disturb)`
+        | ``sys_type = "discr_prob"`` : :math:`disturb^+ \sim P_Q(disturb^+|disturb)`
         
         """       
         pass
 
-    def _ctrl_dyn(self, t, u, y):
+    def _ctrl_dyn(self, t, action, observation):
         """
         Dynamical controller. When ``is_dyn_ctrl=0``, the controller is considered static, which is to say that the control actions are
         computed immediately from the system's output.
@@ -123,20 +123,20 @@ class System:
         
         Depending on the system type, can be:
             
-        | ``sys_type = "diff_eqn"`` : :math:`\mathcal D u = f_u(u, y)`    
-        | ``sys_type = "discr_fnc"`` : :math:`u^+ = f_u(u, y)`  
-        | ``sys_type = "discr_prob"`` : :math:`u^+ \sim P_U(u^+|u, y)`        
+        | ``sys_type = "diff_eqn"`` : :math:`\mathcal D action = f_u(action, observation)`    
+        | ``sys_type = "discr_fnc"`` : :math:`action^+ = f_u(action, observation)`  
+        | ``sys_type = "discr_prob"`` : :math:`action^+ \sim P_U(action^+|action, observation)`        
         
         """
-        Du = np.zeros(self.dim_input)
+        Daction = np.zeros(self.dim_input)
     
-        return Du 
+        return Daction 
 
-    def out(self, x, u=[]):
+    def out(self, state, action=[]):
         """
         System output.
         This is commonly associated with signals that are measured in the system.
-        Normally, output depends only on state ``x`` since no physical processes transmit input to output instantly.       
+        Normally, output depends only on state ``state`` since no physical processes transmit input to output instantly.       
         
         See also
         --------
@@ -144,61 +144,61 @@ class System:
         
         """
         # Trivial case: output identical to state
-        y = x
-        return y
+        observation = state
+        return observation
     
-    def receive_action(self, u):
+    def receive_action(self, action):
         """
         Receive exogeneous control action to be fed into the system.
         This action is commonly computed by your controller (agent) using the system output :func:`~systems.system.out`. 
 
         Parameters
         ----------
-        u : : array of shape ``[dim_input, ]``
+        action : : array of shape ``[dim_input, ]``
             Action
             
         """
-        self.u = u
+        self.action = action
         
-    def closed_loop_rhs(self, t, ksi):
+    def closed_loop_rhs(self, t, state_full):
         """
         Right-hand side of the closed-loop system description.
         Combines everything into a single vector that corresponds to the right-hand side of the closed-loop system description for further use by simulators.
         
         Attributes
         ----------
-        ksi : : vector
+        state_full : : vector
             Current closed-loop system state        
         
         """
         rhs_full_state = np.zeros(self._dim_full_state)
         
-        x = ksi[0:self.dim_state]
+        state = state_full[0:self.dim_state]
         
         if self.is_disturb:
-            q = ksi[self.dim_state:]
+            disturb = state_full[self.dim_state:]
         else:
-            q = []
+            disturb = []
         
         if self.is_dyn_ctrl:
-            u = ksi[-self.dim_input:]
-            y = self.out(x)
-            rhs_full_state[-self.dim_input:] = self._ctrlDyn(t, u, y)
+            action = state_full[-self.dim_input:]
+            observation = self.out(state)
+            rhs_full_state[-self.dim_input:] = self._ctrlDyn(t, action, observation)
         else:
             # Fetch the control action stored in the system
-            u = self.u
+            action = self.action
         
         if self.ctrl_bnds.any():
             for k in range(self.dim_input):
-                u[k] = np.clip(u[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
+                action[k] = np.clip(action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
         
-        rhs_full_state[0:self.dim_state] = self._state_dyn(t, x, u, q)
+        rhs_full_state[0:self.dim_state] = self._state_dyn(t, state, action, disturb)
         
         if self.is_disturb:
-            rhs_full_state[self.dim_state:] = self._disturb_dyn(t, q)
+            rhs_full_state[self.dim_state:] = self._disturb_dyn(t, disturb)
         
         # Track system's state
-        self._x = x
+        self._state = state
         
         return rhs_full_state    
     
@@ -221,8 +221,8 @@ class Sys3WRobot(System):
         
     **Variables**
         
-    | :math:`x_с` : x-coordinate [m]
-    | :math:`y_с` : y-coordinate [m]
+    | :math:`x_с` : state-coordinate [m]
+    | :math:`y_с` : observation-coordinate [m]
     | :math:`\\alpha` : turning angle [rad]
     | :math:`v` : speed [m/s]
     | :math:`\\omega` : revolution speed [rad/s]
@@ -230,11 +230,11 @@ class Sys3WRobot(System):
     | :math:`M` : steering torque [Nm]
     | :math:`m` : robot mass [kg]
     | :math:`I` : robot moment of inertia around vertical axis [kg m\ :sup:`2`]
-    | :math:`q` : actuator disturbance (see :func:`~RLframe.system.disturbDyn`). Is zero if ``is_disturb = 0``
+    | :math:`disturb` : actuator disturbance (see :func:`~RLframe.system.disturbDyn`). Is zero if ``is_disturb = 0``
     
-    :math:`x = [x_c, y_c, \\alpha, v, \\omega]`
+    :math:`state = [x_c, y_c, \\alpha, v, \\omega]`
     
-    :math:`u = [F, M]`
+    :math:`action = [F, M]`
     
     ``pars`` = :math:`[m, I]`
     
@@ -244,55 +244,55 @@ class Sys3WRobot(System):
         nonholonomic double integrator”. In: Kybernetika 53.4 (2017), pp. 578–594
     
     """        
-    def _state_dyn(self, t, x, u, q=[]):   
+    def _state_dyn(self, t, state, action, disturb=[]):   
         m, I = self.pars[0], self.pars[1]
 
-        Dx = np.zeros(self.dim_state)
-        Dx[0] = x[3] * np.cos( x[2] )
-        Dx[1] = x[3] * np.sin( x[2] )
-        Dx[2] = x[4]
+        Dstate = np.zeros(self.dim_state)
+        Dstate[0] = state[3] * np.cos( state[2] )
+        Dstate[1] = state[3] * np.sin( state[2] )
+        Dstate[2] = state[4]
         
-        if self.is_disturb and (q != []):
-            Dx[3] = 1/m * (u[0] + q[0])
-            Dx[4] = 1/I * (u[1] + q[1])
+        if self.is_disturb and (disturb != []):
+            Dstate[3] = 1/m * (action[0] + disturb[0])
+            Dstate[4] = 1/I * (action[1] + disturb[1])
         else:
-            Dx[3] = 1/m * u[0]
-            Dx[4] = 1/I * u[1] 
+            Dstate[3] = 1/m * action[0]
+            Dstate[4] = 1/I * action[1] 
             
-        return Dx    
+        return Dstate    
  
-    def _disturb_dyn(self, t, q):
+    def _disturb_dyn(self, t, disturb):
         """
         Description
         -----------
         
         We use here a 1st-order stochastic linear system of the type
         
-        .. math:: \mathrm d Q_t = - \\frac{1}{\\tau_q} \\left( Q_t \\mathrm d t + \\sigma_q ( \\mathrm d B_t + \\mu_q ) \\right) ,
+        .. math:: \mathrm d Q_t = - \\frac{1}{\\tau_disturb} \\left( Q_t \\mathrm d t + \\sigma_disturb ( \\mathrm d B_t + \\mu_disturb ) \\right) ,
         
-        where :math:`B` is the standard Brownian motion, :math:`Q` is the stochastic process whose realization is :math:`q`, and
-        :math:`\\tau_q, \\sigma_q, \\mu_q` are the time constant, standard deviation and mean, resp.
+        where :math:`B` is the standard Brownian motion, :math:`Q` is the stochastic process whose realization is :math:`disturb`, and
+        :math:`\\tau_disturb, \\sigma_disturb, \\mu_disturb` are the time constant, standard deviation and mean, resp.
         
-        ``pars_disturb = [sigma_q, mu_q, tau_q]``, with each being an array of shape ``[dim_disturb, ]``
+        ``pars_disturb = [sigma_disturb, mu_disturb, tau_disturb]``, with each being an array of shape ``[dim_disturb, ]``
         
         """       
-        Dq = np.zeros(self.dim_disturb)
+        Ddisturb = np.zeros(self.dim_disturb)
         
         if self.is_disturb:
-            sigma_q = self.pars_disturb[0]
-            mu_q = self.pars_disturb[1]
-            tau_q = self.pars_disturb[2]
+            sigma_disturb = self.pars_disturb[0]
+            mu_disturb = self.pars_disturb[1]
+            tau_disturb = self.pars_disturb[2]
             
             for k in range(0, self.dim_disturb):
-                Dq[k] = - tau_q[k] * ( q[k] + sigma_q[k] * (randn() + mu_q[k]) )
+                Ddisturb[k] = - tau_disturb[k] * ( disturb[k] + sigma_disturb[k] * (randn() + mu_disturb[k]) )
                 
-        return Dq   
+        return Ddisturb   
     
-    def out(self, x, u=[]):
-        y = np.zeros(self.dim_output)
-        # y = x[:3] + measNoise # <-- Measure only position and orientation
-        y = x  # <-- Position, force and torque sensors on
-        return y
+    def out(self, state, action=[]):
+        observation = np.zeros(self.dim_output)
+        # observation = state[:3] + measNoise # <-- Measure only position and orientation
+        observation = state  # <-- Position, force and torque sensors on
+        return observation
 
 class Sys3WRobotNI(System):
     """
@@ -300,54 +300,54 @@ class Sys3WRobotNI(System):
     
     
     """        
-    def _state_dyn(self, t, x, u, q=[]):   
-        Dx = np.zeros(self.dim_state)
-        Dx[0] = u[0] * np.cos( x[2] )
-        Dx[1] = u[0] * np.sin( x[2] )
-        Dx[2] = u[1]
+    def _state_dyn(self, t, state, action, disturb=[]):   
+        Dstate = np.zeros(self.dim_state)
+        Dstate[0] = action[0] * np.cos( state[2] )
+        Dstate[1] = action[0] * np.sin( state[2] )
+        Dstate[2] = action[1]
              
-        return Dx    
+        return Dstate    
  
-    def _disturb_dyn(self, t, q):
+    def _disturb_dyn(self, t, disturb):
         """
         
         
         """       
-        Dq = np.zeros(self.dim_disturb)
+        Ddisturb = np.zeros(self.dim_disturb)
         
         if self.is_disturb:
-            sigma_q = self.pars_disturb[0]
-            mu_q = self.pars_disturb[1]
-            tau_q = self.pars_disturb[2]
+            sigma_disturb = self.pars_disturb[0]
+            mu_disturb = self.pars_disturb[1]
+            tau_disturb = self.pars_disturb[2]
             
             for k in range(0, self.dim_disturb):
-                Dq[k] = - tau_q[k] * ( q[k] + sigma_q[k] * (randn() + mu_q[k]) )
+                Ddisturb[k] = - tau_disturb[k] * ( disturb[k] + sigma_disturb[k] * (randn() + mu_disturb[k]) )
                 
-        return Dq   
+        return Ddisturb   
     
-    def out(self, x, u=[]):
-        y = np.zeros(self.dim_output)
-        y = x
-        return y
+    def out(self, state, action=[]):
+        observation = np.zeros(self.dim_output)
+        observation = state
+        return observation
 
 class Sys2Tank(System):
     """
     Two-tank system with nonlinearity
     """
-    def _state_dyn(self, t, x, u, q=[]):     
+    def _state_dyn(self, t, state, action, disturb=[]):     
         tau1, tau2, K1, K2, K3 = self.pars
 
-        Dx = np.zeros(self.dim_state)
-        Dx[0] = 1/(tau1) * ( -x[0] + K1 * u)
-        Dx[1] = 1/(tau2) * ( -x[1] + K2 * x[0] + K3 * x[1]**2)
+        Dstate = np.zeros(self.dim_state)
+        Dstate[0] = 1/(tau1) * ( -state[0] + K1 * action)
+        Dstate[1] = 1/(tau2) * ( -state[1] + K2 * state[0] + K3 * state[1]**2)
             
-        return Dx    
+        return Dstate    
  
-    def _disturb_dyn(self, t, q):   
-        Dq = np.zeros(self.dim_disturb)
+    def _disturb_dyn(self, t, disturb):   
+        Ddisturb = np.zeros(self.dim_disturb)
                 
-        return Dq   
+        return Ddisturb   
     
-    def out(self, x, u=[]):
-        y = x
-        return y   
+    def out(self, state, action=[]):
+        observation = state
+        return observation   

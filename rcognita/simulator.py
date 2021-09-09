@@ -109,7 +109,7 @@ class Simulator:
             self.ODE_solver.step()
             
             self.t = self.ODE_solver.t
-            self.state_full = self.ODE_solver.observation 
+            self.state_full = self.ODE_solver.y
             
             self.state = self.state_full[0:self.dim_state]
             self.observation = self.sys_out(self.state)
