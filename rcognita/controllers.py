@@ -502,11 +502,11 @@ class CtrlRLStab:
                         
             action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation )
             
-            y_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
+            observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
             
-            critic_next = lmbd * w_critic @ self._phi( y_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( y_next )
+            critic_next = lmbd * w_critic @ self._phi( observation_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation_next )
             
-            return self.safe_ctrl.compute_LF(y_next) - critic_next        
+            return self.safe_ctrl.compute_LF(observation_next) - critic_next        
         
         def constr_stab_decay(w_all, observation):
             w_critic = w_all[:self.dim_critic]
@@ -515,10 +515,10 @@ class CtrlRLStab:
             
             action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation )
             
-            y_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
+            observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
             
             critic_new = lmbd * w_critic @ self._phi( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
-            critic_next = lmbd * w_critic @ self._phi( y_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( y_next )
+            critic_next = lmbd * w_critic @ self._phi( observation_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation_next )
             
             return critic_next - critic_new + self.safe_decay_rate
 
@@ -641,9 +641,9 @@ class CtrlRLStab:
         # STUB ===================================================================   
         # ================================Optimization of one rcost + LF_next
         def J_tmp(action, observation):
-            y_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)
-            return self.safe_ctrl.compute_LF(y_next) + self.rcost(y_next, action) 
-            # return self.safe_ctrl.compute_LF(y_next)
+            observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)
+            return self.safe_ctrl.compute_LF(observation_next) + self.rcost(observation_next, action) 
+            # return self.safe_ctrl.compute_LF(observation_next)
         
         action = minimize(lambda action: J_tmp(action, observation),
                       np.zeros(2),
