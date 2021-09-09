@@ -15,13 +15,21 @@ Getting started
 ======================
 
 The package is organized in modules.
+
 These are:
+
 * `controllers`
+
 * `loggers`
+
 * `models`
+
 * `simulator`
+
 * `systems`
+
 * `utilities`
+
 * `visuals` 
 
 There is a collection of main modules (presets) for each agent-environment configuration.
