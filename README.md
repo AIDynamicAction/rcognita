@@ -146,19 +146,6 @@ Optional parameters, set to default values unless specified otherwise:
 | `critic_struct` | string | `quad-nomix` | structure of critic features |
 | `actor_struct` | string | `quad-nomix` | structure of actor features |
 
-Some are more or less self-evident, like `is_log_data`.
-The crucial ones are:
-
-* `dt`: [in seconds] controller sampling time. Relevant if the system itself is continuous as a physical process while the controller is digital
-* `Nactor`: number of prediction steps. `Nactor=1` means the controller is purely **data-driven** and doesn't use prediction. Say, stacked QL will turn into the usual SARSA (in VI form)
-* `pred_step_size`: [in seconds] determines how fine the resolution of the prediction horizon is. Larger `pred_step_size` will result in a larger effective horizon length
-
-Miscellaneous settings:
-
-* `t0`, `t1`: start time and stop time of one episode (usually, `t0=0` and `t1` is the episode duration)
-* `atol, rtol`: sensitivity of the solver. The lower the values, the more accurate the simulation results are
-* `Nruns`: number of episodes. After an episode, the system is reset to the initial state, whereas all the learned parameters continue to get updated. This emulates multi-episode RL
-
 ## Advanced customization
 
 [To table of content](#Table-of-content)
