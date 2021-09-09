@@ -24,7 +24,7 @@ setup(
     long_description_content_type='text/markdown',
     install_requires=[
         "matplotlib >= 3.2.2",
-        "mpldatacursor == 0.7.1",
+        "mpldatacursor @ git+https://github.com/AIDynamicAction/mpldatacursor.git#808f2929ce9d44778a5fc52b0bc3dd770495b3eb",
         "numpy >= 1.20.1",
         "scipy >= 1.5.0",
         "svgpath2mpl == 0.2.1",
