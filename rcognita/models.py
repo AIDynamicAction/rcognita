@@ -23,9 +23,7 @@ class ModelSS:
         State-space model parameters
     x0set : : array
         Initial state estimate
-        
-    **When introducing your custom model estimator, adjust this class**    
-        
+            
     """
     
     def __init__(self, A, B, C, D, x0est):

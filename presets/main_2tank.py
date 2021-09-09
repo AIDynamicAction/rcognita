@@ -188,13 +188,13 @@ my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input, dim_output,
                                             t0=t0, sampling_time=dt, Nactor=Nactor, pred_step_size=pred_step_size,
                                             sys_rhs=my_2tank._state_dyn, sys_out=my_2tank.out,
                                             # get_next_state = get_next_state, sys_out = sys_out,
-                                            x_sys=x0,
+                                            state_sys=x0,
                                             prob_noise_pow = prob_noise_pow, is_est_model=is_est_model, model_est_stage=model_est_stage, model_est_period=model_est_period,
                                             buffer_size=buffer_size,
                                             model_order=model_order, model_est_checks=model_est_checks,
                                             gamma=gamma, Ncritic=Ncritic, critic_period=critic_period, critic_struct=critic_struct, rcost_struct=rcost_struct,
                                             rcost_pars=[R1],
-                                            y_target=y_target)
+                                            observation_target=y_target)
 
 #------------------------------------initialization : : simulator
 my_simulator = simulator.Simulator(sys_type="diff_eqn",
