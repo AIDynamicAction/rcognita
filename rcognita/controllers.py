@@ -130,7 +130,7 @@ class CtrlRLStab:
                  actor_struct='quad-nomix',
                  rcost_struct='quadratic',
                  rcost_pars=[],
-                 y_target=[],   
+                 observation_target=[],   
                  safe_ctrl=[],
                  safe_decay_rate=[]):
         
@@ -284,7 +284,7 @@ class CtrlRLStab:
         self.actor_struct = actor_struct
         self.rcost_struct = rcost_struct
         self.rcost_pars = rcost_pars
-        self.y_target = y_target
+        self.observation_target = observation_target
         
         self.icost_val = 0
 
@@ -388,10 +388,10 @@ class CtrlRLStab:
         
         See class documentation
         """
-        if self.y_target == []:
+        if self.observation_target == []:
             chi = np.concatenate([observation, action])
         else:
-            chi = np.concatenate([observation - self.y_target, action])
+            chi = np.concatenate([observation - self.observation_target, action])
         
         r = 0
 
@@ -419,10 +419,10 @@ class CtrlRLStab:
         Features of the critic
 
         """
-        if self.y_target == []:
+        if self.observation_target == []:
             chi = observation
         else:
-            chi = observation - self.y_target
+            chi = observation - self.observation_target
         
         if self.critic_struct == 'quad-lin':
             return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
@@ -831,7 +831,7 @@ class CtrlOptPred:
                  critic_struct='quad-nomix',
                  rcost_struct='quadratic',
                  rcost_pars=[],
-                 y_target=[]):
+                 observation_target=[]):
         """
         Parameters
         ----------
@@ -1007,7 +1007,7 @@ class CtrlOptPred:
         self.critic_struct = critic_struct
         self.rcost_struct = rcost_struct
         self.rcost_pars = rcost_pars
-        self.y_target = y_target
+        self.observation_target = observation_target
         
         self.icost_val = 0
 
@@ -1095,10 +1095,10 @@ class CtrlOptPred:
         
         See class documentation
         """
-        if self.y_target == []:
+        if self.observation_target == []:
             chi = np.concatenate([observation, action])
         else:
-            chi = np.concatenate([observation - self.y_target, action])
+            chi = np.concatenate([observation - self.observation_target, action])
         
         r = 0
 
@@ -1247,10 +1247,10 @@ class CtrlOptPred:
         within :func:`~controllers.CtrlOptPred._critic_cost`
         
         """
-        if self.y_target == []:
+        if self.observation_target == []:
             chi = np.concatenate([observation, action])
         else:
-            chi = np.concatenate([observation - self.y_target, action])
+            chi = np.concatenate([observation - self.observation_target, action])
         
         if self.critic_struct == 'quad-lin':
             return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
