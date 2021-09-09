@@ -84,12 +84,54 @@ Auxiliary modules of the package are `models` and `utilities` which provide auxi
 After the package is installed, you may just `python` run one of the presets found [here](./presets).
 The naming concention is `main_ACRONYM`, where `ACRONYM` is actually related to the system (environment). 
 You may create your own by analogy.
+Example call:
+```
+python main_3wrobot_NI.py -ctrl_mode JACS -dt 0.01 -t1 1.0 -x0 [5, 5, -3*pi/4]
+```
+Make sure to use Python3 interpreter.
+Parameter settings are described in the next section.
 
 ## Settings
 
 [To table of content](#Table-of-content)
 
 These are made in a preset file.
+
+So, for instance,
+
+Required parameters:
+| Parameter name | Values |  Notes |
+| ----- | ------ | ------|
+| `ctrl_mode` | string | see description of methods in preset |
+| `dt` | number | controller sampling time |
+| `t1` | number | final time |
+| `x0` | numpy vector | initial state, dimension preset-specific! |
+
+Optional parameters, set to default values unless specified otherwise:
+
+| Parameter name | Values | Default | Description| 
+| ----- | ------ | ----- | ----- | 
+| `is_log_data` | binary | 0 | |
+| `is_visualization` | binary | 1 | |
+| `is_print_sim_step` | binary | 1 | |
+| `is_est_model` | binary | 0 | if a model of the env. is to be estimated online |
+| `model_est_stage` | number | 1 | seconds to learn model until benchmarking controller kicks in | 
+| `model_est_period` | number | 1*`dt` | model is updated every `model_est_period` seconds | 
+| `model_order` | integer | 5 | order of state-space estimation model | 
+| `prob_noise_pow` | number | 8 | power of probing noise | 
+|`uMan` | numpy vector | zeros | manual control action to be fed constant, system-specific! |
+| `Nactor` | integer | 3 | horizon length (in steps) for predictive controllers |
+| `pred_step_size` | number | `dt` | |
+| `buffer_size` | integer | 10 | |
+| `rcost_struct` | string | `quadratic` | structure of running cost function | 
+| `R1` | numpy matrix | identity matrix | must have proper dimension |
+| `R2` | numpy matrix | identity matrix | must have proper dimension |
+| `Ncritic` | integer | 4 | critic stack size (number of TDs) |
+| `gamma` | number | 1 | discount factor |
+| `critic_period` | number | `dt` | critic is updated every `critic_period` seconds |
+| `critic_struct` | string | `quad-nomix` | structure of critic features |
+| `actor_struct` | string | `quad-nomix` | structure of actor features |
+
 Some are more or less self-evident, like `is_log_data`.
 The crucial ones are:
 
