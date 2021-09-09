@@ -100,7 +100,7 @@ The naming concention is `main_ACRONYM`, where `ACRONYM` is actually related to 
 You may create your own by analogy.
 Example call:
 ```
-python main_3wrobot_NI.py -ctrl_mode JACS -dt 0.01 -t1 1.0 -x0 [5, 5, -3*pi/4]
+python main_3wrobot_NI.py -ctrl_mode JACS -dt 0.01 -t1 1.0 -state_init [5, 5, -3*pi/4]
 ```
 Make sure to use Python3 interpreter.
 Parameter settings are described in the next section.
@@ -116,10 +116,10 @@ So, for instance, for [the three-wheel kinematic robot preset](https://github.co
 Required parameters:
 | Parameter name | Values |  Notes |
 | ----- | ------ | ------|
-| `ctrl_mode` | string | see description of methods in preset |
-| `dt` | number | controller sampling time |
-| `t1` | number | final time |
-| `x0` | numpy vector | initial state, dimension preset-specific! |
+| `ctrl_mode` | string | Controller mode |
+| `dt` | number | Controller sampling time |
+| `t1` | number | Final time |
+| `state_init` | numpy vector | Initial state, dimension preset-specific! |
 
 Optional parameters, set to default values unless specified otherwise:
 
@@ -128,23 +128,23 @@ Optional parameters, set to default values unless specified otherwise:
 | `is_log_data` | binary | 0 | |
 | `is_visualization` | binary | 1 | |
 | `is_print_sim_step` | binary | 1 | |
-| `is_est_model` | binary | 0 | if a model of the env. is to be estimated online |
-| `model_est_stage` | number | 1 | seconds to learn model until benchmarking controller kicks in | 
-| `model_est_period` | number | 1*`dt` | model is updated every `model_est_period` seconds | 
-| `model_order` | integer | 5 | order of state-space estimation model | 
-| `prob_noise_pow` | number | 8 | power of probing noise | 
-|`uMan` | numpy vector | zeros | manual control action to be fed constant, system-specific! |
-| `Nactor` | integer | 3 | horizon length (in steps) for predictive controllers |
+| `is_est_model` | binary | 0 | If a model of the system is to be estimated online |
+| `model_est_stage` | number | 1 | Seconds to learn model until benchmarking controller kicks in | 
+| `model_est_period` | number | 1*`dt` | Model is updated every `model_est_period` seconds | 
+| `model_order` | integer | 5 | Order of state-space estimation model | 
+| `prob_noise_pow` | number | 8 | Power of probing noise | 
+|`uMan` | numpy vector | zeros | Manual control action to be fed constant, system-specific! |
+| `Nactor` | integer | 3 | Horizon length (in steps) for predictive controllers |
 | `pred_step_size` | number | `dt` | |
 | `buffer_size` | integer | 10 | |
-| `rcost_struct` | string | `quadratic` | structure of running cost function | 
-| `R1` | numpy matrix | identity matrix | must have proper dimension |
-| `R2` | numpy matrix | identity matrix | must have proper dimension |
-| `Ncritic` | integer | 4 | critic stack size (number of TDs) |
-| `gamma` | number | 1 | discount factor |
-| `critic_period` | number | `dt` | critic is updated every `critic_period` seconds |
-| `critic_struct` | string | `quad-nomix` | structure of critic features |
-| `actor_struct` | string | `quad-nomix` | structure of actor features |
+| `rcost_struct` | string | `quadratic` | Structure of running objective function | 
+| `R1` | numpy matrix | identity matrix | Must have proper dimension, see preset |
+| `R2` | numpy matrix | identity matrix | Must have proper dimension, see preset |
+| `Ncritic` | integer | 4 | Critic stack size (number of TDs) |
+| `gamma` | number | 1 | Discount factor |
+| `critic_period` | number | `dt` | Critic is updated every `critic_period` seconds |
+| `critic_struct` | string | `quad-nomix` | Structure of critic features |
+| `actor_struct` | string | `quad-nomix` | Structure of actor features |
 
 ## Advanced customization
 
