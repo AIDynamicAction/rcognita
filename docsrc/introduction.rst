@@ -9,7 +9,7 @@ Installation
 
 The package can be installed via `pip` by typing in terminal:
 
-```pip install rcognita```
+``pip install rcognita``
 
 Getting started
 ======================
