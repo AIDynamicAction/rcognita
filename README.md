@@ -111,7 +111,7 @@ Parameter settings are described in the next section.
 
 These are made in a preset file.
 
-So, for instance,
+So, for instance, for [the three-wheel kinematic robot preset](https://github.com/AIDynamicAction/rcognita/blob/master/presets/main_3wrobot_NI.py), these read as below.
 
 Required parameters:
 | Parameter name | Values |  Notes |
