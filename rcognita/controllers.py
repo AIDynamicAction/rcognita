@@ -27,14 +27,6 @@ from numpy import reshape
 # For debugging purposes
 from tabulate import tabulate
 
-import warnings
-
-# System identification package
-try:
-    import sippy
-except Exception:
-    print('Importing sippy failed. Read how to install it at https://github.com/AIDynamicAction/rcognita')
-
 # [EXPERIMENTAL] Use MATLAB's system identification toolbox instead of ssid and sippy
 # Compatible MATLAB Runtime and system identification toolbox must be installed
 # import matlab.engine
