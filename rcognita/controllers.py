@@ -235,17 +235,17 @@ class CtrlRLStab:
         self.Nactor = Nactor 
         self.pred_step_size = pred_step_size
         
-        self.uMin = np.array( ctrl_bnds[:,0] )
-        self.uMax = np.array( ctrl_bnds[:,1] )
-        self.Umin = rep_mat(self.uMin, 1, Nactor)
-        self.Umax = rep_mat(self.uMax, 1, Nactor) 
+        self.action_min = np.array( ctrl_bnds[:,0] )
+        self.action_max = np.array( ctrl_bnds[:,1] )
+        self.action_sqn_min = rep_mat(self.action_min, 1, Nactor)
+        self.action_sqn_max = rep_mat(self.action_max, 1, Nactor) 
         
-        self.uCurr = self.uMin/10
+        self.action_curr = self.action_min/10
         
-        self.Uinit = rep_mat( self.uMin/10 , 1, self.Nactor)
+        self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
         
-        self.ubuffer = np.zeros( [buffer_size, dim_input] )
-        self.ybuffer = np.zeros( [buffer_size, dim_output] )        
+        self.action_buffer = np.zeros( [buffer_size, dim_input] )
+        self.observation_buffer = np.zeros( [buffer_size, dim_output] )        
         
         # Exogeneous model's things
         self.sys_rhs = sys_rhs
@@ -290,18 +290,18 @@ class CtrlRLStab:
 
         if self.critic_struct == 'quad-lin':
             self.dim_critic = int( (  self.dim_output  + 1 ) *  self.dim_output / 2 + self.dim_output )
-            self.Wmin = -1e3*np.ones(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic) 
+            self.w_critic_min = -1e3*np.ones(self.dim_critic) 
+            self.w_critic_max = 1e3*np.ones(self.dim_critic) 
         elif self.critic_struct == 'quadratic':
             self.dim_critic = int( ( self.dim_output + 1 ) * self.dim_output / 2 ).astype(int)
-            self.Wmin = np.zeros(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)    
+            self.w_critic_min = np.zeros(self.dim_critic) 
+            self.w_critic_max = 1e3*np.ones(self.dim_critic)    
         elif self.critic_struct == 'quad-nomix':
             self.dim_critic = self.dim_output
-            self.Wmin = np.zeros(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)
+            self.w_critic_min = np.zeros(self.dim_critic) 
+            self.w_critic_max = 1e3*np.ones(self.dim_critic)
  
-        self.w_critic_prev = self.Wmin
+        self.w_critic_prev = self.w_critic_min
         self.w_critic_init = np.ones(self.dim_critic)
         
         self.lmbd_prev = 0
@@ -373,7 +373,7 @@ class CtrlRLStab:
         
         """
         self.ctrl_clock = t0
-        self.uCurr = self.uMin/10
+        self.action_curr = self.action_min/10
     
     def receive_sys_state(self, x):
         """
@@ -446,31 +446,31 @@ class CtrlRLStab:
         elif self.actor_struct == 'quad-nomix':
             return chi * chi        
 
-    def _actor_critic_cost(self, W_lmbd_u):
+    def _actor_critic_cost(self, w_all):
         """
         Joint actor-critic cost function
        
         """        
         
-        Y = self.ybuffer[-self.Ncritic:,:]
+        Y = self.observation_buffer[-self.Ncritic:,:]
         
-        w_critic = W_lmbd_u[:self.dim_critic]
+        w_critic = w_all[:self.dim_critic]
         # lmbd = W_lmbd_u[self.dim_critic+1]
-        w_actor = W_lmbd_u[-self.dim_actor:]         
+        w_actor = w_all[-self.dim_actor:]         
         
         Jc = 0
         
         for k in range(self.Ncritic-1, 0, -1):
-            yPrev = Y[k-1, :]
-            yNext = Y[k, :]
+            observation_prev = Y[k-1, :]
+            observation_next = Y[k, :]
             
-            critic_prev = w_critic @ self._phi( yPrev )
-            critic_next = self.w_critic_prev @ self._phi( yNext )
+            critic_prev = w_critic @ self._phi( observation_prev )
+            critic_next = self.w_critic_prev @ self._phi( observation_next )
             
-            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( yPrev )
+            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation_prev )
             
             # Temporal difference
-            e = critic_prev - self.gamma * critic_next - self.rcost(yPrev, action)
+            e = critic_prev - self.gamma * critic_next - self.rcost(observation_prev, action)
             
             Jc += 1/2 * e**2
         
@@ -558,16 +558,17 @@ class CtrlRLStab:
             opt_options = {'maxiter': 10, 'maxfev': 10, 'disp': False, 'adaptive': True, 'xatol': 1e-4, 'fatol': 1e-4} # 'disp': True, 'verbose': 2} 
         
         # Bounds are not practically necessary for stabilizing joint actor-critic to function
-        # bnds = sp.optimize.Bounds(np.hstack([self.Wmin, self.lmbd_min, self.Hmin]), 
-        #                           np.hstack([self.Wmax, self.lmbd_max, self.Hmax]), 
+        # bnds = sp.optimize.Bounds(np.hstack([self.w_critic_min, self.lmbd_min, self.Hmin]), 
+        #                           np.hstack([self.w_critic_max, self.lmbd_max, self.Hmax]), 
         #                           keep_feasible=True)
         
-        self.Hinit = reshape( lstsq( np.array( [ self._psi( observation ) ] ), np.array( [ self.safe_ctrl.compute_action_vanila( observation ) ] ) )[0].T, self.dim_actor )
+        self.w_actor_init = reshape(lstsq( np.array( [ self._psi( observation ) ] ),
+                                           np.array( [ self.safe_ctrl.compute_action_vanila( observation ) ] ) )[0].T, self.dim_actor )
        
         # DEBUG ===================================================================
         # ================================Constraint debugger
 
-        # w_all = np.concatenate([self.w_critic_init, np.array([self.lmbd_init]), self.Hinit])
+        # w_all = np.concatenate([self.w_critic_init, np.array([self.lmbd_init]), self.w_actor_init])
         
         # w_critic = w_all[:self.dim_critic]
         # lmbd = w_all[self.dim_critic]
@@ -585,11 +586,11 @@ class CtrlRLStab:
         # Notice `bounds=bnds` is removed from arguments of minimize.
         # It is because bounds are not practically necessary for stabilizing joint actor-critic to function
         # w_all = minimize(self._actor_critic_cost,
-        #                     np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.Hinit]),
+        #                     np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.w_actor_init]),
         #                     method=opt_method, tol=1e-4, constraints=my_constraints, options=opt_options).x
         
         w_all = minimize(self._actor_critic_cost,
-                            np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.Hinit]),
+                            np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.w_actor_init]),
                             method=opt_method, tol=1e-4, options=opt_options).x        
         
         w_critic = w_all[:self.dim_critic]
@@ -640,14 +641,14 @@ class CtrlRLStab:
         
         # STUB ===================================================================   
         # ================================Optimization of one rcost + LF_next
-        def J_tmp(action, observation):
-            observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)
-            return self.safe_ctrl.compute_LF(observation_next) + self.rcost(observation_next, action) 
-            # return self.safe_ctrl.compute_LF(observation_next)
+        # def J_tmp(action, observation):
+        #     observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)
+        #     return self.safe_ctrl.compute_LF(observation_next) + self.rcost(observation_next, action) 
+        #     # return self.safe_ctrl.compute_LF(observation_next)
         
-        action = minimize(lambda action: J_tmp(action, observation),
-                      np.zeros(2),
-                      method=opt_method, tol=1e-6, options=opt_options).x        
+        # action = minimize(lambda action: J_tmp(action, observation),
+        #               np.zeros(2),
+        #               method=opt_method, tol=1e-6, options=opt_options).x        
         
         # /STUB ===================================================================
         
@@ -662,8 +663,8 @@ class CtrlRLStab:
             self.ctrl_clock = t
             
             # Update data buffers
-            self.ubuffer = push_vec(self.ubuffer, self.uCurr)
-            self.ybuffer = push_vec(self.ybuffer, observation)          
+            self.action_buffer = push_vec(self.action_buffer, self.action_curr)
+            self.observation_buffer = push_vec(self.observation_buffer, observation)          
             
             w_critic, lmbd, action = self._actor_critic(observation)
             
@@ -671,14 +672,14 @@ class CtrlRLStab:
             self.lmbd_prev = lmbd
 
             for k in range(2):
-                action[k] = np.clip(action[k], self.uMin[k], self.uMax[k]) 
+                action[k] = np.clip(action[k], self.action_min[k], self.action_max[k]) 
 
-            self.uCurr = action
+            self.action_curr = action
 
             return action
         
         else:
-            return self.uCurr        
+            return self.action_curr        
 
 class CtrlOptPred:
     """
@@ -958,17 +959,17 @@ class CtrlOptPred:
         self.Nactor = Nactor 
         self.pred_step_size = pred_step_size
         
-        self.uMin = np.array( ctrl_bnds[:,0] )
-        self.uMax = np.array( ctrl_bnds[:,1] )
-        self.Umin = rep_mat(self.uMin, 1, Nactor)
-        self.Umax = rep_mat(self.uMax, 1, Nactor) 
+        self.action_min = np.array( ctrl_bnds[:,0] )
+        self.action_max = np.array( ctrl_bnds[:,1] )
+        self.action_sqn_min = rep_mat(self.action_min, 1, Nactor)
+        self.action_sqn_max = rep_mat(self.action_max, 1, Nactor) 
         
-        self.uCurr = self.uMin/10
+        self.action_curr = self.action_min/10
         
-        self.Uinit = rep_mat( self.uMin/10 , 1, self.Nactor)
+        self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
         
-        self.ubuffer = np.zeros( [buffer_size, dim_input] )
-        self.ybuffer = np.zeros( [buffer_size, dim_output] )        
+        self.action_buffer = np.zeros( [buffer_size, dim_input] )
+        self.observation_buffer = np.zeros( [buffer_size, dim_output] )        
         
         # Exogeneous model's things
         self.sys_rhs = sys_rhs
@@ -1013,20 +1014,20 @@ class CtrlOptPred:
 
         if self.critic_struct == 'quad-lin':
             self.dim_critic = int( ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 + (self.dim_output + self.dim_input) ) 
-            self.Wmin = -1e3*np.ones(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic) 
+            self.w_critic_min = -1e3*np.ones(self.dim_critic) 
+            self.w_critic_max = 1e3*np.ones(self.dim_critic) 
         elif self.critic_struct == 'quadratic':
             self.dim_critic = int( ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 )
-            self.Wmin = np.zeros(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)    
+            self.w_critic_min = np.zeros(self.dim_critic) 
+            self.w_critic_max = 1e3*np.ones(self.dim_critic)    
         elif self.critic_struct == 'quad-nomix':
             self.dim_critic = self.dim_output + self.dim_input
-            self.Wmin = np.zeros(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)    
+            self.w_critic_min = np.zeros(self.dim_critic) 
+            self.w_critic_max = 1e3*np.ones(self.dim_critic)    
         elif self.critic_struct == 'quad-mix':
             self.dim_critic = int( self.dim_output + self.dim_output * self.dim_input + self.dim_input )
-            self.Wmin = -1e3*np.ones(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)
+            self.w_critic_min = -1e3*np.ones(self.dim_critic) 
+            self.w_critic_max = 1e3*np.ones(self.dim_critic)
             
         self.w_critic_prev = np.ones(self.dim_critic)  
         self.w_critic_init = self.w_critic_prev
@@ -1080,7 +1081,7 @@ class CtrlOptPred:
         
         """
         self.ctrl_clock = t0
-        self.uCurr = self.uMin/10
+        self.action_curr = self.action_min/10
     
     def receive_sys_state(self, x):
         """
@@ -1123,7 +1124,7 @@ class CtrlOptPred:
     
     def _estimate_model(self, t, observation):
         """
-        Estimate model parameters by accumulating data buffers ``ubuffer`` and ``ybuffer``
+        Estimate model parameters by accumulating data buffers ``action_buffer`` and ``observation_buffer``
         
         """
         
@@ -1141,7 +1142,7 @@ class CtrlOptPred:
                     
                     try:
                         # Using ssid from Githug:AndyLamperski/pyN4SID
-                        # Aid, Bid, Cid, Did, _ ,_ = ssid.N4SID(serf.ubuffer.T,  self.ybuffer.T, 
+                        # Aid, Bid, Cid, Did, _ ,_ = ssid.N4SID(serf.action_buffer.T,  self.observation_buffer.T, 
                         #                                       NumRows = self.dim_input + self.model_order,
                         #                                       NumCols = self.buffer_size - (self.dim_input + self.model_order)*2,
                         #                                       NSig = self.model_order,
@@ -1150,7 +1151,7 @@ class CtrlOptPred:
                         
                         # Using Github:CPCLAB-UNIPI/SIPPY 
                         # method: N4SID, MOESP, CVA, PARSIM-P, PARSIM-S, PARSIM-K
-                        SSest = sippy.system_identification(self.ybuffer, self.ubuffer,
+                        SSest = sippy.system_identification(self.observation_buffer, self.action_buffer,
                                                             id_method='N4SID',
                                                             SS_fixed_order=self.model_order,
                                                             SS_D_required=False,
@@ -1165,8 +1166,8 @@ class CtrlOptPred:
                         # NN_wgts = NN_train(...)
                         
                         # [EXPERIMENTAL] Using MATLAB's system identification toolbox
-                        # us_ml = eng.transpose(matlab.double(self.ubuffer.tolist()))
-                        # ys_ml = eng.transpose(matlab.double(self.ybuffer.tolist()))
+                        # us_ml = eng.transpose(matlab.double(self.action_buffer.tolist()))
+                        # ys_ml = eng.transpose(matlab.double(self.observation_buffer.tolist()))
                         
                         # Aml, Bml, Cml, Dml = eng.mySSest_simple(ys_ml, us_ml, dt, model_order, nargout=4)
                         
@@ -1190,8 +1191,8 @@ class CtrlOptPred:
                         for k in range(self.model_est_checks):
                             A, B, C, D = self.model_stack[k].A, self.model_stack[k].B, self.model_stack[k].C, self.model_stack[k].D
                             x0est,_,_,_ = np.linalg.lstsq(C, observation)
-                            Yest,_ = dss_sim(A, B, C, D, self.ubuffer, x0est, observation)
-                            mean_err = np.mean(Yest - self.ybuffer, axis=0)
+                            Yest,_ = dss_sim(A, B, C, D, self.action_buffer, x0est, observation)
+                            mean_err = np.mean(Yest - self.observation_buffer, axis=0)
                             
                             # DEBUG ===================================================================
                             # ================================Interm output of model prediction quality
@@ -1214,8 +1215,8 @@ class CtrlOptPred:
                         # R  = '\033[31m'
                         # Bl  = '\033[30m'
                         # x0est,_,_,_ = np.linalg.lstsq(ctrlStat.C, observation)
-                        # Yest,_ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, ctrlStat.ubuffer, x0est, observation)
-                        # mean_err = np.mean(Yest - ctrlStat.ybuffer, axis=0)
+                        # Yest,_ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, ctrlStat.action_buffer, x0est, observation)
+                        # mean_err = np.mean(Yest - ctrlStat.observation_buffer, axis=0)
                         # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']  
                         # dataRow = []
                         # for k in range(dim_output):
@@ -1276,13 +1277,13 @@ class CtrlOptPred:
         Jc = 0
         
         for k in range(self.Ncritic-1, 0, -1):
-            yPrev = self.ybuffer[k-1, :]
-            yNext = self.ybuffer[k, :]
-            uPrev = self.ubuffer[k-1, :]
-            uNext = self.ubuffer[k, :]
+            observation_prev = self.observation_buffer[k-1, :]
+            observation_next = self.observation_buffer[k, :]
+            uPrev = self.action_buffer[k-1, :]
+            uNext = self.action_buffer[k, :]
             
             # Temporal difference
-            e = w_critic @ self._phi( yPrev, uPrev ) - self.gamma * self.w_critic_prev @ self._phi( yNext, uNext ) - self.rcost(yPrev, uPrev)
+            e = w_critic @ self._phi( observation_prev, uPrev ) - self.gamma * self.w_critic_prev @ self._phi( observation_next, uNext ) - self.rcost(observation_prev, uPrev)
             
             Jc += 1/2 * e**2
             
@@ -1303,7 +1304,7 @@ class CtrlOptPred:
         else:
             critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2} 
         
-        bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
+        bnds = sp.optimize.Bounds(self.w_critic_min, self.w_critic_max, keep_feasible=True)
     
         w_critic = minimize(lambda w_critic: self._critic_cost(w_critic), self.w_critic_init, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
         
@@ -1419,9 +1420,9 @@ class CtrlOptPred:
        
         isGlobOpt = 0
         
-        myUinit = np.reshape(self.Uinit, [self.Nactor*self.dim_input,])
+        myUinit = np.reshape(self.action_sqn_init, [self.Nactor*self.dim_input,])
         
-        bnds = sp.optimize.Bounds(self.Umin, self.Umax, keep_feasible=True)
+        bnds = sp.optimize.Bounds(self.action_sqn_min, self.action_sqn_max, keep_feasible=True)
         
         try:
             if isGlobOpt:
@@ -1493,8 +1494,8 @@ class CtrlOptPred:
                 timeInCriticPeriod = t - self.critic_clock
                 
                 # Update data buffers
-                self.ubuffer = push_vec(self.ubuffer, self.uCurr)
-                self.ybuffer = push_vec(self.ybuffer, observation)
+                self.action_buffer = push_vec(self.action_buffer, self.action_curr)
+                self.observation_buffer = push_vec(self.observation_buffer, observation)
                 
                 if timeInCriticPeriod >= self.critic_period:
                     # Update critic's internal clock
@@ -1518,12 +1519,12 @@ class CtrlOptPred:
                 elif self.mode in ['RQL', 'SQL']:
                     action = self._actor(observation) 
             
-            self.uCurr = action
+            self.action_curr = action
             
             return action    
     
         else:
-            return self.uCurr
+            return self.action_curr
         
 class CtrlNominal3WRobot:
     """
@@ -1578,7 +1579,7 @@ class CtrlNominal3WRobot:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
         
-        self.uCurr = np.zeros(2)
+        self.action_curr = np.zeros(2)
    
     def reset(self, t0):
         """
@@ -1586,7 +1587,7 @@ class CtrlNominal3WRobot:
         
         """
         self.ctrl_clock = t0
-        self.uCurr = np.zeros(2)   
+        self.action_curr = np.zeros(2)   
     
     def _zeta(self, xNI, theta):
         """
@@ -1759,7 +1760,7 @@ class CtrlNominal3WRobot:
                 for k in range(2):
                     action[k] = np.clip(action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])           
             
-            self.uCurr = action
+            self.action_curr = action
 
             # DEBUG ===================================================================   
             # ================================LF debugger
@@ -1775,7 +1776,7 @@ class CtrlNominal3WRobot:
             return action    
     
         else:
-            return self.uCurr
+            return self.action_curr
 
     def compute_action_vanila(self, observation):
         """
@@ -1790,7 +1791,7 @@ class CtrlNominal3WRobot:
         uNI = - self.ctrl_gain * z
         action = self._NH2ctrl_Cart(xNI, eta, uNI)
         
-        self.uCurr = action
+        self.action_curr = action
         
         return action
 
@@ -1823,7 +1824,7 @@ class CtrlNominal3WRobotNI:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
         
-        self.uCurr = np.zeros(2)
+        self.action_curr = np.zeros(2)
    
     def reset(self, t0):
         """
@@ -1831,7 +1832,7 @@ class CtrlNominal3WRobotNI:
         
         """
         self.ctrl_clock = t0
-        self.uCurr = np.zeros(2)   
+        self.action_curr = np.zeros(2)   
     
     def _zeta(self, xNI):
         """
@@ -1969,7 +1970,7 @@ class CtrlNominal3WRobotNI:
                 for k in range(2):
                     action[k] = np.clip(action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])           
             
-            self.uCurr = action
+            self.action_curr = action
             
             # DEBUG ===================================================================   
             # ================================LF debugger
@@ -1985,7 +1986,7 @@ class CtrlNominal3WRobotNI:
             return action    
     
         else:
-            return self.uCurr
+            return self.action_curr
 
     def compute_action_vanila(self, observation):
         """
@@ -1998,7 +1999,7 @@ class CtrlNominal3WRobotNI:
         uNI = self.ctrl_gain * kappa_val
         action = self._NH2ctrl_Cart(xNI, uNI)
         
-        self.uCurr = action
+        self.action_curr = action
         
         return action
 
