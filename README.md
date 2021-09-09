@@ -133,7 +133,7 @@ Optional parameters, set to default values unless specified otherwise:
 | `model_est_period` | number | 1*`dt` | Model is updated every `model_est_period` seconds | 
 | `model_order` | integer | 5 | Order of state-space estimation model | 
 | `prob_noise_pow` | number | 8 | Power of probing noise | 
-|`uMan` | numpy vector | zeros | Manual control action to be fed constant, system-specific! |
+| `action_manual` | numpy vector | zeros | Manual control action to be fed constant, system-specific! |
 | `Nactor` | integer | 3 | Horizon length (in steps) for predictive controllers |
 | `pred_step_size` | number | `dt` | |
 | `buffer_size` | integer | 10 | |
