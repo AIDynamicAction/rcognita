@@ -34,5 +34,5 @@ These are:
 
 There is a collection of main modules (presets) for each agent-environment configuration.
 
-To work with `rcognita`, use one of the presets by `python` running it and specifying parameters.
-If you want to create your own environment, fork the repo and implement one in `systems` via inheriting the `System` superclass.
+To work with `rcognita`, use one of the presets by ``python`` running it and specifying parameters.
+If you want to create your own environment, fork the repo and implement one in ``systems`` via inheriting the ``System`` superclass.
