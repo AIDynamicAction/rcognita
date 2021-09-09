@@ -3,8 +3,11 @@ from os.path import join, dirname
 import sys, os
 
 sys.path.insert(0, os.path.abspath(__file__ + '/..'))
-from rcognita import __version__
-# import rcognita; print(rcognita.__file__)
+with open(os.path.abspath(__file__ + "/../rcognita/__init__.py"), "r") as f:
+    for line in f.readlines():
+        if "__version__" in line:
+            exec(line)
+            break
 
 setup(
     name='rcognita',
