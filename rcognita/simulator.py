@@ -29,13 +29,13 @@ class Simulator:
     sys_type : : string
         Type of system by description:
             
-        | ``diff_eqn`` : differential equation :math:`\mathcal D x = f(x, u, q)`
-        | ``discr_fnc`` : difference equation :math:`x^+ = f(x, u, q)`
-        | ``discr_prob`` :  by probability distribution :math:`X^+ \sim P_X(x^+| x, u, q)`
+        | ``diff_eqn`` : differential equation :math:`\mathcal D state = f(state, u, q)`
+        | ``discr_fnc`` : difference equation :math:`state^+ = f(state, u, q)`
+        | ``discr_prob`` :  by probability distribution :math:`X^+ \sim P_X(state^+| state, u, q)`
     
     where:
         
-        | :math:`x` : state
+        | :math:`state` : state
         | :math:`u` : input
         | :math:`q` : disturbance
         
@@ -51,7 +51,7 @@ class Simulator:
     is_dyn_ctrl : : 0 or 1
         If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
 
-    x0, q0, u0 : : vectors
+    state_init, disturb_init, action_init : : vectors
         Initial values of the (open-loop) system state, disturbance and input
         
     t0, t1, dt : : numbers
@@ -67,7 +67,7 @@ class Simulator:
    
     """    
     
-    def __init__(self, sys_type, closed_loop_rhs, sys_out, x0, q0=[], u0=[], t0=0, t1=1, dt=1e-2, max_step=0.5e-2, first_step=1e-6, atol=1e-5, rtol=1e-3,
+    def __init__(self, sys_type, closed_loop_rhs, sys_out, state_init, disturb_init=[], action_init=[], t0=0, t1=1, dt=1e-2, max_step=0.5e-2, first_step=1e-6, atol=1e-5, rtol=1e-3,
                  is_disturb=0, is_dyn_ctrl=0):
         self.sys_type = sys_type
         self.closed_loop_rhs = closed_loop_rhs
@@ -77,27 +77,27 @@ class Simulator:
         # Build full state of the closed-loop
         if is_dyn_ctrl:
             if is_disturb:
-                ksi0 = np.concatenate([x0, q0, u0])
+                state_full_init = np.concatenate([state_init, disturb_init, action_init])
             else:
-                ksi0 = np.concatenate([x0, u0])
+                state_full_init = np.concatenate([state_init, action_init])
         else:
             if is_disturb:
-                ksi0 = np.concatenate([x0, q0])
+                state_full_init = np.concatenate([state_init, disturb_init])
             else:
-                ksi0 = x0
+                state_full_init = state_init
             
-        self.ksi = ksi0
+        self.state_full = state_full_init
             
         self.t = t0
-        self.x = x0
-        self.dim_state = x0.shape[0]
-        self.y = self.sys_out(x0)
+        self.state = state_init
+        self.dim_state = state_init.shape[0]
+        self.observation = self.sys_out(state_init)
         
         if sys_type == "diff_eqn":
-            self.ODE_solver = sp.integrate.RK45(closed_loop_rhs, t0, ksi0, t1, max_step = dt/2, first_step=first_step, atol=atol, rtol=rtol) 
+            self.ODE_solver = sp.integrate.RK45(closed_loop_rhs, t0, state_full_init, t1, max_step = dt/2, first_step=first_step, atol=atol, rtol=rtol) 
             
         # Store these for reset purposes
-        self.ksi0 = ksi0
+        self.state_full_init = state_full_init
         self.t0 = t0
     
     def sim_step(self):
@@ -109,25 +109,25 @@ class Simulator:
             self.ODE_solver.step()
             
             self.t = self.ODE_solver.t
-            self.ksi = self.ODE_solver.y 
+            self.state_full = self.ODE_solver.observation 
             
-            self.x = self.ksi[0:self.dim_state]
-            self.y = self.sys_out(self.x)
+            self.state = self.state_full[0:self.dim_state]
+            self.observation = self.sys_out(self.state)
             
         elif self.sys_type == "discr_fnc":
             self.t = self.t + self.dt
-            self.ksi = self.closed_loop_rhs(self.t, self.ksi)
+            self.state_full = self.closed_loop_rhs(self.t, self.state_full)
             
-            self.x = self.ksi[0:self.dim_state]
-            self.y = self.sys_out(self.x)
+            self.state = self.state_full[0:self.dim_state]
+            self.observation = self.sys_out(self.state)
             
         elif self.sys_type == "discr_prob":
-            self.ksi = rej_sampling_rvs(self.dim_state, self.closed_loop_rhs, 10)
+            self.state_full = rej_sampling_rvs(self.dim_state, self.closed_loop_rhs, 10)
             
             self.t = self.t + self.dt
             
-            self.x = self.ksi[0:self.dim_state]
-            self.y = self.sys_out(self.x)           
+            self.state = self.state_full[0:self.dim_state]
+            self.observation = self.sys_out(self.state)           
         else:
             raise ValueError('Invalid system description')
             
@@ -137,15 +137,15 @@ class Simulator:
 
         """
         
-        t, x, y, ksi = self.t, self.x, self.y, self.ksi
+        t, state, observation, state_full = self.t, self.state, self.observation, self.state_full
         
-        return t, x, y, ksi
+        return t, state, observation, state_full
     
     def reset(self):
         if self.sys_type == "diff_eqn":
             self.ODE_solver.status = 'running'
             self.ODE_solver.t = self.t0
-            self.ODE_solver.y = self.ksi0
+            self.ODE_solver.observation = self.state_full_init
         else:
             self.t = self.t0
-            self.ksi = self.ksi0
+            self.state_full = self.state_full_init
