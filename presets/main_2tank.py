@@ -36,11 +36,117 @@ from rcognita import controllers
 from rcognita import loggers
 from rcognita import visuals
 from rcognita.utilities import on_key_press
+import argparse
+
+
+dim_state = 2
+dim_input = 1
+dim_output = 2
+dim_disturb = 1
+
+
+description = "Simulate a nonlinear double-tank system"
+parser = argparse.ArgumentParser(description=description)
+parser.add_argument('ctrl_mode', metavar='ctrl_mode', type=str,
+                    help='control mode',
+                    choices=['manual',
+                             'nominal',
+                             'MPC',
+                             'RQL',
+                             'SQL',
+                             'JACS'])
+parser.add_argument('dt', type=float, metavar='dt',
+                    help='controller sampling time')
+parser.add_argument('t1', type=float, metavar='t1',
+                    help='final time')
+parser.add_argument('x0', type=float, nargs="+", metavar='x0',
+                    help='initial state (sequence of numbers); ' + 
+                         'dimension preset-specific!')
+parser.add_argument('--is_log_data', type=bool, default=False,
+                    help='')
+parser.add_argument('--is_visualization', type=bool, default=True,
+                    help='')
+parser.add_argument('--is_print_sim_step', type=bool, default=True,
+                    help='')
+parser.add_argument('--is_est_model', type=bool, default=False,
+                    help='if a model of the env. is to be estimated online')
+parser.add_argument('--model_est_stage', type=float, default=1.0,
+                    help='seconds to learn model until benchmarking controller kicks in')
+parser.add_argument('--model_est_period', type=float, default=None,
+                    help='model is updated every model_est_period seconds')
+parser.add_argument('--model_order', type=int, default=5,
+                    help='order of state-space estimation model')
+parser.add_argument('--prob_noise_pow', type=float, default=False,
+                    help='power of probing noise')
+parser.add_argument('--uMan', type=float, default=np.zeros(dim_input), nargs='+',
+                    help='manual control action to be fed constant, system-specific!')
+parser.add_argument('--Nactor', type=int, default=3,
+                    help='horizon length (in steps) for predictive controllers')
+parser.add_argument('--pred_step_size', type=float, default=None,
+                    help='')
+parser.add_argument('--buffer_size', type=int, default=10,
+                    help='')
+parser.add_argument('--rcost_struct', type=str,
+                    default='quadratic', choices=['quadratic',
+                                                  'biquadratic'],
+                    help='structure of running cost function')
+dim1 = 3
+dim2 = 2
+parser.add_argument('--R1', type=float, nargs='+',
+                    default=np.eye(dim1),
+                    help='must have proper dimension')
+parser.add_argument('--R2', type=float, nargs='+',
+                    default=np.eye(dim2),
+                    help='must have proper dimension')
+parser.add_argument('--Ncritic', type=int, default=4,
+                    help='critic stack size (number of TDs)')
+parser.add_argument('--gamma', type=float, default=1.0,
+                    help='discount factor')
+parser.add_argument('--critic_period', type=float, default=None,
+                    help='critic is updated every critic_period seconds')
+parser.add_argument('--critic_struct', type=str,
+                    default='quad-nomix', choices=['quad-lin',
+                                                   'quadratic',
+                                                   'quad-nomix',
+                                                   'quad-mix'],
+                    help='structure of critic features')
+parser.add_argument('--actor_struct', type=str,
+                    default='quad-nomix', choices=['quad-lin',
+                                                   'quadratic',
+                                                   'quad-nomix',
+                                                   'quad-mix'],
+                    help='structure of actor features')
+
+args = parser.parse_args()
+args.x0 = np.array(args.x0)
+args.uMan = np.array(args.uMan)
+if args.model_est_period is None:
+    args.model_est_period = args.dt
+if args.pred_step_size is None:
+    args.pred_step_size = args.dt
+if isinstance(args.R1, list):
+    assert len(args.R1) == dim1 ** 2
+    args.R1 = np.array(args.R1).reshape(dim1, dim1)
+if isinstance(args.R2, list):
+    assert len(args.R2) == dim2 ** 2
+    args.R2 = np.array(args.R2).reshape(dim2, dim2)
+if args.critic_period is None:
+    args.critic_period = args.dt
+
+assert args.t1 > args.dt > 0.0
+assert args.x0.size == dim_state
+
+
+
+
+globals().update(vars(args))
+
+
+
+
 
 #------------------------------------user settings : : main switches
-is_log_data = 0
-is_visualization = 1
-is_print_sim_step = 1
+
 
 is_disturb = 0
 
@@ -57,14 +163,11 @@ is_dyn_ctrl = 0
 # 'RQL'         - reinforcement learning: Q-learning with Ncritic roll-outs of running cost
 # 'SQL'         - reinforcement learning: stacked Q-learning
 # 'JACS'        - Joint actor-critic (stabilizing)
-ctrl_mode = 'MPC'
+# ctrl_mode = 'MPC'
 
 #------------------------------------user settings : : system
 # System
-dim_state = 2
-dim_input = 1
-dim_output = 2
-dim_disturb = 1
+
 
 # System parameters
 tau1 = 18.4
@@ -75,11 +178,10 @@ K3 = 0.2
 
 #------------------------------------user settings : : simulation
 t0 = 0
-t1 = 100
 Nruns = 1
 
 # state_init = np.ones(dim_state)
-state_init = np.array([0.25, 0.75])
+state_init = x0
 
 action_init = 0.5 * np.ones(dim_input)
 
@@ -91,7 +193,7 @@ rtol = 1e-3
 
 #------------------------------------user settings : : digital elements
 # Digital elements sampling time
-dt = 0.1 # [s], controller sampling time
+#dt = 0.1 # [s], controller sampling time
 # sampleFreq = 1/dt # [Hz]
 
 # Parameters
@@ -101,13 +203,13 @@ dt = 0.1 # [s], controller sampling time
 # diffFiltOrd = 4
 
 #------------------------------------user settings : : model estimator
-is_est_model = 0
-model_est_stage = 2 # [s]
-model_est_period = 1*dt # [s]
+# is_est_model = 0
+# model_est_stage = 2 # [s]
+# model_est_period = 1*dt # [s]
 
-model_order = 5
+# model_order = 5
 
-prob_noise_pow = 8
+# prob_noise_pow = 8
 
 # Model estimator stores models in a stack and recall the best of model_est_checks
 model_est_checks = 0
@@ -117,20 +219,20 @@ model_est_checks = 0
 # u[1]: Steering torque M [N m]
 
 # Manual control
-action_manual = np.array([0.1])
+action_manual = uMan
 
 # Control constraints
 action_min = 0
 action_max = 1
 
 # Control horizon length
-Nactor = 5
+#Nactor = 5
 
 # Should be a multiple of dt
-pred_step_size = 5*dt # [s]
+#pred_step_size = 5*dt # [s]
 
 # Size of data buffers (used, e.g., in model estimation and critic)
-buffer_size = 200
+#buffer_size = 200
 
 #------------------------------------user settings : : RL
 # Running cost structure and parameters
@@ -138,29 +240,29 @@ buffer_size = 200
 # 'quadratic'     - quadratic chi.T R1 chi 
 # 'biquadratic'     - 4th order chi**2.T R2 chi**2 + chi.T R2 chi
 # R1, R2 must be positive-definite
-rcost_struct = 'quadratic'
+# rcost_struct = 'quadratic'
 
-R1 = np.diag([10, 10, 0])  # No mixed terms, full-state measurement
+#R1 = np.diag([10, 10, 0])  # No mixed terms, full-state measurement
 
 # Target filling of the tanks
 observation_target = np.array([0.5, 0.5])
 
 # Critic stack size, not greater than buffer_size
-Ncritic = 50
+# Ncritic = 50
 
 # Discounting factor
-gamma = 1
+# gamma = 1
 
 # Critic is updated every critic_period seconds
-critic_period = 5*dt # [s]
+# critic_period = 5*dt # [s]
 
 # Actor and critic structure choice
 # 'quad-lin' - quadratic-linear
 # 'quadratic' - quadratic
 # 'quad-nomix' - quadratic, no mixed terms
 # 'quad-mix' - W[0] observation[0]^2 + ... W[p-1] observation[p-1]^2 + W[p] observation[0] u[0] + ... W[...] u[0]^2 + ... (only Q-function critic)
-critic_struct = 'quad-nomix'
-actor_struct = 'quad-nomix'
+# critic_struct = 'quad-nomix'
+# actor_struct = 'quad-nomix'
 
 #------------------------------------initialization : : system
 ctrl_bnds = np.array([[action_min], [action_max]]).T
