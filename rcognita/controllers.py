@@ -24,15 +24,18 @@ from scipy.optimize import basinhopping
 from scipy.optimize import NonlinearConstraint
 from numpy.linalg import lstsq
 from numpy import reshape
+import warnings
 
 # For debugging purposes
 from tabulate import tabulate
 
 try:
     import sippy
-except Exception:
-    print(['Importing sippy failed. You may still use rcognita, but without model identification capability. '], 
-          ['Read on how to install sippy at https://github.com/AIDynamicAction/rcognita'])
+except ModuleNotFoundError:
+    warnings.warn_explicit('\nImporting sippy failed. You may still use rcognita, but' +
+                  ' without model identification capability. \nRead on how' +
+                  ' to install sippy at https://github.com/AIDynamicAction/rcognita\n', 
+                  UserWarning, __file__, 33)
 
 # System identification packages
 # import ssid  # Github:OsinenkoP/pyN4SID, fork of Githug:AndyLamperski/pyN4SID, with some errors fixed
