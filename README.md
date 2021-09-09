@@ -38,7 +38,21 @@ cd rcognita
 python3 setup.py install
 ```
 
-Notice that your Python 3 interpreter might be called something else, say, just `python`
+Notice that your Python 3 interpreter might be called something else, say, just `python`.
+
+The package was tested with online model estimation using [SIPPY](https://github.com/CPCLAB-UNIPI/SIPPY). 
+The respective functionality is implemented and enabled via `is_est_model`.
+Related parameters can be found in the documentation of the `CtrlOptPred` class.
+
+To install `SIPPY`, install `scikit-build` first.
+For instance, if you're using Anaconda, type :
+
+```
+conda install scikit-build
+git clone https://github.com/CPCLAB-UNIPI/SIPPY
+cd SIPPY
+python3 setup.py install
+```
 
 # General description
 
@@ -162,20 +176,6 @@ An interface for dynamical controllers, which can be considered as extensions of
 RL is usually understood as a static controller, i.e., a one which assigns actions directly to outputs.
 A dynamical controller does this indirectly, via an internal state as intermediate link. 
 ynamical controllers can overcome some limitations of static controllers.
-
-The package was tested with online model estimation using [SIPPY](https://github.com/CPCLAB-UNIPI/SIPPY). 
-The respective functionality is implemented and enabled via `is_est_model`.
-Related parameters can be found in the documentation of the `CtrlOptPred` class.
-
-To install `SIPPY`, install `scikit-build` first.
-For instance, if you're using Anaconda, type :
-
-```
-conda install scikit-build
-git clone https://github.com/CPCLAB-UNIPI/SIPPY
-cd SIPPY
-python3 setup.py install
-```
 
 # Closing remarks
 
