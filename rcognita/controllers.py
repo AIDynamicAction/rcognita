@@ -27,9 +27,13 @@ from numpy import reshape
 # For debugging purposes
 from tabulate import tabulate
 
-# System identification packages
-# import ssid  # Github:OsinenkoP/pyN4SID, fork of Githug:AndyLamperski/pyN4SID, with some errors fixed
-# import sippy  # Github:CPCLAB-UNIPI/SIPPY
+import warnings
+
+# System identification package
+try:
+    import sippy
+except Exception:
+    print('Importing sippy failed. Read how to install it at https://github.com/AIDynamicAction/rcognita')
 
 # [EXPERIMENTAL] Use MATLAB's system identification toolbox instead of ssid and sippy
 # Compatible MATLAB Runtime and system identification toolbox must be installed
@@ -66,9 +70,9 @@ class CtrlRLStab:
     """
     Class of reinforcement learning agents with stabilizing constraints.
     
-    Sampling here is similar to the predictive controller agent ``ctrl_opt_pred``
+    Sampling here is similar to the predictive controller agent ``CtrlOptPred``
     
-    Needs a nominal controller object ``safe_ctrl`` with a respective Lyapunov function.
+    Needs a nominal controller object ``SafeCtrl`` with a respective Lyapunov function.
     
     Actor
     -----
@@ -77,13 +81,14 @@ class CtrlRLStab:
     
     ``_psi``: regressor
     
-    ``_psi`` is a vector, not a matrix. So, if the environment is multi-input, the input is actually computed as
+    ``_psi`` is a vector, not a matrix. So, if the environment is multi-input, the input is actually computed as, in case of a 1-layer net,
     
     ``u = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( y )``
     
     where ``y`` is the output.
     
-    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.ctrl_opt_pred``
+    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of
+    ``controllers.CtrlOptPred``
     
     Critic
     -----
@@ -97,16 +102,134 @@ class CtrlRLStab:
     mode : : string
         Controller mode. Currently available only JACS, joint actor-critic (stabilizing)   
     
+    See also
+    --------
+    ``CtrlOptPred`` class. Settings are similar to a large extent
+    
     Read more
     ---------
 
     Osinenko, P., Beckenbach, L., Göhrt, T., & Streif, S. (2020). A reinforcement learning method with closed-loop stability guarantee. IFAC-PapersOnLine  
     
     """
-    def __init__(self, dim_input, dim_output, mode='JACS', ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
-                 sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, is_est_model=0, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
-                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct='quad-nomix', actor_struct='quad-nomix', rcost_struct='quadratic', rcost_pars=[], y_target=[],
-                 safe_ctrl=[], safe_decay_rate=[]):
+    def __init__(self,
+                 dim_input,
+                 dim_output,
+                 mode='JACS',
+                 ctrl_bnds=[],
+                 t0=0,
+                 sampling_time=0.1,
+                 Nactor=1,
+                 pred_step_size=0.1,
+                 sys_rhs=[],
+                 sys_out=[],
+                 x_sys=[],
+                 prob_noise_pow = 1,
+                 is_est_model=0,
+                 model_est_stage=1,
+                 model_est_period=0.1,
+                 buffer_size=20,
+                 model_order=3,
+                 model_est_checks=0,
+                 gamma=1,
+                 Ncritic=4,
+                 critic_period=0.1,
+                 critic_struct='quad-nomix',
+                 actor_struct='quad-nomix',
+                 rcost_struct='quadratic',
+                 rcost_pars=[],
+                 y_target=[],   
+                 safe_ctrl=[],
+                 safe_decay_rate=[]):
+        
+        """
+        Parameters
+        ----------
+        dim_input, dim_output : : integer
+            Dimension of input and output which should comply with the system-to-be-controlled  
+    
+        ctrl_bnds : : array of shape ``[dim_input, 2]``
+            Box control constraints.
+            First element in each row is the lower bound, the second - the upper bound.
+            If empty, control is unconstrained (default)
+        t0 : : number
+            Initial value of the controller's internal clock
+        sampling_time : : number
+            Controller's sampling time (in seconds)
+        sys_rhs, sys_out : : functions        
+            Functions that represent the right-hand side, resp., the output of the exogenously passed model.
+            The latter could be, for instance, the true model of the system.
+            In turn, ``x_sys`` represents the (true) current state of the system and should be updated accordingly.
+            Parameters ``sys_rhs, sys_out, x_sys`` are used in those controller modes which rely on them
+        prob_noise_pow : : number
+            Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
+        is_est_model : : number
+            Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model` 
+        model_est_stage : : number
+            Initial time segment to fill the estimator's buffer before applying optimal control (in seconds)      
+        model_est_period : : number
+            Time between model estimate updates (in seconds)
+        buffer_size : : natural number
+            Size of the buffer to store data
+        model_order : : natural number
+            Order of the state-space estimation model
+            
+            .. math::
+                \\begin{array}{ll}
+        			\\hat x^+ & = A \\hat x + B u \\newline
+        			y^+  & = C \\hat x + D u,
+                \\end{array}             
+            
+            See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
+            When customizing, :func:`~controllers.CtrlOptPred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
+            neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
+        model_est_checks : : natural number
+            Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
+            May improve the prediction quality somewhat
+        gamma : : number in (0, 1]
+            Discounting factor.
+            Characterizes fading of running costs along horizon
+        Ncritic : : natural number
+            Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
+            optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
+        critic_period : : number
+            The same meaning as ``model_est_period`` 
+        critic_struct, actor_struct : : string
+            Choice of the structure of the critic's and actor's features
+            
+            Currently available:
+                
+            .. list-table:: Feature structures
+               :widths: 10 90
+               :header-rows: 1
+        
+               * - Mode
+                 - Structure
+               * - 'quad-lin'
+                 - Quadratic-linear
+               * - 'quadratic'
+                 - Quadratic
+               * - 'quad-nomix'
+                 - Quadratic, no mixed terms
+           
+            *Add your specification into the table when customizing the actor and critic* 
+        rcost_struct : : string
+            Choice of the running cost structure.
+            
+            Currently available:
+               
+            .. list-table:: Running objective structures
+               :widths: 10 90
+               :header-rows: 1
+        
+               * - Mode
+                 - Structure
+               * - 'quadratic'
+                 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcost_pars`` should be ``[R1]``
+               * - 'biquadratic'
+                 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcost_pars``
+                   should be ``[R1, R2]``
+        """
         
         self.dim_input = dim_input
         self.dim_output = dim_output
@@ -301,7 +424,7 @@ class CtrlRLStab:
 
     def _phi(self, y):
         """
-        Feature vector of the critic
+        Features of the critic
 
         """
         if self.y_target == []:
@@ -318,7 +441,7 @@ class CtrlRLStab:
         
     def _psi(self, y):
         """
-        Feature vector of the actor
+        Features of the actor
 
         """
 
@@ -363,7 +486,7 @@ class CtrlRLStab:
 
     def _actor_critic(self, y):
         """
-        This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_RL_stab._actor_critic_cost`.
+        This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.CtrlRLStab._actor_critic_cost`.
         It implements the stabilizing constraints
         
         The variable ``w_all`` here is a stack of actor, critic and auxiliary critic weights
@@ -612,7 +735,7 @@ class CtrlOptPred:
     prob_noise_pow : : number
         Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
     is_est_model : : number
-        Flag whether to estimate a system model. See :func:`~controllers.ctrl_opt_pred._estimate_model` 
+        Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model` 
     model_est_stage : : number
         Initial time segment to fill the estimator's buffer before applying optimal control (in seconds)      
     model_est_period : : number
@@ -628,8 +751,8 @@ class CtrlOptPred:
     			y^+  & = C \\hat x + D u,
             \\end{array}             
         
-        See :func:`~controllers.ctrl_opt_pred._estimate_model`. This is just a particular model estimator.
-        When customizing, :func:`~controllers.ctrl_opt_pred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
+        See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
+        When customizing, :func:`~controllers.CtrlOptPred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
         neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
     model_est_checks : : natural number
         Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
@@ -643,11 +766,11 @@ class CtrlOptPred:
     critic_period : : number
         The same meaning as ``model_est_period`` 
     critic_struct : : natural number
-        Choice of the structure of the critic's feature vector
+        Choice of the structure of the critic's features
         
         Currently available:
             
-        .. list-table:: Critic structures
+        .. list-table:: Critic feature structures
            :widths: 10 90
            :header-rows: 1
     
@@ -661,7 +784,7 @@ class CtrlOptPred:
              - Quadratic, no mixed terms
            * - 'quad-mix'
              - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, 
-               where :math:`w` is the critic's weight vector
+               where :math:`w` is the critic's weights
        
         *Add your specification into the table when customizing the critic* 
     rcost_struct : : string
@@ -669,7 +792,7 @@ class CtrlOptPred:
         
         Currently available:
            
-        .. list-table:: Critic structures
+        .. list-table:: Running objective structures
            :widths: 10 90
            :header-rows: 1
     
@@ -691,9 +814,145 @@ class CtrlOptPred:
         
     """    
          
-    def __init__(self, dim_input, dim_output, mode='MPC', ctrl_bnds=[], t0=0, sampling_time=0.1, Nactor=1, pred_step_size=0.1,
-                 sys_rhs=[], sys_out=[], x_sys=[], prob_noise_pow = 1, is_est_model=0, model_est_stage=1, model_est_period=0.1, buffer_size=20, model_order=3, model_est_checks=0,
-                 gamma=1, Ncritic=4, critic_period=0.1, critic_struct='quad-nomix', rcost_struct='quadratic', rcost_pars=[], y_target=[]):
+    def __init__(self,
+                 dim_input,
+                 dim_output,
+                 mode='MPC',
+                 ctrl_bnds=[],
+                 t0=0,
+                 sampling_time=0.1,
+                 Nactor=1,
+                 pred_step_size=0.1,
+                 sys_rhs=[],
+                 sys_out=[],
+                 x_sys=[],
+                 prob_noise_pow = 1,
+                 is_est_model=0,
+                 model_est_stage=1,
+                 model_est_period=0.1,
+                 buffer_size=20,
+                 model_order=3,
+                 model_est_checks=0,
+                 gamma=1,
+                 Ncritic=4,
+                 critic_period=0.1,
+                 critic_struct='quad-nomix',
+                 rcost_struct='quadratic',
+                 rcost_pars=[],
+                 y_target=[]):
+        """
+        Parameters
+        ----------
+        dim_input, dim_output : : integer
+            Dimension of input and output which should comply with the system-to-be-controlled
+        mode : : string
+            Controller mode. Currently available (:math:`r` is the running cost, :math:`\\gamma` is the discounting factor):
+              
+            .. list-table:: Controller modes
+               :widths: 75 25
+               :header-rows: 1
+        
+               * - Mode
+                 - Cost function
+               * - 'MPC' - Model-predictive control (MPC)
+                 - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right)=\\sum_{k=1}^{N_a} \\gamma^{k-1} r(y_k, u_k)`
+               * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
+                 - :math:`J \\left( y_1, \\{u\}_{1}^{N_a}\\right) =\\sum_{k=1}^{N_a-1} \\gamma^{k-1} r(y_k, u_k) + \\hat Q(y_{N_a}, u_{N_a})` 
+               * - 'SQL' - RL/ADP via stacked Q-learning [[1]_]
+                 - :math:`J \\left( y_1, \\{u\\}_1^{N_a} \\right) =\\frac{1}{N_a} \\sum_{k=1}^{N_a-1} \\hat Q(y_{N_a}, u_{N_a})`               
+            
+            *Add your specification into the table when customizing the agent*    
+    
+        ctrl_bnds : : array of shape ``[dim_input, 2]``
+            Box control constraints.
+            First element in each row is the lower bound, the second - the upper bound.
+            If empty, control is unconstrained (default)
+        t0 : : number
+            Initial value of the controller's internal clock
+        sampling_time : : number
+            Controller's sampling time (in seconds)
+        Nactor : : natural number
+            Size of prediction horizon :math:`N_a` 
+        pred_step_size : : number
+            Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
+            convenience. Larger prediction step size leads to longer factual horizon
+        sys_rhs, sys_out : : functions        
+            Functions that represent the right-hand side, resp., the output of the exogenously passed model.
+            The latter could be, for instance, the true model of the system.
+            In turn, ``x_sys`` represents the (true) current state of the system and should be updated accordingly.
+            Parameters ``sys_rhs, sys_out, x_sys`` are used in those controller modes which rely on them
+        prob_noise_pow : : number
+            Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
+        is_est_model : : number
+            Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model` 
+        model_est_stage : : number
+            Initial time segment to fill the estimator's buffer before applying optimal control (in seconds)      
+        model_est_period : : number
+            Time between model estimate updates (in seconds)
+        buffer_size : : natural number
+            Size of the buffer to store data
+        model_order : : natural number
+            Order of the state-space estimation model
+            
+            .. math::
+                \\begin{array}{ll}
+        			\\hat x^+ & = A \\hat x + B u \\newline
+        			y^+  & = C \\hat x + D u,
+                \\end{array}             
+            
+            See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
+            When customizing, :func:`~controllers.CtrlOptPred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
+            neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
+        model_est_checks : : natural number
+            Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
+            May improve the prediction quality somewhat
+        gamma : : number in (0, 1]
+            Discounting factor.
+            Characterizes fading of running costs along horizon
+        Ncritic : : natural number
+            Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
+            optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
+        critic_period : : number
+            The same meaning as ``model_est_period`` 
+        critic_struct : : natural number
+            Choice of the structure of the critic's features
+            
+            Currently available:
+                
+            .. list-table:: Critic feature structures
+               :widths: 10 90
+               :header-rows: 1
+        
+               * - Mode
+                 - Structure
+               * - 'quad-lin'
+                 - Quadratic-linear
+               * - 'quadratic'
+                 - Quadratic
+               * - 'quad-nomix'
+                 - Quadratic, no mixed terms
+               * - 'quad-mix'
+                 - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, 
+                   where :math:`w` is the critic's weights
+           
+            *Add your specification into the table when customizing the critic* 
+        rcost_struct : : string
+            Choice of the running cost structure.
+            
+            Currently available:
+               
+            .. list-table:: Running objective structures
+               :widths: 10 90
+               :header-rows: 1
+        
+               * - Mode
+                 - Structure
+               * - 'quadratic'
+                 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcost_pars`` should be ``[R1]``
+               * - 'biquadratic'
+                 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [y, u]`, ``rcost_pars``
+                   should be ``[R1, R2]``
+        """
         
         self.dim_input = dim_input
         self.dim_output = dim_output
@@ -984,7 +1243,7 @@ class CtrlOptPred:
 
     def _phi(self, y, u):
         """
-        Feature vector of the critic
+        Features of the critic
         
         In Q-learning mode, it uses both ``y`` and ``u``. In value function approximation mode, it should use just ``y``
         
@@ -993,7 +1252,7 @@ class CtrlOptPred:
         
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
         If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``w_critic @ self._phi( y, u )`` 
-        within :func:`~controllers.ctrl_opt_pred._critic_cost`
+        within :func:`~controllers.CtrlOptPred._critic_cost`
         
         """
         if self.y_target == []:
@@ -1040,7 +1299,7 @@ class CtrlOptPred:
         
     def _critic(self):
         """
-        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_opt_pred._critic_cost`
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._critic_cost`
 
         """        
         
@@ -1127,7 +1386,7 @@ class CtrlOptPred:
         Customization
         -------------         
         
-        This method normally should not be altered, adjust :func:`~controllers.ctrl_opt_pred._actor_cost` instead.
+        This method normally should not be altered, adjust :func:`~controllers.CtrlOptPred._actor_cost` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -1215,7 +1474,7 @@ class CtrlOptPred:
         Customization
         -------------         
         
-        Add your modes, that you introduced in :func:`~controllers.ctrl_opt_pred._actor_cost`, here
+        Add your modes, that you introduced in :func:`~controllers.CtrlOptPred._actor_cost`, here
 
         """       
         
@@ -1306,7 +1565,20 @@ class CtrlNominal3WRobot:
     
     """
     
-    def __init__(self, m, I, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1):
+    def __init__(self, m, I, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1):       
+        """
+        Parameters
+        ----------
+        m, I : : numbers
+            Mass and moment of inertia around vertical axis of the robot
+        ctrl_gain : : number
+            Controller gain       
+        t0 : : number
+            Initial value of the controller's internal clock
+        sampling_time : : number
+            Controller's sampling time (in seconds) 
+        """
+        
         self.m = m
         self.I = I
         self.ctrl_gain = ctrl_gain
@@ -1544,6 +1816,16 @@ class CtrlNominal3WRobotNI:
     """
     
     def __init__(self, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1):
+        """
+        Parameters
+        ----------
+        ctrl_gain : : number
+            Controller gain       
+        t0 : : number
+            Initial value of the controller's internal clock
+        sampling_time : : number
+            Controller's sampling time (in seconds) 
+        """        
         self.ctrl_gain = ctrl_gain
         self.ctrl_bnds = ctrl_bnds
         self.ctrl_clock = t0
