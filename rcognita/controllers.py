@@ -15,6 +15,7 @@ from .utilities import dss_sim
 from .utilities import rep_mat
 from .utilities import uptria2vec
 from .utilities import push_vec
+from . import models
 import numpy as np
 import scipy as sp
 from numpy.random import rand
@@ -71,11 +72,11 @@ class CtrlRLStab:
     
     ``w_actor`` : weights
     
-    ``_psi``: regressor
+    ``_regressor_actor``: regressor
     
-    ``_psi`` is a vector, not a matrix. So, if the environment is multi-input, the input is actually computed as, in case of a 1-layer net,
+    ``_regressor_actor`` is a vector, not a matrix. So, if the environment is multi-input, the input is actually computed as, in case of a 1-layer net,
     
-    ``action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation )``
+    ``action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )``
     
     where ``observation`` is the observation or, in other words, output.
     
@@ -87,7 +88,7 @@ class CtrlRLStab:
     
     ``w_critic`` : weights
     
-    ``_phi``: regressor   
+    ``_regressor_critic``: regressor   
     
     Attributes
     ----------
@@ -115,7 +116,7 @@ class CtrlRLStab:
                  pred_step_size=0.1,
                  sys_rhs=[],
                  sys_out=[],
-                 x_sys=[],
+                 state_sys=[],
                  prob_noise_pow = 1,
                  is_est_model=0,
                  model_est_stage=1,
@@ -151,8 +152,8 @@ class CtrlRLStab:
         sys_rhs, sys_out : : functions        
             Functions that represent the right-hand side, resp., the output of the exogenously passed model.
             The latter could be, for instance, the true model of the system.
-            In turn, ``x_sys`` represents the (true) current state of the system and should be updated accordingly.
-            Parameters ``sys_rhs, sys_out, x_sys`` are used in those controller modes which rely on them
+            In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
+            Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them
         prob_noise_pow : : number
             Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
         is_est_model : : number
@@ -250,7 +251,7 @@ class CtrlRLStab:
         # Exogeneous model's things
         self.sys_rhs = sys_rhs
         self.sys_out = sys_out
-        self.x_sys = x_sys
+        self.state_sys = state_sys
         
         # Model estimator's things
         self.est_clock = t0
@@ -268,7 +269,7 @@ class CtrlRLStab:
         D = np.zeros( [self.dim_output, self.dim_input] )
         x0est = np.zeros( self.model_order )
         
-        self.my_model = self.model(A, B, C, D, x0est)
+        self.my_model = models.ModelSS(A, B, C, D, x0est)
         
         self.model_stack = []
         for k in range(self.model_est_checks):
@@ -326,45 +327,6 @@ class CtrlRLStab:
         self.safe_ctrl = safe_ctrl          # Safe controller (agent)
         self.safe_decay_rate = safe_decay_rate
 
-    class model:
-        """
-            Class of estimated models
-            
-            So far, uses just the state-space structure:
-                
-        .. math::
-            \\begin{array}{ll}
-    			\\hat x^+ & = A \\hat x + B u \\newline
-    			y^+  & = C \\hat x + D u,
-            \\end{array}                 
-            
-        Attributes
-        ---------- 
-        A, B, C, D : : arrays of proper shape
-            State-space model parameters
-        x0set : : array
-            Initial state estimate
-            
-        **When introducing your custom model estimator, adjust this class**    
-            
-        """
-        
-        def __init__(self, A, B, C, D, x0est):
-            self.A = A
-            self.B = B
-            self.C = C
-            self.D = D
-            self.x0est = x0est
-            
-        def upd_pars(self, Anew, Bnew, Cnew, Dnew):
-            self.A = Anew
-            self.B = Bnew
-            self.C = Cnew
-            self.D = Dnew
-            
-        def updateIC(self, x0setNew):
-            self.x0set = x0setNew    
-
     def reset(self, t0):
         """
         Resets agent for use in multi-episode simulation.
@@ -375,12 +337,12 @@ class CtrlRLStab:
         self.ctrl_clock = t0
         self.action_curr = self.action_min/10
     
-    def receive_sys_state(self, x):
+    def receive_sys_state(self, state):
         """
         Fetch exogenous model state. Used in some controller modes. See class documentation
 
         """
-        self.x_sys = x
+        self.state_sys = state
     
     def rcost(self, observation, action):
         """
@@ -414,7 +376,7 @@ class CtrlRLStab:
         """
         self.icost_val += self.rcost(observation, action)*self.sampling_time
 
-    def _phi(self, observation):
+    def _regressor_critic(self, observation):
         """
         Features of the critic
 
@@ -431,7 +393,7 @@ class CtrlRLStab:
         elif self.critic_struct == 'quad-nomix':
             return chi * chi
         
-    def _psi(self, observation):
+    def _regressor_actor(self, observation):
         """
         Features of the actor
 
@@ -452,7 +414,7 @@ class CtrlRLStab:
        
         """        
         
-        Y = self.observation_buffer[-self.Ncritic:,:]
+        observation_sqn = self.observation_buffer[-self.Ncritic:,:]
         
         w_critic = w_all[:self.dim_critic]
         # lmbd = W_lmbd_u[self.dim_critic+1]
@@ -461,13 +423,13 @@ class CtrlRLStab:
         Jc = 0
         
         for k in range(self.Ncritic-1, 0, -1):
-            observation_prev = Y[k-1, :]
-            observation_next = Y[k, :]
+            observation_prev = observation_sqn[k-1, :]
+            observation_next = observation_sqn[k, :]
             
-            critic_prev = w_critic @ self._phi( observation_prev )
-            critic_next = self.w_critic_prev @ self._phi( observation_next )
+            critic_prev = w_critic @ self._regressor_critic( observation_prev )
+            critic_next = self.w_critic_prev @ self._regressor_critic( observation_next )
             
-            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation_prev )
+            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation_prev )
             
             # Temporal difference
             e = critic_prev - self.gamma * critic_next - self.rcost(observation_prev, action)
@@ -490,8 +452,8 @@ class CtrlRLStab:
             w_critic = w_all[:self.dim_critic]
             lmbd = w_all[self.dim_critic]
             
-            critic_curr = self.lmbd_prev * self.w_critic_prev @ self._phi( observation ) + ( 1 - self.lmbd_prev ) * self.safe_ctrl.compute_LF( observation )
-            critic_new = lmbd * w_critic @ self._phi( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
+            critic_curr = self.lmbd_prev * self.w_critic_prev @ self._regressor_critic( observation ) + ( 1 - self.lmbd_prev ) * self.safe_ctrl.compute_LF( observation )
+            critic_new = lmbd * w_critic @ self._regressor_critic( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
             
             return critic_new - critic_curr
             
@@ -500,11 +462,11 @@ class CtrlRLStab:
             lmbd = w_all[self.dim_critic]
             w_actor = w_all[-self.dim_actor:] 
                         
-            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation )
+            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )
             
             observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
             
-            critic_next = lmbd * w_critic @ self._phi( observation_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation_next )
+            critic_next = lmbd * w_critic @ self._regressor_critic( observation_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation_next )
             
             return self.safe_ctrl.compute_LF(observation_next) - critic_next        
         
@@ -513,12 +475,12 @@ class CtrlRLStab:
             lmbd = w_all[self.dim_critic]
             w_actor = w_all[-self.dim_actor:]   
             
-            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation )
+            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )
             
             observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
             
-            critic_new = lmbd * w_critic @ self._phi( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
-            critic_next = lmbd * w_critic @ self._phi( observation_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation_next )
+            critic_new = lmbd * w_critic @ self._regressor_critic( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
+            critic_next = lmbd * w_critic @ self._regressor_critic( observation_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation_next )
             
             return critic_next - critic_new + self.safe_decay_rate
 
@@ -526,7 +488,7 @@ class CtrlRLStab:
             w_critic = w_all[:self.dim_critic]
             lmbd = w_all[self.dim_critic]
             
-            critic_new = lmbd * w_critic @ self._phi( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
+            critic_new = lmbd * w_critic @ self._regressor_critic( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
             
             return - critic_new
 
@@ -562,7 +524,7 @@ class CtrlRLStab:
         #                           np.hstack([self.w_critic_max, self.lmbd_max, self.Hmax]), 
         #                           keep_feasible=True)
         
-        self.w_actor_init = reshape(lstsq( np.array( [ self._psi( observation ) ] ),
+        self.w_actor_init = reshape(lstsq( np.array( [ self._regressor_actor( observation ) ] ),
                                            np.array( [ self.safe_ctrl.compute_action_vanila( observation ) ] ) )[0].T, self.dim_actor )
        
         # DEBUG ===================================================================
@@ -574,7 +536,7 @@ class CtrlRLStab:
         # lmbd = w_all[self.dim_critic]
         # w_actor = w_all[-self.dim_actor:] 
                     
-        # action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation )
+        # action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )
         
         # constr_stab_par_decay(w_all, observation)
         # constr_stab_LF_bound(w_all, observation)
@@ -597,7 +559,7 @@ class CtrlRLStab:
         lmbd = w_all[self.dim_critic]
         w_actor = w_all[-self.dim_actor:]       
         
-        action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._psi( observation )       
+        action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )       
         
         # DEBUG ===================================================================   
         # ================================Constraint debugger
@@ -619,7 +581,7 @@ class CtrlRLStab:
             w_critic = self.w_critic_init
             lmbd = self.lmbd_init
             action = self.safe_ctrl.compute_action_vanila( observation )
-            w_actor = reshape( lstsq( np.array( [ self._psi( observation ) ] ), np.array( [ action ] ) )[0].T, self.dim_actor )
+            w_actor = reshape( lstsq( np.array( [ self._regressor_actor( observation ) ] ), np.array( [ action ] ) )[0].T, self.dim_actor )
        
         # DEBUG ===================================================================   
         # ================================Put safe controller through        
@@ -723,8 +685,8 @@ class CtrlOptPred:
     sys_rhs, sys_out : : functions        
         Functions that represent the right-hand side, resp., the output of the exogenously passed model.
         The latter could be, for instance, the true model of the system.
-        In turn, ``x_sys`` represents the (true) current state of the system and should be updated accordingly.
-        Parameters ``sys_rhs, sys_out, x_sys`` are used in those controller modes which rely on them
+        In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
+        Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them
     prob_noise_pow : : number
         Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
     is_est_model : : number
@@ -818,7 +780,7 @@ class CtrlOptPred:
                  pred_step_size=0.1,
                  sys_rhs=[],
                  sys_out=[],
-                 x_sys=[],
+                 state_sys=[],
                  prob_noise_pow = 1,
                  is_est_model=0,
                  model_est_stage=1,
@@ -872,8 +834,8 @@ class CtrlOptPred:
         sys_rhs, sys_out : : functions        
             Functions that represent the right-hand side, resp., the output of the exogenously passed model.
             The latter could be, for instance, the true model of the system.
-            In turn, ``x_sys`` represents the (true) current state of the system and should be updated accordingly.
-            Parameters ``sys_rhs, sys_out, x_sys`` are used in those controller modes which rely on them
+            In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
+            Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them
         prob_noise_pow : : number
             Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
         is_est_model : : number
@@ -974,7 +936,7 @@ class CtrlOptPred:
         # Exogeneous model's things
         self.sys_rhs = sys_rhs
         self.sys_out = sys_out
-        self.x_sys = x_sys
+        self.state_sys = state_sys
         
         # Model estimator's things
         self.is_est_model = is_est_model
@@ -993,7 +955,7 @@ class CtrlOptPred:
         D = np.zeros( [self.dim_output, self.dim_input] )
         x0est = np.zeros( self.model_order )
         
-        self.my_model = self.model(A, B, C, D, x0est)
+        self.my_model = models.ModelSS(A, B, C, D, x0est)
         
         self.model_stack = []
         for k in range(self.model_est_checks):
@@ -1034,45 +996,6 @@ class CtrlOptPred:
         
         # self.big_number = 1e4
 
-    class model:
-        """
-            Class of estimated models
-            
-            So far, uses just the state-space structure:
-                
-        .. math::
-            \\begin{array}{ll}
-    			\\hat x^+ & = A \\hat x + B u \\newline
-    			y^+  & = C \\hat x + D u,
-            \\end{array}                 
-            
-        Attributes
-        ---------- 
-        A, B, C, D : : arrays of proper shape
-            State-space model parameters
-        x0set : : array
-            Initial state estimate
-            
-        **When introducing your custom model estimator, adjust this class**    
-            
-        """
-        
-        def __init__(self, A, B, C, D, x0est):
-            self.A = A
-            self.B = B
-            self.C = C
-            self.D = D
-            self.x0est = x0est
-            
-        def upd_pars(self, Anew, Bnew, Cnew, Dnew):
-            self.A = Anew
-            self.B = Bnew
-            self.C = Cnew
-            self.D = Dnew
-            
-        def updateIC(self, x0setNew):
-            self.x0set = x0setNew
-
     def reset(self, t0):
         """
         Resets agent for use in multi-episode simulation.
@@ -1083,12 +1006,12 @@ class CtrlOptPred:
         self.ctrl_clock = t0
         self.action_curr = self.action_min/10
     
-    def receive_sys_state(self, x):
+    def receive_sys_state(self, state):
         """
         Fetch exogenous model state. Used in some controller modes. See class documentation
 
         """
-        self.x_sys = x
+        self.state_sys = state
     
     def rcost(self, observation, action):
         """
@@ -1234,7 +1157,7 @@ class CtrlOptPred:
                     # Drop probing noise
                     self.is_prob_noise = 0 
 
-    def _phi(self, observation, action):
+    def _regressor_critic(self, observation, action):
         """
         Features of the critic
         
@@ -1244,7 +1167,7 @@ class CtrlOptPred:
         -------------
         
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
-        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``w_critic @ self._phi( observation, action )`` 
+        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``w_critic @ self._regressor_critic( observation, action )`` 
         within :func:`~controllers.CtrlOptPred._critic_cost`
         
         """
@@ -1283,7 +1206,9 @@ class CtrlOptPred:
             uNext = self.action_buffer[k, :]
             
             # Temporal difference
-            e = w_critic @ self._phi( observation_prev, uPrev ) - self.gamma * self.w_critic_prev @ self._phi( observation_next, uNext ) - self.rcost(observation_prev, uPrev)
+            e = w_critic @ self._regressor_critic( observation_prev, uPrev )- \
+            self.gamma * self.w_critic_prev @ self._regressor_critic( observation_next, uNext )- \
+            self.rcost(observation_prev, uPrev)
             
             Jc += 1/2 * e**2
             
@@ -1315,7 +1240,7 @@ class CtrlOptPred:
         
         return w_critic
     
-    def _actor_cost(self, U, observation):
+    def _actor_cost(self, action_sqn, observation):
         """
         See class documentation
         
@@ -1326,46 +1251,46 @@ class CtrlOptPred:
 
         """
         
-        myU = np.reshape(U, [self.Nactor, self.dim_input])
+        my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
         
-        Y = np.zeros([self.Nactor, self.dim_output])
+        observation_sqn = np.zeros([self.Nactor, self.dim_output])
         
         # System output prediction
         if not self.is_est_model:    # Via exogenously passed model
-            Y[0, :] = observation
-            x = self.x_sys
+            observation_sqn[0, :] = observation
+            state = self.state_sys
             for k in range(1, self.Nactor):
-                # x = get_next_state(x, myU[k-1, :], delta)         TODO
-                x = x + self.pred_step_size * self.sys_rhs([], x, myU[k-1, :])  # Euler scheme
+                # state = get_next_state(state, my_action_sqn[k-1, :], delta)         TODO
+                state = state + self.pred_step_size * self.sys_rhs([], state, my_action_sqn[k-1, :])  # Euler scheme
                 
-                Y[k, :] = self.sys_out(x)
+                observation_sqn[k, :] = self.sys_out(state)
 
         elif self.is_est_model:    # Via estimated model
-            myU_upsampled = myU.repeat(int(self.pred_step_size/self.sampling_time), axis=0)
-            Yupsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0est, observation)
-            Y = Yupsampled[::int(self.pred_step_size/self.sampling_time)]
+            my_action_sqn_upsampled = my_action_sqn.repeat(int(self.pred_step_size/self.sampling_time), axis=0)
+            observation_sqn_upsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, my_action_sqn_upsampled, self.my_model.x0est, observation)
+            observation_sqn = observation_sqn_upsampled[::int(self.pred_step_size/self.sampling_time)]
         
         J = 0         
         if self.mode=='MPC':
             for k in range(self.Nactor):
-                J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
+                J += self.gamma**k * self.rcost(observation_sqn[k, :], my_action_sqn[k, :])
         elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of running cost
              for k in range(self.Nactor-1):
-                J += self.gamma**k * self.rcost(Y[k, :], myU[k, :])
-             J += self.w_critic @ self._phi( Y[-1, :], myU[-1, :] )
+                J += self.gamma**k * self.rcost(observation_sqn[k, :], my_action_sqn[k, :])
+             J += self.w_critic @ self._regressor_critic( observation_sqn[-1, :], my_action_sqn[-1, :] )
         elif self.mode=='SQL':     # RL: stacked Q-learning
              for k in range(self.Nactor): 
-                Q = self.w_critic @ self._phi( Y[k, :], myU[k, :] )
+                Q = self.w_critic @ self._regressor_critic( observation_sqn[k, :], my_action_sqn[k, :] )
                 
                 # With state constraints via indicator function
-                # Q = w_critic @ self._phi( Y[k, :], myU[k, :] ) + state_constraint_indicator(Y[k, 0])
+                # Q = w_critic @ self._regressor_critic( observation_sqn[k, :], my_action_sqn[k, :] ) + state_constraint_indicator(observation_sqn[k, 0])
                 
                 # DEBUG ===================================================================
                 # =========================================================================
                 # R  = '\033[31m'
                 # Bl  = '\033[30m'
-                # if state_constraint_indicator(Y[k, 0]) > 1:
-                #     print(R+str(state_constraint_indicator(Y[k, 0]))+Bl)
+                # if state_constraint_indicator(observation_sqn[k, 0]) > 1:
+                #     print(R+str(state_constraint_indicator(observation_sqn[k, 0]))+Bl)
                 # /DEBUG ==================================================================                 
                 
                 J += Q 
@@ -1386,26 +1311,26 @@ class CtrlOptPred:
 
         # For direct implementation of state constraints, this needs `partial` from `functools`
         # See [here](https://stackoverflow.com/questions/27659235/adding-multiple-constraints-to-scipy-minimize-autogenerate-constraint-dictionar)
-        # def state_constraint(U, idx):
+        # def state_constraint(action_sqn, idx):
             
-        #     myU = np.reshape(U, [N, self.dim_input])
+        #     my_action_sqn = np.reshape(action_sqn, [N, self.dim_input])
             
-        #     Y = np.zeros([idx, self.dim_output])    
+        #     observation_sqn = np.zeros([idx, self.dim_output])    
             
         #     # System output prediction
         #     if (mode==1) or (mode==3) or (mode==5):    # Via exogenously passed model
-        #         Y[0, :] = observation
-        #         x = self.x_sys
+        #         observation_sqn[0, :] = observation
+        #         state = self.state_sys
         #         for k in range(1, idx):
-        #             # x = get_next_state(x, myU[k-1, :], delta)
-        #             x = x + delta * self.sys_rhs([], x, myU[k-1, :], [])  # Euler scheme
-        #             Y[k, :] = self.sys_out(x)            
+        #             # state = get_next_state(state, my_action_sqn[k-1, :], delta)
+        #             state = state + delta * self.sys_rhs([], state, my_action_sqn[k-1, :], [])  # Euler scheme
+        #             observation_sqn[k, :] = self.sys_out(state)            
             
-        #     return Y[-1, 1] - 1
+        #     return observation_sqn[-1, 1] - 1
 
         # my_constraints=[]
         # for my_idx in range(1, self.Nactor+1):
-        #     my_constraints.append({'type': 'eq', 'fun': lambda U: state_constraint(U, idx=my_idx)})
+        #     my_constraints.append({'type': 'eq', 'fun': lambda action_sqn: state_constraint(action_sqn, idx=my_idx)})
 
         # my_constraints = {'type': 'ineq', 'fun': state_constraint}
 
@@ -1420,45 +1345,46 @@ class CtrlOptPred:
        
         isGlobOpt = 0
         
-        myUinit = np.reshape(self.action_sqn_init, [self.Nactor*self.dim_input,])
+        my_action_sqn_init = np.reshape(self.action_sqn_init, [self.Nactor*self.dim_input,])
         
         bnds = sp.optimize.Bounds(self.action_sqn_min, self.action_sqn_max, keep_feasible=True)
         
         try:
             if isGlobOpt:
                 minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                U = basinhopping(lambda U: self._actor_cost(U, observation), myUinit, minimizer_kwargs=minimizer_kwargs, niter = 10).x
+                action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation), my_action_sqn_init, minimizer_kwargs=minimizer_kwargs, niter = 10).x
             else:
-                U = minimize(lambda U: self._actor_cost(U, observation), myUinit, method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x        
+                action_sqn = minimize(lambda action_sqn: self._actor_cost(action_sqn, observation), my_action_sqn_init,
+                                      method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x        
 
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
-            U = myUinit
+            action_sqn = my_action_sqn_init
         
         # DEBUG ===================================================================
         # ================================Interm output of model prediction quality
         # R  = '\033[31m'
         # Bl  = '\033[30m'
-        # myU = np.reshape(U, [N, self.dim_input])    
-        # myU_upsampled = myU.repeat(int(delta/self.sampling_time), axis=0)
-        # Yupsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, myU_upsampled, self.my_model.x0est, observation)
-        # Y = Yupsampled[::int(delta/self.sampling_time)]
+        # my_action_sqn = np.reshape(action_sqn, [N, self.dim_input])    
+        # my_action_sqn_upsampled = my_action_sqn.repeat(int(delta/self.sampling_time), axis=0)
+        # observation_sqn_upsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, my_action_sqn_upsampled, self.my_model.x0est, observation)
+        # observation_sqn = observation_sqn_upsampled[::int(delta/self.sampling_time)]
         # Yt = np.zeros([N, self.dim_output])
         # Yt[0, :] = observation
-        # x = self.x_sys
+        # state = self.state_sys
         # for k in range(1, Nactor):
-        #     x = x + delta * self.sys_rhs([], x, myU[k-1, :], [])  # Euler scheme
-        #     Yt[k, :] = self.sys_out(x)           
+        #     state = state + delta * self.sys_rhs([], state, my_action_sqn[k-1, :], [])  # Euler scheme
+        #     Yt[k, :] = self.sys_out(state)           
         # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']  
         # dataRow = []
         # for k in range(dim_output):
-        #     dataRow.append( np.mean(Y[:,k] - Yt[:,k]) )
+        #     dataRow.append( np.mean(observation_sqn[:,k] - Yt[:,k]) )
         # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')   
         # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
         # print(R+table+Bl)
         # /DEBUG ==================================================================     
         
-        return U[:self.dim_input]    # Return first action
+        return action_sqn[:self.dim_input]    # Return first action
                     
     def compute_action(self, t, observation):
         """
