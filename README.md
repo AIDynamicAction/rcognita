@@ -15,6 +15,8 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 # Table of content
 
 - [Installation](#Installation)
+  * Basic(#Basic)
+  * With model estimation tools(#With-model-estimation-tools)
 - [General description](#General-description)
 - [Usage](#Usage)
   * [Settings](#Settings)
@@ -23,6 +25,8 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 - [Closing remarks](#Closing-remarks)
 
 # Installation
+
+[To table of content](#Table-of-content)
 
 ## Basic
 
@@ -49,14 +53,16 @@ The package was tested with online model estimation using [SIPPY](https://github
 The respective functionality is implemented and enabled via `is_est_model`.
 Related parameters can be found in the documentation of the `CtrlOptPred` class.
 
+### Installing dependencies
+
 To install `SIPPY`, first take care of the dependencies:
 
-### Ubuntu/Debian:
+#### Ubuntu/Debian:
 ```
 sudo apt-get install -y build-essential gfortran cmake libopenblas-dev
 ```
 
-### Arch
+#### Arch
 ```
 pacman -Sy gcc gcc-fortran cmake base-devel openblas
 ```
