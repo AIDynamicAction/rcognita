@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-This module contains auxiliary functions
+This module contains auxiliary functions.
 
 Remarks: 
 
@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 
 def rej_sampling_rvs(dim, pdf, M):
     """
-    Random variable (pseudo)-realizations via rejection sampling
+    Random variable (pseudo)-realizations via rejection sampling.
     
     Parameters
     ----------
@@ -35,7 +35,7 @@ def rej_sampling_rvs(dim, pdf, M):
 
     Returns
     -------
-    A single realization (in general, as a vector) of the random variable with the desired probability density
+    A single realization (in general, as a vector) of the random variable with the desired probability density.
 
     """
     
@@ -57,7 +57,7 @@ def rej_sampling_rvs(dim, pdf, M):
         
 def to_col_vec(argin):
     """
-    Convert input to a column vector
+    Convert input to a column vector.
 
     """
     if argin.ndim < 2:
@@ -70,7 +70,7 @@ def to_col_vec(argin):
 
 def rep_mat(argin, n, m):
     """
-    Ensures 1D result
+    Ensures 1D result.
     
     """
     return np.squeeze(repmat(argin, n, m))
@@ -80,7 +80,7 @@ def push_vec(matrix, vec):
 
 def uptria2vec(mat):
     """
-    Convert upper triangular square sub-matrix to column vector
+    Convert upper triangular square sub-matrix to column vector.
     
     """    
     n = mat.shape[0]
@@ -97,7 +97,7 @@ def uptria2vec(mat):
 
 class ZOH:
     """
-    Zero-order hold
+    Zero-order hold.
     
     """    
     def __init__(self, init_time=0, init_val=0, sample_time=1):
@@ -115,7 +115,7 @@ class ZOH:
     
 class DFilter:
     """
-    Real-time digital filter
+    Real-time digital filter.
     
     """
     def __init__(self, filter_num, filter_den, buffer_size=16, init_time=0, init_val=0, sample_time=1):
@@ -145,7 +145,7 @@ class DFilter:
     
 def dss_sim(A, B, C, D, uSqn, x0, y0):
     """
-    Simulate output response of a discrete-time state-space model
+    Simulate output response of a discrete-time state-space model.
     """
     if uSqn.ndim == 1:
         return y0, x0
@@ -177,7 +177,7 @@ def upd_text(textHandle, newText):
     
 def on_key_press(event, anm):  
     """
-    Key press event handler for a ``FuncAnimation`` animation object
+    Key press event handler for a ``FuncAnimation`` animation object.
 
     """
     if event.key==' ':

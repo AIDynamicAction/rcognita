@@ -63,8 +63,58 @@ class System:
     pars_disturb : : list
         Parameters of the disturbance model
         
+   Each concrete system must realize ``System`` and define ``name`` attribute.   
+        
     """
-    def __init__(self, sys_type, dim_state, dim_input, dim_output, dim_disturb, pars=[], ctrl_bnds=[], is_dyn_ctrl=0, is_disturb=0, pars_disturb=[]):
+    def __init__(self,
+                 sys_type,
+                 dim_state,
+                 dim_input,
+                 dim_output,
+                 dim_disturb,
+                 pars=[],
+                 ctrl_bnds=[],
+                 is_dyn_ctrl=0,
+                 is_disturb=0,
+                 pars_disturb=[]):
+        
+        """
+        Parameters
+        ----------
+        sys_type : : string
+            Type of system by description:
+                
+            | ``diff_eqn`` : differential equation :math:`\mathcal D state = f(state, action, disturb)`
+            | ``discr_fnc`` : difference equation :math:`state^+ = f(state, action, disturb)`
+            | ``discr_prob`` :  by probability distribution :math:`X^+ \sim P_X(state^+| state, action, disturb)`
+        
+        where:
+            
+            | :math:`state` : state
+            | :math:`action` : input
+            | :math:`disturb` : disturbance
+            
+        The time variable ``t`` is commonly used by ODE solvers, and you shouldn't have it explicitly referenced in the definition, unless your system is non-autonomous.
+        For the latter case, however, you already have the input and disturbance at your disposal.
+        
+        Parameters of the system are contained in ``pars`` attribute.
+        
+        dim_state, dim_input, dim_output, dim_disturb : : integer
+            System dimensions 
+        pars : : list
+            List of fixed parameters of the system
+        ctrl_bnds : : array of shape ``[dim_input, 2]``
+            Box control constraints.
+            First element in each row is the lower bound, the second - the upper bound.
+            If empty, control is unconstrained (default)
+        is_dyn_ctrl : : 0 or 1
+            If 1, the controller (a.k.a. agent) is considered as a part of the full state vector
+        is_disturb : : 0 or 1
+            If 0, no disturbance is fed into the system
+        pars_disturb : : list
+            Parameters of the disturbance model        
+        """
+        
         self.sys_type = sys_type
         
         self.dim_state = dim_state
@@ -243,7 +293,9 @@ class Sys3WRobot(System):
     .. [1] W. Abbasi, F. urRehman, and I. Shah. “Backstepping based nonlinear adaptive control for the extended
         nonholonomic double integrator”. In: Kybernetika 53.4 (2017), pp. 578–594
     
-    """        
+    """ 
+    name = '3wrobot'
+       
     def _state_dyn(self, t, state, action, disturb=[]):   
         m, I = self.pars[0], self.pars[1]
 
@@ -299,7 +351,9 @@ class Sys3WRobotNI(System):
     System class: 3-wheel robot with static actuators (the NI - non-holonomic integrator).
     
     
-    """        
+    """ 
+    name = '3wrobotNI'
+       
     def _state_dyn(self, t, state, action, disturb=[]):   
         Dstate = np.zeros(self.dim_state)
         Dstate[0] = action[0] * np.cos( state[2] )
@@ -332,8 +386,11 @@ class Sys3WRobotNI(System):
 
 class Sys2Tank(System):
     """
-    Two-tank system with nonlinearity
+    Two-tank system with nonlinearity.
+    
     """
+    name = '2tank'
+    
     def _state_dyn(self, t, state, action, disturb=[]):     
         tau1, tau2, K1, K2, K3 = self.pars
 

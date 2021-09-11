@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-This module contains classes to be used in fitting system models
+This module contains classes to be used in fitting system models.
 
-Currently under construction
+Updates to come.
 
 """
 

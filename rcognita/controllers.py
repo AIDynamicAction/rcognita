@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-This module contains controllers (agents)
+This module contains controllers (agents).
 
 Remarks: 
 
@@ -37,29 +37,19 @@ except ModuleNotFoundError:
                   ' to install sippy at https://github.com/AIDynamicAction/rcognita\n', 
                   UserWarning, __file__, 33)
 
-# System identification packages
-# import ssid  # Github:OsinenkoP/pyN4SID, fork of Githug:AndyLamperski/pyN4SID, with some errors fixed
-# import sippy  # Github:CPCLAB-UNIPI/SIPPY
-
-# [EXPERIMENTAL] Use MATLAB's system identification toolbox instead of ssid and sippy
-# Compatible MATLAB Runtime and system identification toolbox must be installed
-# import matlab.engine
-# eng = matlab.engine.start_matlab()
-# eng.addpath(r'~/MATLAB/RL/ENDICart',nargout=0)
-
 def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode):
     """
-    Main interface for various controllers
+    Main interface for various controllers.
 
     Parameters
     ----------
     mode : : string
-        Controller mode as acronym of the respective control method
+        Controller mode as acronym of the respective control method.
 
     Returns
     -------
-    action : : array of shape ``[dim_input, ]``
-        Control action
+    action : : array of shape ``[dim_input, ]``.
+        Control action.
 
     """
     
@@ -76,7 +66,7 @@ class CtrlRLStab:
     """
     Class of reinforcement learning agents with stabilizing constraints.
     
-    Sampling here is similar to the predictive controller agent ``ctrl_opt_pred``
+    Sampling here is similar to the predictive controller agent ``CtrlOptPred``
     
     Needs a nominal controller object ``safe_ctrl`` with a respective Lyapunov function.
     
@@ -93,7 +83,7 @@ class CtrlRLStab:
     
     where ``observation`` is the output.
     
-    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.ctrl_opt_pred``
+    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.CtrlOptPred``
     
     Critic
     -----
@@ -105,7 +95,7 @@ class CtrlRLStab:
     Attributes
     ----------
     mode : : string
-        Controller mode. Currently available only JACS, joint actor-critic (stabilizing)   
+        Controller mode. Currently available only JACS, joint actor-critic (stabilizing).   
     
     Read more
     ---------
@@ -138,41 +128,43 @@ class CtrlRLStab:
                  critic_period=0.1,
                  critic_struct='quad-nomix',
                  actor_struct='quad-nomix',
-                 rcost_struct='quadratic',
+                 stage_obj_struct='quadratic',
                  rcost_pars=[],
                  observation_target=[],   
                  safe_ctrl=[],
                  safe_decay_rate=[]):
         
         """
+        Parameter specification largely resembles that of ``CtrlOptPred`` class.
+        
         Parameters
         ----------
         dim_input, dim_output : : integer
-            Dimension of input and output which should comply with the system-to-be-controlled  
+            Dimension of input and output which should comply with the system-to-be-controlled.  
     
         ctrl_bnds : : array of shape ``[dim_input, 2]``
             Box control constraints.
             First element in each row is the lower bound, the second - the upper bound.
-            If empty, control is unconstrained (default)
+            If empty, control is unconstrained (default).
         t0 : : number
-            Initial value of the controller's internal clock
+            Initial value of the controller's internal clock.
         sampling_time : : number
-            Controller's sampling time (in seconds)
+            Controller's sampling time (in seconds).
         sys_rhs, sys_out : : functions        
             Functions that represent the right-hand side, resp., the output of the exogenously passed model.
             The latter could be, for instance, the true model of the system.
             In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-            Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them
+            Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them.
         prob_noise_pow : : number
-            Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
+            Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
         is_est_model : : number
-            Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model` 
+            Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model`. 
         model_est_stage : : number
-            Initial time segment to fill the estimator's buffer before applying optimal control (in seconds)      
+            Initial time segment to fill the estimator's buffer before applying optimal control (in seconds).      
         model_est_period : : number
-            Time between model estimate updates (in seconds)
+            Time between model estimate updates (in seconds).
         buffer_size : : natural number
-            Size of the buffer to store data
+            Size of the buffer to store data.
         model_order : : natural number
             Order of the state-space estimation model
             
@@ -184,20 +176,20 @@ class CtrlRLStab:
             
             See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
             When customizing, :func:`~controllers.CtrlOptPred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
-            neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
+            neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons``. 
         model_est_checks : : natural number
             Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
             May improve the prediction quality somewhat
         gamma : : number in (0, 1]
             Discounting factor.
-            Characterizes fading of running costs along horizon
+            Characterizes fading of stage objectives along horizon.
         Ncritic : : natural number
             Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
-            optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
+            optimal infinite-horizon objective (a.k.a. the value function). The temporal errors are stacked up using the said buffer.
         critic_period : : number
-            The same meaning as ``model_est_period`` 
+            The same meaning as ``model_est_period`.` 
         critic_struct, actor_struct : : string
-            Choice of the structure of the critic's and actor's features
+            Choice of the structure of the critic's and actor's features.
             
             Currently available:
                 
@@ -214,9 +206,9 @@ class CtrlRLStab:
                * - 'quad-nomix'
                  - Quadratic, no mixed terms
            
-            *Add your specification into the table when customizing the actor and critic* 
-        rcost_struct : : string
-            Choice of the running cost structure.
+            *Add your specification into the table when customizing the actor and critic*. 
+        stage_obj_struct : : string
+            Choice of the stage objective structure.
             
             Currently available:
                
@@ -292,11 +284,11 @@ class CtrlRLStab:
         self.critic_period = critic_period
         self.critic_struct = critic_struct
         self.actor_struct = actor_struct
-        self.rcost_struct = rcost_struct
+        self.stage_obj_struct = stage_obj_struct
         self.rcost_pars = rcost_pars
         self.observation_target = observation_target
         
-        self.icost_val = 0
+        self.accum_obj_val = 0
 
         if self.critic_struct == 'quad-lin':
             self.dim_critic = int( (  self.dim_output  + 1 ) *  self.dim_output / 2 + self.dim_output )
@@ -340,7 +332,7 @@ class CtrlRLStab:
         """
         Resets agent for use in multi-episode simulation.
         Only internal clock and current actions are reset.
-        All the learned parameters are retained
+        All the learned parameters are retained.
         
         """
         self.ctrl_clock = t0
@@ -348,46 +340,46 @@ class CtrlRLStab:
     
     def receive_sys_state(self, state):
         """
-        Fetch exogenous model state. Used in some controller modes. See class documentation
+        Fetch exogenous model state. Used in some controller modes. See class documentation.
 
         """
         self.state_sys = state
     
-    def rcost(self, observation, action):
+    def stage_obj(self, observation, action):
         """
-        Running cost (a.k.a. utility, reward, instantaneous cost etc.)
+        Stage (equivalently, instantaneous or running) objective. Depending on the context, it is also called utility, reward, running cost etc.
         
-        See class documentation
+        See class documentation.
         """
         if self.observation_target == []:
             chi = np.concatenate([observation, action])
         else:
             chi = np.concatenate([observation - self.observation_target, action])
         
-        r = 0
+        stage_obj = 0
 
-        if self.rcost_struct == 'quadratic':
+        if self.stage_obj_struct == 'quadratic':
             R1 = self.rcost_pars[0]
-            r = chi @ R1 @ chi
-        elif self.rcost_struct == 'biquadratic':
+            stage_obj = chi @ R1 @ chi
+        elif self.stage_obj_struct == 'biquadratic':
             R1 = self.rcost_pars[0]
             R2 = self.rcost_pars[1]
-            r = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
+            stage_obj = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
         
-        return r
+        return stage_obj
         
-    def upd_icost(self, observation, action):
+    def upd_accum_obj(self, observation, action):
         """
-        Sample-to-sample integrated running cost. This can be handy to evaluate the performance of the agent.
-        If the agent succeeded to stabilize the system, ``icost`` would converge to a finite value which is the performance mark.
-        The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
+        Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
+        If the agent succeeded to stabilize the system, ``accum_obj`` would converge to a finite value which is the performance mark.
+        The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead).
         
         """
-        self.icost_val += self.rcost(observation, action)*self.sampling_time
+        self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
 
     def _regressor_critic(self, observation):
         """
-        Feature vector of the critic
+        Feature vector of the critic.
 
         """
         if self.observation_target == []:
@@ -404,7 +396,7 @@ class CtrlRLStab:
         
     def _regressor_actor(self, observation):
         """
-        Feature vector of the actor
+        Feature vector of the actor.
 
         """
 
@@ -419,7 +411,7 @@ class CtrlRLStab:
 
     def _actor_critic_cost(self, W_lmbd_u):
         """
-        Joint actor-critic cost function
+        Joint actor-critic cost function.
        
         """        
         
@@ -441,7 +433,7 @@ class CtrlRLStab:
             action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation_prev )
             
             # Temporal difference
-            e = critic_prev - self.gamma * critic_next - self.rcost(observation_prev, action)
+            e = critic_prev - self.gamma * critic_next - self.stage_obj(observation_prev, action)
             
             Jc += 1/2 * e**2
         
@@ -450,9 +442,9 @@ class CtrlRLStab:
     def _actor_critic(self, observation):
         """
         This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_RL_stab._actor_critic_cost`.
-        It implements the stabilizing constraints
+        It implements the stabilizing constraints.
         
-        The variable ``w_all`` here is a stack of actor, critic and auxiliary critic weights
+        The variable ``w_all`` here is a stack of actor, critic and auxiliary critic weights.
         
 
         """  
@@ -612,10 +604,10 @@ class CtrlRLStab:
         # /DEBUG ===================================================================  
         
         # STUB ===================================================================   
-        # ================================Optimization of one rcost + LF_next
+        # ================================Optimization of one stage_obj + LF_next
         # def J_tmp(action, observation):
         #     observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)
-        #     return self.safe_ctrl.compute_LF(observation_next) + self.rcost(observation_next, action) 
+        #     return self.safe_ctrl.compute_LF(observation_next) + self.stage_obj(observation_next, action) 
         #     # return self.safe_ctrl.compute_LF(observation_next)
         
         # action = minimize(lambda action: J_tmp(action, observation),
@@ -655,14 +647,14 @@ class CtrlRLStab:
 
 class CtrlOptPred:
     """
-    Class of predictive optimal controllers, primarily MPC and predictive RL, that optimize a finite-horizon cost
+    Class of predictive optimal controllers, primarily MPC and predictive RL, that optimize a finite-horizon cost.
         
     Attributes
     ----------
     dim_input, dim_output : : integer
-        Dimension of input and output which should comply with the system-to-be-controlled
+        Dimension of input and output which should comply with the system-to-be-controlled.
     mode : : string
-        Controller mode. Currently available (:math:`r` is the running cost, :math:`\\gamma` is the discounting factor):
+        Controller mode. Currently available (:math:`\\rho` is the stage objective, :math:`\\gamma` is the discounting factor):
           
         .. list-table:: Controller modes
            :widths: 75 25
@@ -671,42 +663,44 @@ class CtrlOptPred:
            * - Mode
              - Cost function
            * - 'MPC' - Model-predictive control (MPC)
-             - :math:`J \\left( y_1, \\{action\\}_1^{N_a} \\right)=\\sum_{k=1}^{N_a} \\gamma^{k-1} r(y_k, u_k)`
-           * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
-             - :math:`J \\left( y_1, \\{action\}_{1}^{N_a}\\right) =\\sum_{k=1}^{N_a-1} \\gamma^{k-1} r(y_k, u_k) + \\hat Q(y_{N_a}, u_{N_a})` 
+             - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right)= \\sum_{k=1}^{N_a} \\gamma^{k-1} \\rho(y_k, u_k)`
+           * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`\\rho`
+             - :math:`J_a \\left( y_1, \\{action\}_{1}^{N_a}\\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\rho(y_k, u_k) + \\hat Q^{\\theta}(y_{N_a}, u_{N_a})` 
            * - 'SQL' - RL/ADP via stacked Q-learning [[1]_]
-             - :math:`J \\left( y_1, \\{action\\}_1^{N_a} \\right) =\\frac{1}{N_a} \\sum_{k=1}^{N_a-1} \\hat Q(y_{N_a}, u_{N_a})`               
+             - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\hat Q^{\\theta}(y_{N_a}, u_{N_a})`               
+        
+        Here, :math:`\\theta` are the critic parameters (neural network weights, say) and :math:`y_1` is the current observation.
         
         *Add your specification into the table when customizing the agent*    
 
     ctrl_bnds : : array of shape ``[dim_input, 2]``
         Box control constraints.
         First element in each row is the lower bound, the second - the upper bound.
-        If empty, control is unconstrained (default)
+        If empty, control is unconstrained (default).
     t0 : : number
-        Initial value of the controller's internal clock
+        Initial value of the controller's internal clock.
     sampling_time : : number
-        Controller's sampling time (in seconds)
+        Controller's sampling time (in seconds).
     Nactor : : natural number
-        Size of prediction horizon :math:`N_a` 
+        Size of prediction horizon :math:`N_a`. 
     pred_step_size : : number
-        Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
-        convenience. Larger prediction step size leads to longer factual horizon
+        Prediction step size in :math:`J_a` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
+        convenience. Larger prediction step size leads to longer factual horizon.
     sys_rhs, sys_out : : functions        
         Functions that represent the right-hand side, resp., the output of the exogenously passed model.
         The latter could be, for instance, the true model of the system.
         In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-        Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them
+        Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them.
     prob_noise_pow : : number
-        Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
+        Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
     is_est_model : : number
-        Flag whether to estimate a system model. See :func:`~controllers.ctrl_opt_pred._estimate_model` 
+        Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model`. 
     model_est_stage : : number
-        Initial time segment to fill the estimator's buffer before applying optimal control (in seconds)      
+        Initial time segment to fill the estimator's buffer before applying optimal control (in seconds).      
     model_est_period : : number
-        Time between model estimate updates (in seconds)
+        Time between model estimate updates (in seconds).
     buffer_size : : natural number
-        Size of the buffer to store data
+        Size of the buffer to store data.
     model_order : : natural number
         Order of the state-space estimation model
         
@@ -716,22 +710,22 @@ class CtrlOptPred:
     			observation^+  & = C \\hat x + D action,
             \\end{array}             
         
-        See :func:`~controllers.ctrl_opt_pred._estimate_model`. This is just a particular model estimator.
-        When customizing, :func:`~controllers.ctrl_opt_pred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
-        neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
+        See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
+        When customizing, :func:`~controllers.CtrlOptPred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
+        neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons``. 
     model_est_checks : : natural number
         Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
-        May improve the prediction quality somewhat
+        May improve the prediction quality somewhat.
     gamma : : number in (0, 1]
         Discounting factor.
-        Characterizes fading of running costs along horizon
+        Characterizes fading of stage objectives along horizon.
     Ncritic : : natural number
         Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
-        optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
+        optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer.
     critic_period : : number
-        The same meaning as ``model_est_period`` 
+        The same meaning as ``model_est_period``. 
     critic_struct : : natural number
-        Choice of the structure of the critic's feature vector
+        Choice of the structure of the critic's features.
         
         Currently available:
             
@@ -751,9 +745,9 @@ class CtrlOptPred:
              - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, 
                where :math:`w` is the critic's weight vector
        
-        *Add your specification into the table when customizing the critic* 
-    rcost_struct : : string
-        Choice of the running cost structure.
+        *Add your specification into the table when customizing the critic*. 
+    stage_obj_struct : : string
+        Choice of the stage objective structure.
         
         Currently available:
            
@@ -769,9 +763,9 @@ class CtrlOptPred:
              - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``rcost_pars``
                should be ``[R1, R2]``   
         
-        *Pass correct running cost parameters in* ``rcost_pars`` *(as a list)*
+        *Pass correct stage objective parameters in* ``rcost_pars`` *(as a list)*
         
-        *When customizing the running cost, add your specification into the table above*
+        *When customizing the stage objective, add your specification into the table above*
         
     References
     ----------
@@ -802,7 +796,7 @@ class CtrlOptPred:
                  Ncritic=4,
                  critic_period=0.1,
                  critic_struct='quad-nomix',
-                 rcost_struct='quadratic',
+                 stage_obj_struct='quadratic',
                  rcost_pars=[],
                  observation_target=[]):
         """
@@ -811,7 +805,7 @@ class CtrlOptPred:
         dim_input, dim_output : : integer
             Dimension of input and output which should comply with the system-to-be-controlled
         mode : : string
-            Controller mode. Currently available (:math:`r` is the running cost, :math:`\\gamma` is the discounting factor):
+            Controller mode. Currently available (:math:`\\rho` is the stage objective, :math:`\\gamma` is the discounting factor):
               
             .. list-table:: Controller modes
                :widths: 75 25
@@ -820,11 +814,13 @@ class CtrlOptPred:
                * - Mode
                  - Cost function
                * - 'MPC' - Model-predictive control (MPC)
-                 - :math:`J \\left( y_1, \\{action\\}_1^{N_a} \\right)=\\sum_{k=1}^{N_a} \\gamma^{k-1} r(y_k, u_k)`
-               * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`r`
-                 - :math:`J \\left( y_1, \\{action\}_{1}^{N_a}\\right) =\\sum_{k=1}^{N_a-1} \\gamma^{k-1} r(y_k, u_k) + \\hat Q(y_{N_a}, u_{N_a})` 
+                 - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right)= \\sum_{k=1}^{N_a} \\gamma^{k-1} \\rho(y_k, u_k)`
+               * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`\\rho`
+                 - :math:`J_a \\left( y_1, \\{action\}_{1}^{N_a}\\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\rho(y_k, u_k) + \\hat Q^{\\theta}(y_{N_a}, u_{N_a})` 
                * - 'SQL' - RL/ADP via stacked Q-learning [[1]_]
-                 - :math:`J \\left( y_1, \\{action\\}_1^{N_a} \\right) =\\frac{1}{N_a} \\sum_{k=1}^{N_a-1} \\hat Q(y_{N_a}, u_{N_a})`               
+                 - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\hat Q^{\\theta}(y_{N_a}, u_{N_a})`               
+            
+            Here, :math:`\\theta` are the critic parameters (neural network weights, say) and :math:`y_1` is the current observation.
             
             *Add your specification into the table when customizing the agent*    
     
@@ -873,7 +869,7 @@ class CtrlOptPred:
             May improve the prediction quality somewhat
         gamma : : number in (0, 1]
             Discounting factor.
-            Characterizes fading of running costs along horizon
+            Characterizes fading of stage objectives along horizon
         Ncritic : : natural number
             Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
             optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
@@ -901,8 +897,8 @@ class CtrlOptPred:
                    where :math:`w` is the critic's weights
            
             *Add your specification into the table when customizing the critic* 
-        rcost_struct : : string
-            Choice of the running cost structure.
+        stage_obj_struct : : string
+            Choice of the stage objective structure.
             
             Currently available:
                
@@ -978,11 +974,11 @@ class CtrlOptPred:
         self.Ncritic = np.min([self.Ncritic, self.buffer_size-1]) # Clip critic buffer size
         self.critic_period = critic_period
         self.critic_struct = critic_struct
-        self.rcost_struct = rcost_struct
+        self.stage_obj_struct = stage_obj_struct
         self.rcost_pars = rcost_pars
         self.observation_target = observation_target
         
-        self.icost_val = 0
+        self.accum_obj_val = 0
 
         if self.critic_struct == 'quad-lin':
             self.dim_critic = int( ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 + (self.dim_output + self.dim_input) ) 
@@ -1023,37 +1019,37 @@ class CtrlOptPred:
         """
         self.state_sys = state
     
-    def rcost(self, observation, action):
+    def stage_obj(self, observation, action):
         """
-        Running cost (a.k.a. utility, reward, instantaneous cost etc.)
+        Stage (equivalently, instantaneous or running) objective. Depending on the context, it is also called utility, reward, running cost etc.
         
-        See class documentation
+        See class documentation.
         """
         if self.observation_target == []:
             chi = np.concatenate([observation, action])
         else:
             chi = np.concatenate([observation - self.observation_target, action])
         
-        r = 0
+        stage_obj = 0
 
-        if self.rcost_struct == 'quadratic':
+        if self.stage_obj_struct == 'quadratic':
             R1 = self.rcost_pars[0]
-            r = chi @ R1 @ chi
-        elif self.rcost_struct == 'biquadratic':
+            stage_obj = chi @ R1 @ chi
+        elif self.stage_obj_struct == 'biquadratic':
             R1 = self.rcost_pars[0]
             R2 = self.rcost_pars[1]
-            r = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
+            stage_obj = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
         
-        return r
+        return stage_obj
         
-    def upd_icost(self, observation, action):
+    def upd_accum_obj(self, observation, action):
         """
-        Sample-to-sample integrated running cost. This can be handy to evaluate the performance of the agent.
-        If the agent succeeded to stabilize the system, ``icost`` would converge to a finite value which is the performance mark.
+        Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
+        If the agent succeeded to stabilize the system, ``accum_obj`` would converge to a finite value which is the performance mark.
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
         
         """
-        self.icost_val += self.rcost(observation, action)*self.sampling_time
+        self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
     
     def _estimate_model(self, t, observation):
         """
@@ -1218,7 +1214,7 @@ class CtrlOptPred:
             # Temporal difference
             e = w_critic @ self._regressor_critic( observation_prev, action_prev )- \
             self.gamma * self.w_critic_prev @ self._regressor_critic( observation_next, action_next )- \
-            self.rcost(observation_prev, action_prev)
+            self.stage_obj(observation_prev, action_prev)
             
             Jc += 1/2 * e**2
             
@@ -1227,7 +1223,7 @@ class CtrlOptPred:
         
     def _critic(self):
         """
-        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_opt_pred._critic_cost`
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._critic_cost`
 
         """        
         
@@ -1283,10 +1279,10 @@ class CtrlOptPred:
         J = 0         
         if self.mode=='MPC':
             for k in range(self.Nactor):
-                J += self.gamma**k * self.rcost(observation_sqn[k, :], my_action_sqn[k, :])
-        elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of running cost
+                J += self.gamma**k * self.stage_obj(observation_sqn[k, :], my_action_sqn[k, :])
+        elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of stage objectives
              for k in range(self.Nactor-1):
-                J += self.gamma**k * self.rcost(observation_sqn[k, :], my_action_sqn[k, :])
+                J += self.gamma**k * self.stage_obj(observation_sqn[k, :], my_action_sqn[k, :])
              J += self.w_critic @ self._regressor_critic( observation_sqn[-1, :], my_action_sqn[-1, :] )
         elif self.mode=='SQL':     # RL: stacked Q-learning
              for k in range(self.Nactor): 
@@ -1314,7 +1310,7 @@ class CtrlOptPred:
         Customization
         -------------         
         
-        This method normally should not be altered, adjust :func:`~controllers.ctrl_opt_pred._actor_cost` instead.
+        This method normally should not be altered, adjust :func:`~controllers.CtrlOptPred._actor_cost` instead.
         The only customization you might want here is regarding the optimization algorithm
 
         """
@@ -1405,7 +1401,7 @@ class CtrlOptPred:
         Customization
         -------------         
         
-        Add your modes, that you introduced in :func:`~controllers.ctrl_opt_pred._actor_cost`, here
+        Add your modes, that you introduced in :func:`~controllers.CtrlOptPred._actor_cost`, here
 
         """       
         
