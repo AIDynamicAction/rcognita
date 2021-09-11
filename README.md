@@ -24,12 +24,15 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 
 # Installation
 
+## Basic
+
 Run in terminal:
+
 ```
 pip3 install rcognita
 ```
 
-Alternatively one can install the package direcly form the master branch.
+Alternatively, one can install the package direcly form the master branch.
 The following instruction is for Unix-based systems, assuming a terminal and Python3 interpreter.
 
 ```
@@ -40,18 +43,36 @@ python3 setup.py install
 
 Notice that your Python 3 interpreter might be called something else, say, just `python`.
 
+## With model estimation tools
+
 The package was tested with online model estimation using [SIPPY](https://github.com/CPCLAB-UNIPI/SIPPY). 
 The respective functionality is implemented and enabled via `is_est_model`.
 Related parameters can be found in the documentation of the `CtrlOptPred` class.
 
-To install `SIPPY`, install `scikit-build` first.
-For instance, if you're using Anaconda, type :
+To install `SIPPY`, first take care of the dependencies:
 
+### Ubuntu/Debian:
+```
+sudo apt-get install -y build-essential gfortran cmake libopenblas-dev
+```
+
+### Arch
+```
+pacman -Sy gcc gcc-fortran cmake base-devel openblas
+```
+
+### Installing `scikit-build`
+```
+pip install scikit-build
+```
+or, using `Anaconda`,
 ```
 conda install scikit-build
-git clone https://github.com/CPCLAB-UNIPI/SIPPY
-cd SIPPY
-python3 setup.py install
+```
+
+### Installing `rcognita` with `SIPPY`
+```
+pip3 install rcognita[SIPPY]
 ```
 
 # General description
