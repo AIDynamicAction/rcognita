@@ -39,30 +39,34 @@ from rcognita import visuals
 from rcognita.utilities import on_key_press
 import argparse
 
-
+#------------------------------------user settings : : system
+# System
 dim_state = 3
 dim_input = 2
 dim_output = dim_state
 dim_disturb = 0
 
-
 description = "Simulate a kinematic model of a 3-wheel robot"
 parser = argparse.ArgumentParser(description=description)
-parser.add_argument('ctrl_mode', metavar='ctrl_mode', type=str,
-                    help='control mode',
+parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
+                    help='Control mode ',
                     choices=['manual',
                              'nominal',
                              'MPC',
                              'RQL',
                              'SQL',
-                             'JACS'])
-parser.add_argument('dt', type=float, metavar='dt',
-                    help='controller sampling time')
-parser.add_argument('t1', type=float, metavar='t1',
-                    help='final time')
-parser.add_argument('x0', type=float, nargs="+", metavar='x0',
-                    help='initial state (sequence of numbers); ' + 
-                         'dimension preset-specific!')
+                             'JACS'],
+                    default='nominal')
+parser.add_argument('--dt', type=float, metavar='dt',
+                    help='controller sampling time',
+                    default=0.01)
+parser.add_argument('--t1', type=float, metavar='t1',
+                    help='final time',
+                    default=1.0)
+parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
+                    help='Initial state (as sequence of numbers); ' + 
+                         'dimension is environment-specific!',
+                         default=['5', '5', '-3*pi/4'])
 parser.add_argument('--is_log_data', type=bool, default=False,
                     help='')
 parser.add_argument('--is_visualization', type=bool, default=True,
@@ -119,7 +123,12 @@ parser.add_argument('--actor_struct', type=str,
                     help='structure of actor features')
 
 args = parser.parse_args()
-args.x0 = np.array(args.x0)
+
+for k in range(len(args.state_init)):
+    args.state_init[k] = eval( args.state_init[k].replace('pi', str(np.pi)) )
+
+args.state_init = np.array(args.state_init)
+
 args.uMan = np.array(args.uMan)
 if args.model_est_period is None:
     args.model_est_period = args.dt
@@ -135,16 +144,9 @@ if args.critic_period is None:
     args.critic_period = args.dt
 
 assert args.t1 > args.dt > 0.0
-assert args.x0.size == dim_state
-
-
-
+assert args.state_init.size == dim_state
 
 globals().update(vars(args))
-
-
-
-
 
 
 #------------------------------------user settings : : main switches
@@ -173,16 +175,11 @@ is_dyn_ctrl = 0
 # Digital elements sampling time
 # dt = 0.01 # [s], controller sampling time
 
-#------------------------------------user settings : : system
-# System
-
 
 #------------------------------------user settings : : simulation
 t0 = 0
 # t1 = 5
 Nruns = 1
-
-state_init = x0
 
 action_init = 0 * np.ones(dim_input)
 

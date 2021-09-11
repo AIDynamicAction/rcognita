@@ -33,8 +33,8 @@ setup(
         "systems == 0.1.0",
         "shapely == 1.7.1"],
     extras_require={
-        "sippy" : 
-            ["sippy@git+https://github.com/AIDynamicAction/SIPPY.git#c2be509876a688dc5ba03cb66fd33c0a07463b74"]},
+        "SIPPY" : 
+            ["SIPPY@git+https://github.com/AIDynamicAction/SIPPY.git#c2be509876a688dc5ba03cb66fd33c0a07463b74"]},
     python_requires=">=3.6",
 )
     
