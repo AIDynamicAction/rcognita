@@ -22,6 +22,7 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
   * [Settings](#Settings)
   * [Advanced customization](#Advanced-customization)
   * [Experimental things](#Experimental-things)
+- [Related literature](#Related-literature)
 - [Closing remarks](#Closing-remarks)
 
 # Installation
@@ -192,6 +193,15 @@ An interface for dynamical controllers, which can be considered as extensions of
 RL is usually understood as a static controller, i.e., a one which assigns actions directly to outputs.
 A dynamical controller does this indirectly, via an internal state as intermediate link. 
 ynamical controllers can overcome some limitations of static controllers.
+
+# Related literature
+
+[To table of content](#Table-of-content)
+
+* [Online actor-critic via stacked Q-learning and Kalman filter for model estimation](https://arxiv.org/abs/2007.03999)
+* [More on fusion of model-predictive control and reinforcement learing](https://arxiv.org/abs/1906.02580)
+* [More on "JACS", joint actor-critic (stabilizing)](https://arxiv.org/abs/2006.14034)
+* [Some comparison of model-predictive control vs. stacked Q-learning](https://arxiv.org/abs/2108.04802)
 
 # Closing remarks
 

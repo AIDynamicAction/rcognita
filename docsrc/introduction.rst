@@ -40,7 +40,7 @@ If you want to create your own environment, fork the repo and implement one in `
 For developers
 ======================
 
-To build these wiki docs, run inside cloned repo folder:
+In Linux-based OS, to build these wiki docs, run inside cloned repo folder:
 
 ```
 cd docsrc
