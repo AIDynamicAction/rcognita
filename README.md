@@ -15,8 +15,8 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 # Table of content
 
 - [Installation](#Installation)
-  * Basic(#Basic)
-  * With model estimation tools(#With-model-estimation-tools)
+  * [Basic](#Basic)
+  * [With model estimation tools](#With-model-estimation-tools)
 - [General description](#General-description)
 - [Usage](#Usage)
   * [Settings](#Settings)
