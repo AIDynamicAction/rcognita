@@ -196,6 +196,8 @@ ynamical controllers can overcome some limitations of static controllers.
 
 # Related literature
 
+[To table of content](#Table-of-content)
+
 * [Online actor-critic via stacked Q-learning and Kalman filter for model estimation](https://arxiv.org/abs/2007.03999)
 * [More on fusion of model-predictive control and reinforcement learing](https://arxiv.org/abs/1906.02580)
 * [More on "JACS", joint actor-critic (stabilizing)](https://arxiv.org/abs/2006.14034)
