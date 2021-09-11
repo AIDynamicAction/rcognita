@@ -129,7 +129,7 @@ The naming concention is `main_ACRONYM`, where `ACRONYM` is actually related to 
 You may create your own by analogy.
 Example call:
 ```
-python main_3wrobot_NI.py -ctrl_mode JACS -dt 0.01 -t1 1.0 -state_init [5, 5, -3*pi/4]
+python main_3wrobot_NI.py --ctrl_mode JACS --dt 0.01 --t1 1.0 --state_init 5 5 3*pi/4
 ```
 Make sure to use Python3 interpreter.
 Parameter settings are described in the next section.
