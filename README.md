@@ -26,9 +26,9 @@ A detailed documentation is available [here](https://aidynamicaction.github.io/r
 
 # Installation
 
-[To table of content](#Table-of-content)
-
 ## Basic
+
+[To table of content](#Table-of-content)
 
 Run in terminal:
 
@@ -48,6 +48,8 @@ python3 setup.py install
 Notice that your Python 3 interpreter might be called something else, say, just `python`.
 
 ## With model estimation tools
+
+[To table of content](#Table-of-content)
 
 The package was tested with online model estimation using [SIPPY](https://github.com/CPCLAB-UNIPI/SIPPY). 
 The respective functionality is implemented and enabled via `is_est_model`.
