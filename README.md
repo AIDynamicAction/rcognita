@@ -114,7 +114,7 @@ The method `receive_action` gets a control action and stores it.
 Everything is packed together in the `closed_loop_rhs` for the use in `Simulator`.
 
 Finally, the `controllers` module contains various agent types.
-One of them is `CtrlOptPred` – the class of predictive objective-optimizing agents (model-predictive control and predictive reinforcement learning) as shown in [this flowchart](./flowcharts/rcognita-flowchart-RLstab.pdf).
+One of them is `CtrlOptPred` – the class of predictive objective-optimizing agents (model-predictive control and predictive reinforcement learning) as shown in [this flowchart](./flowcharts/rcognita-flowchart-CtrlOptPred.pdf).
 Notice it contains an explicit specification of the sampling time `dt`.
 
 The method `_critic` computes a model of something related to the value, e.g., value function, Q-function or advantage.
