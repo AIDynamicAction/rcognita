@@ -22,6 +22,8 @@ else:
            f"locally installed rcognita ({rcognita.__version__}). " \
            f"Make sure the versions match."
 print("INFO:", info)
+
+import pathlib
     
 import warnings
 import csv
@@ -29,12 +31,14 @@ from datetime import datetime
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import numpy as np
+
 from rcognita import simulator
 from rcognita import systems
 from rcognita import controllers
 from rcognita import loggers
 from rcognita import visuals
 from rcognita.utilities import on_key_press
+
 import argparse
 
 #----------------------------------------Set up dimensions
