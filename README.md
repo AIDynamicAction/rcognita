@@ -151,7 +151,7 @@ Some key settings are described below (full description is available via `-h` op
 | `ctrl_mode` | string | Controller mode |
 | `dt` | number | Controller sampling time |
 | `t1` | number | Final time |
-| `state_init` | list | Initial state, it's possible to type in `pi` |
+| `state_init` | list | Initial state |
 | `is_log_data` | binary | Flag to log data |
 | `is_visualization` | binary | Flag to produce graphical output |
 | `is_print_sim_step` | binary | Flag to print simulation step data |
