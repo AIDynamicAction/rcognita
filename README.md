@@ -96,9 +96,9 @@ The package consists of several modules, namely, `controllers`, `loggers`, `mode
 
 The main module is a preset, on the flowchart a 3-wheel robot.
 It initializes the system (the environment), the controllers (the agents, e. g., a safe agent, a benchmarking agent, a reinforcement learning agent etc.), the visualization engine called animator, the logger and the simulator.
-The latter is a multi-purpose device for simulating agent-environment loops of different types (specified by sys type).
+The latter is a multi-purpose device for simulating agent-environment loops of different types (specified by `sys_type`).
 
-Depending on `sys_type`, the environment can either be described by a differential equation (including stochastic ones), a difference equation (for discrete-time systems), or by a probability distribution (for, e. g., Markov decision processes).
+Depending on `sys_type`, the environment can either be described by a differential equation (including stochastic ones), a difference equation (for discrete-time systems), or by a probability distribution (for, e.g., Markov decision processes).
 
 The parameter `dt` determines the maximal step size for the numerical solver in case of differential equations.
 The main method of this class is `sim_step` which performs one solver step, whereas reset re-initializes the simulator after an episode.
@@ -106,17 +106,22 @@ The main method of this class is `sim_step` which performs one solver step, wher
 The `Logger` class is an interface defining stubs of a print-to-console method print sim step, and print-to-file method log data row, respectively.
 Concrete loggers realize these methods.
 
-A similar class inheritance scheme is used in animator, and system.
-The core data of animator’s subclasses are `objects`, which include entities to be updated on the screen, and their parameters stored in `pars`.
+A similar class inheritance scheme is used in `Animator`, and `System`.
+The core data of `Animator`’s subclasses are `objects`, which include entities to be updated on the screen, and their parameters stored in `pars`.
 
-A concrete realization of a system interface must realize `sys_dyn`, which is the “right-handside” of the environment description, optionally disturbance dynamics via `disturb_dyn`, optionally controller dynamics (if the latter is, e. g., time-varying), and the output function `out`.
+A concrete realization of a system interface must realize `sys_dyn`, which is the “right-handside” of the environment description, optionally disturbance dynamics via `disturb_dyn`, optionally controller dynamics (if the latter is, e.g., time-varying), and the output function `out`.
 The method `receive_action` gets a control action and stores it.
 Everything is packed together in the `closed_loop_rhs` for the use in `Simulator`.
 
 Finally, the `controllers` module contains various agent types.
-One of them is `CtrlRLStab` – the class of stabilizing reinforcement learning agents as shown in [this flowchart](./flowcharts/rcognita-flowchart-RLstab.pdf).
-Notice it contains an explicit specification of the sampling time.
-The data `SafeCtrl` is required to specify the stabilizing constraints and also to initialize the optimizer inside the `actor_critic` method, which in turns fetches the cost function from the `actor_critic_cost` method.
+One of them is `CtrlOptPred` – the class of predictive objective-optimizing agents (model-predictive control and predictive reinforcement learning) as shown in [this flowchart](./flowcharts/rcognita-flowchart-RLstab.pdf).
+Notice it contains an explicit specification of the sampling time `dt`.
+
+The method `_critic` computes a model of something related to the value, e.g., value function, Q-function or advantage.
+In turn, `_critic_cost` defines a cost (loss) function to fir the critic (commonly based on temporal errors).
+The method `_critic_optimizer` actually optimizes the critic cost.
+The principle is analogous with the actor, except that it optimizes an objective along a prediction horizon.
+The details can be found in the code documentation.
 The method `compute_action` essentially watches the internal clock and performs an action updates when a time sample has elapsed.
 
 Auxiliary modules of the package are `models` and `utilities` which provide auxiliary functions and data structures, such as neural networks.
@@ -126,55 +131,37 @@ Auxiliary modules of the package are `models` and `utilities` which provide auxi
 [To table of content](#Table-of-content)
 
 After the package is installed, you may just `python` run one of the presets found [here](./presets).
-The naming concention is `main_ACRONYM`, where `ACRONYM` is actually related to the system (environment). 
+The naming convention is `main_ACRONYM`, where `ACRONYM` is actually related to the system (environment). 
 You may create your own by analogy.
-Example call:
+
+Just call help to get the detailed information on how to configure a preset.
+Say,
 ```
-python main_3wrobot_NI.py --ctrl_mode JACS --dt 0.01 --t1 1.0 --state_init 5 5 3*pi/4
+python3 main_3wrobot_NI.py -h
 ```
-Make sure to use Python3 interpreter.
-Parameter settings are described in the next section.
 
 ## Settings
 
 [To table of content](#Table-of-content)
 
-These are made in a preset file.
+Some key settings are described below (full description is available via `-h` option).
 
-So, for instance, for [the three-wheel kinematic robot preset](https://github.com/AIDynamicAction/rcognita/blob/master/presets/main_3wrobot_NI.py), these read as below.
-
-Required parameters:
-| Parameter name | Values |  Notes |
+| Parameter | Type |  Description |
 | ----- | ------ | ------|
 | `ctrl_mode` | string | Controller mode |
 | `dt` | number | Controller sampling time |
 | `t1` | number | Final time |
-| `state_init` | numpy vector | Initial state, dimension preset-specific! |
-
-Optional parameters, set to default values unless specified otherwise:
-
-| Parameter name | Values | Default | Description| 
-| ----- | ------ | ----- | ----- | 
-| `is_log_data` | binary | 0 | |
-| `is_visualization` | binary | 1 | |
-| `is_print_sim_step` | binary | 1 | |
+| `state_init` | list | Initial state, it's possible to type in `pi` |
+| `is_log_data` | binary | Flag to log data |
+| `is_visualization` | binary | Flag to produce graphical output |
+| `is_print_sim_step` | binary | Flag to print simulation step data |
 | `is_est_model` | binary | 0 | If a model of the system is to be estimated online |
-| `model_est_stage` | number | 1 | Seconds to learn model until benchmarking controller kicks in | 
-| `model_est_period` | number | 1*`dt` | Model is updated every `model_est_period` seconds | 
-| `model_order` | integer | 5 | Order of state-space estimation model | 
-| `prob_noise_pow` | number | 8 | Power of probing noise | 
-| `action_manual` | numpy vector | zeros | Manual control action to be fed constant, system-specific! |
-| `Nactor` | integer | 3 | Horizon length (in steps) for predictive controllers |
-| `pred_step_size` | number | `dt` | |
-| `buffer_size` | integer | 10 | |
-| `rcost_struct` | string | `quadratic` | Structure of running objective function | 
-| `R1` | numpy matrix | identity matrix | Must have proper dimension, see preset |
-| `R2` | numpy matrix | identity matrix | Must have proper dimension, see preset |
-| `Ncritic` | integer | 4 | Critic stack size (number of TDs) |
-| `gamma` | number | 1 | Discount factor |
-| `critic_period` | number | `dt` | Critic is updated every `critic_period` seconds |
-| `critic_struct` | string | `quad-nomix` | Structure of critic features |
-| `actor_struct` | string | `quad-nomix` | Structure of actor features |
+| `Nactor` | integer | Horizon length (in steps) for predictive controllers |
+| `stage_obj_struct` | string | Structure of running objective function | 
+| `Ncritic` | integer | Critic stack size (number of TDs) |
+| `gamma` | number | Discount factor |
+| `critic_struct` | string | Structure of critic features |
+| `actor_struct` | string | Structure of actor features |
 
 ## Advanced customization
 
