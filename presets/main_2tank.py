@@ -246,7 +246,7 @@ my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            critic_period=critic_period,
                                            critic_struct=critic_struct,
                                            stage_obj_struct=stage_obj_struct,
-                                           rcost_pars=[R1],
+                                           stage_obj_pars=[R1],
                                            observation_target=observation_target)
 
 my_ctrl_benchm = my_ctrl_opt_pred

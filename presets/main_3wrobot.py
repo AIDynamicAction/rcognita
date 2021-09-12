@@ -69,7 +69,7 @@ parser.add_argument('--dt', type=float, metavar='dt',
                     default=0.01,
                     help='Controller sampling time.' )
 parser.add_argument('--t1', type=float, metavar='t1',
-                    default=1.0,
+                    default=10.0,
                     help='Final time of episode.' )
 parser.add_argument('--Nruns', type=int,
                     default=1,
@@ -106,7 +106,7 @@ parser.add_argument('--action_manual', type=float,
                     default=[-5, -3], nargs='+',
                     help='Manual control action to be fed constant, system-specific!')
 parser.add_argument('--Nactor', type=int,
-                    default=3,
+                    default=5,
                     help='Horizon length (in steps) for predictive controllers.')
 parser.add_argument('--pred_step_size_multiplier', type=float,
                     default=1.0,
@@ -232,7 +232,7 @@ alpha_deg_0 = alpha0/2/np.pi
 #----------------------------------------Initialization : : model
 
 #----------------------------------------Initialization : : controller
-my_ctrl_nominal = controllers.CtrlNominal3WRobot(m, I, ctrl_gain=0.5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
+my_ctrl_nominal = controllers.CtrlNominal3WRobot(m, I, ctrl_gain=5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
 
 # Predictive optimal controller
 my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
@@ -258,7 +258,7 @@ my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            critic_period=critic_period,
                                            critic_struct=critic_struct,
                                            stage_obj_struct=stage_obj_struct,
-                                           rcost_pars=[R1],
+                                           stage_obj_pars=[R1],
                                            observation_target=[])
 
 # Stabilizing RL agent
@@ -286,7 +286,7 @@ my_ctrl_RL_stab = controllers.CtrlRLStab(dim_input,
                                          critic_struct=critic_struct,
                                          actor_struct=actor_struct,
                                          stage_obj_struct=stage_obj_struct,
-                                         rcost_pars=[R1],
+                                         stage_obj_pars=[R1],
                                          observation_target=[],
                                          safe_ctrl=my_ctrl_nominal,
                                          safe_decay_rate=1e-4)

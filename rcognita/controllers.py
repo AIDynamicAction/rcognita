@@ -73,24 +73,24 @@ class CtrlRLStab:
     Actor
     -----
     
-    ``w_actor`` : weights
+    ``w_actor`` : weights.
     
-    ``_regressor_actor``: regressor
+    ``_regressor_actor``: regressor.
     
     ``_regressor_actor`` is a vector, not a matrix. So, if the environment is multi-input, the input is actually computed as, in case of a 1-layer net,
     
-    ``action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )``
+    ``action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )``.
     
     where ``observation`` is the output.
     
-    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.CtrlOptPred``
+    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.CtrlOptPred``.
     
     Critic
     -----
     
-    ``w_critic`` : weights
+    ``w_critic`` : weights.
     
-    ``_regressor_critic``: regressor   
+    ``_regressor_critic``: regressor.   
     
     Attributes
     ----------
@@ -129,7 +129,7 @@ class CtrlRLStab:
                  critic_struct='quad-nomix',
                  actor_struct='quad-nomix',
                  stage_obj_struct='quadratic',
-                 rcost_pars=[],
+                 stage_obj_pars=[],
                  observation_target=[],   
                  safe_ctrl=[],
                  safe_decay_rate=[]):
@@ -179,7 +179,7 @@ class CtrlRLStab:
             neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons``. 
         model_est_checks : : natural number
             Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
-            May improve the prediction quality somewhat
+            May improve the prediction quality somewhat.
         gamma : : number in (0, 1]
             Discounting factor.
             Characterizes fading of stage objectives along horizon.
@@ -219,9 +219,9 @@ class CtrlRLStab:
                * - Mode
                  - Structure
                * - 'quadratic'
-                 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``rcost_pars`` should be ``[R1]``
+                 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars`` should be ``[R1]``
                * - 'biquadratic'
-                 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``rcost_pars``
+                 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
                    should be ``[R1, R2]``
         """
         
@@ -285,7 +285,7 @@ class CtrlRLStab:
         self.critic_struct = critic_struct
         self.actor_struct = actor_struct
         self.stage_obj_struct = stage_obj_struct
-        self.rcost_pars = rcost_pars
+        self.stage_obj_pars = stage_obj_pars
         self.observation_target = observation_target
         
         self.accum_obj_val = 0
@@ -359,11 +359,11 @@ class CtrlRLStab:
         stage_obj = 0
 
         if self.stage_obj_struct == 'quadratic':
-            R1 = self.rcost_pars[0]
+            R1 = self.stage_obj_pars[0]
             stage_obj = chi @ R1 @ chi
         elif self.stage_obj_struct == 'biquadratic':
-            R1 = self.rcost_pars[0]
-            R2 = self.rcost_pars[1]
+            R1 = self.stage_obj_pars[0]
+            R2 = self.stage_obj_pars[1]
             stage_obj = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
         
         return stage_obj
@@ -441,7 +441,7 @@ class CtrlRLStab:
 
     def _actor_critic(self, observation):
         """
-        This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.ctrl_RL_stab._actor_critic_cost`.
+        This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.CtrlRLStab._actor_critic_cost`.
         It implements the stabilizing constraints.
         
         The variable ``w_all`` here is a stack of actor, critic and auxiliary critic weights.
@@ -667,11 +667,11 @@ class CtrlOptPred:
            * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`\\rho`
              - :math:`J_a \\left( y_1, \\{action\}_{1}^{N_a}\\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\rho(y_k, u_k) + \\hat Q^{\\theta}(y_{N_a}, u_{N_a})` 
            * - 'SQL' - RL/ADP via stacked Q-learning [[1]_]
-             - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\hat Q^{\\theta}(y_{N_a}, u_{N_a})`               
+             - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\hat \\gamma^{k-1} Q^{\\theta}(y_{N_a}, u_{N_a})`               
         
         Here, :math:`\\theta` are the critic parameters (neural network weights, say) and :math:`y_1` is the current observation.
         
-        *Add your specification into the table when customizing the agent*    
+        *Add your specification into the table when customizing the agent*.    
 
     ctrl_bnds : : array of shape ``[dim_input, 2]``
         Box control constraints.
@@ -758,12 +758,12 @@ class CtrlOptPred:
            * - Mode
              - Structure
            * - 'quadratic'
-             - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``rcost_pars`` should be ``[R1]``
+             - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars`` should be ``[R1]``
            * - 'biquadratic'
-             - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``rcost_pars``
+             - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
                should be ``[R1, R2]``   
         
-        *Pass correct stage objective parameters in* ``rcost_pars`` *(as a list)*
+        *Pass correct stage objective parameters in* ``stage_obj_pars`` *(as a list)*
         
         *When customizing the stage objective, add your specification into the table above*
         
@@ -797,13 +797,13 @@ class CtrlOptPred:
                  critic_period=0.1,
                  critic_struct='quad-nomix',
                  stage_obj_struct='quadratic',
-                 rcost_pars=[],
+                 stage_obj_pars=[],
                  observation_target=[]):
         """
         Parameters
         ----------
         dim_input, dim_output : : integer
-            Dimension of input and output which should comply with the system-to-be-controlled
+            Dimension of input and output which should comply with the system-to-be-controlled.
         mode : : string
             Controller mode. Currently available (:math:`\\rho` is the stage objective, :math:`\\gamma` is the discounting factor):
               
@@ -818,16 +818,16 @@ class CtrlOptPred:
                * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`\\rho`
                  - :math:`J_a \\left( y_1, \\{action\}_{1}^{N_a}\\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\rho(y_k, u_k) + \\hat Q^{\\theta}(y_{N_a}, u_{N_a})` 
                * - 'SQL' - RL/ADP via stacked Q-learning [[1]_]
-                 - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\hat Q^{\\theta}(y_{N_a}, u_{N_a})`               
+                 - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\hat Q^{\\theta}(y_{N_a}, u_{N_a})`               
             
             Here, :math:`\\theta` are the critic parameters (neural network weights, say) and :math:`y_1` is the current observation.
             
-            *Add your specification into the table when customizing the agent*    
+            *Add your specification into the table when customizing the agent* .   
     
         ctrl_bnds : : array of shape ``[dim_input, 2]``
             Box control constraints.
             First element in each row is the lower bound, the second - the upper bound.
-            If empty, control is unconstrained (default)
+            If empty, control is unconstrained (default).
         t0 : : number
             Initial value of the controller's internal clock
         sampling_time : : number
@@ -836,22 +836,22 @@ class CtrlOptPred:
             Size of prediction horizon :math:`N_a` 
         pred_step_size : : number
             Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
-            convenience. Larger prediction step size leads to longer factual horizon
+            convenience. Larger prediction step size leads to longer factual horizon.
         sys_rhs, sys_out : : functions        
             Functions that represent the right-hand side, resp., the output of the exogenously passed model.
             The latter could be, for instance, the true model of the system.
             In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-            Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them
+            Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them.
         prob_noise_pow : : number
-            Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control   
+            Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
         is_est_model : : number
-            Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model` 
+            Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model`. 
         model_est_stage : : number
-            Initial time segment to fill the estimator's buffer before applying optimal control (in seconds)      
+            Initial time segment to fill the estimator's buffer before applying optimal control (in seconds).      
         model_est_period : : number
-            Time between model estimate updates (in seconds)
+            Time between model estimate updates (in seconds).
         buffer_size : : natural number
-            Size of the buffer to store data
+            Size of the buffer to store data.
         model_order : : natural number
             Order of the state-space estimation model
             
@@ -866,17 +866,17 @@ class CtrlOptPred:
             neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
         model_est_checks : : natural number
             Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
-            May improve the prediction quality somewhat
+            May improve the prediction quality somewhat.
         gamma : : number in (0, 1]
             Discounting factor.
-            Characterizes fading of stage objectives along horizon
+            Characterizes fading of stage objectives along horizon.
         Ncritic : : natural number
             Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
-            optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer
+            optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer.
         critic_period : : number
-            The same meaning as ``model_est_period`` 
+            The same meaning as ``model_est_period``. 
         critic_struct : : natural number
-            Choice of the structure of the critic's features
+            Choice of the structure of the critic's features.
             
             Currently available:
                 
@@ -896,7 +896,7 @@ class CtrlOptPred:
                  - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, 
                    where :math:`w` is the critic's weights
            
-            *Add your specification into the table when customizing the critic* 
+            *Add your specification into the table when customizing the critic*.
         stage_obj_struct : : string
             Choice of the stage objective structure.
             
@@ -909,9 +909,9 @@ class CtrlOptPred:
                * - Mode
                  - Structure
                * - 'quadratic'
-                 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``rcost_pars`` should be ``[R1]``
+                 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars`` should be ``[R1]``
                * - 'biquadratic'
-                 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``rcost_pars``
+                 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
                    should be ``[R1, R2]``
         """
         
@@ -975,7 +975,7 @@ class CtrlOptPred:
         self.critic_period = critic_period
         self.critic_struct = critic_struct
         self.stage_obj_struct = stage_obj_struct
-        self.rcost_pars = rcost_pars
+        self.stage_obj_pars = stage_obj_pars
         self.observation_target = observation_target
         
         self.accum_obj_val = 0
@@ -1006,7 +1006,7 @@ class CtrlOptPred:
         """
         Resets agent for use in multi-episode simulation.
         Only internal clock and current actions are reset.
-        All the learned parameters are retained
+        All the learned parameters are retained.
         
         """
         self.ctrl_clock = t0
@@ -1014,7 +1014,7 @@ class CtrlOptPred:
     
     def receive_sys_state(self, state):
         """
-        Fetch exogenous model state. Used in some controller modes. See class documentation
+        Fetch exogenous model state. Used in some controller modes. See class documentation.
 
         """
         self.state_sys = state
@@ -1033,11 +1033,11 @@ class CtrlOptPred:
         stage_obj = 0
 
         if self.stage_obj_struct == 'quadratic':
-            R1 = self.rcost_pars[0]
+            R1 = self.stage_obj_pars[0]
             stage_obj = chi @ R1 @ chi
         elif self.stage_obj_struct == 'biquadratic':
-            R1 = self.rcost_pars[0]
-            R2 = self.rcost_pars[1]
+            R1 = self.stage_obj_pars[0]
+            R2 = self.stage_obj_pars[1]
             stage_obj = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
         
         return stage_obj
@@ -1046,14 +1046,14 @@ class CtrlOptPred:
         """
         Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
         If the agent succeeded to stabilize the system, ``accum_obj`` would converge to a finite value which is the performance mark.
-        The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead)
+        The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead).
         
         """
         self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
     
     def _estimate_model(self, t, observation):
         """
-        Estimate model parameters by accumulating data buffers ``action_buffer`` and ``observation_buffer``
+        Estimate model parameters by accumulating data buffers ``action_buffer`` and ``observation_buffer``.
         
         """
         
@@ -1070,14 +1070,6 @@ class CtrlOptPred:
                     self.est_clock = t
                     
                     try:
-                        # Using ssid from Githug:AndyLamperski/pyN4SID
-                        # Aid, Bid, Cid, Did, _ ,_ = ssid.N4SID(serf.action_buffer.T,  self.observation_buffer.T, 
-                        #                                       NumRows = self.dim_input + self.model_order,
-                        #                                       NumCols = self.buffer_size - (self.dim_input + self.model_order)*2,
-                        #                                       NSig = self.model_order,
-                        #                                       require_stable=False) 
-                        # self.my_model.upd_pars(Aid, Bid, Cid, Did)
-                        
                         # Using Github:CPCLAB-UNIPI/SIPPY 
                         # method: N4SID, MOESP, CVA, PARSIM-P, PARSIM-S, PARSIM-K
                         SSest = sippy.system_identification(self.observation_buffer, self.action_buffer,
@@ -1092,15 +1084,8 @@ class CtrlOptPred:
                         
                         self.my_model.upd_pars(SSest.A, SSest.B, SSest.C, SSest.D)
                         
+                        # ToDo: train an NN via Torch
                         # NN_wgts = NN_train(...)
-                        
-                        # [EXPERIMENTAL] Using MATLAB's system identification toolbox
-                        # us_ml = eng.transpose(matlab.double(self.action_buffer.tolist()))
-                        # ys_ml = eng.transpose(matlab.double(self.observation_buffer.tolist()))
-                        
-                        # Aml, Bml, Cml, Dml = eng.mySSest_simple(ys_ml, us_ml, dt, model_order, nargout=4)
-                        
-                        # self.my_model.upd_pars(np.asarray(Aml), np.asarray(Bml), np.asarray(Cml), np.asarray(Dml) )
                         
                     except:
                         print('Model estimation problem')
@@ -1165,16 +1150,16 @@ class CtrlOptPred:
 
     def _regressor_critic(self, observation, action):
         """
-        Feature vector of the critic
+        Features of the critic.
         
-        In Q-learning mode, it uses both ``observation`` and ``action``. In value function approximation mode, it should use just ``observation``
+        In Q-learning mode, it uses both ``observation`` and ``action``. In value function approximation mode, it should use just ``observation``.
         
         Customization
         -------------
         
         Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
         If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``w_critic @ self._regressor_critic( observation, action )`` 
-        within :func:`~controllers.CtrlOptPred._critic_cost`
+        within :func:`~controllers.CtrlOptPred._critic_cost`.
         
         """
         if self.observation_target == []:
@@ -1193,14 +1178,14 @@ class CtrlOptPred:
     
     def _critic_cost(self, w_critic):
         """
-        Cost function of the critic
+        Cost function of the critic.
         
-        Currently uses value-iteration-like method  
+        Currently uses value-iteration-like method.  
         
         Customization
         -------------        
         
-        Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation 
+        Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation. 
        
         """
         Jc = 0
@@ -1223,7 +1208,7 @@ class CtrlOptPred:
         
     def _critic(self):
         """
-        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._critic_cost`
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._critic_cost`.
 
         """        
         
@@ -1248,12 +1233,12 @@ class CtrlOptPred:
     
     def _actor_cost(self, action_sqn, observation):
         """
-        See class documentation
+        See class documentation.
         
         Customization
         -------------        
         
-        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation
+        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
 
         """
         
@@ -1305,13 +1290,13 @@ class CtrlOptPred:
     
     def _actor(self, observation):
         """
-        See class documentation
+        See class documentation.
         
         Customization
         -------------         
         
         This method normally should not be altered, adjust :func:`~controllers.CtrlOptPred._actor_cost` instead.
-        The only customization you might want here is regarding the optimization algorithm
+        The only customization you might want here is regarding the optimization algorithm.
 
         """
 
@@ -1396,12 +1381,12 @@ class CtrlOptPred:
                     
     def compute_action(self, t, observation):
         """
-        Main method. See class documentation
+        Main method. See class documentation.
         
         Customization
         -------------         
         
-        Add your modes, that you introduced in :func:`~controllers.CtrlOptPred._actor_cost`, here
+        Add your modes, that you introduced in :func:`~controllers.CtrlOptPred._actor_cost`, here.
 
         """       
         
@@ -1467,18 +1452,18 @@ class CtrlNominal3WRobot:
     The controller is sampled.
     
     For a 3-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [[1]_], we use here
-    a controller designed by non-smooth backstepping (read more in [[2]_], [[3]_])
+    a controller designed by non-smooth backstepping (read more in [[2]_], [[3]_]).
   
     Attributes
     ----------
     m, I : : numbers
-        Mass and moment of inertia around vertical axis of the robot
+        Mass and moment of inertia around vertical axis of the robot.
     ctrl_gain : : number
-        Controller gain       
+        Controller gain.       
     t0 : : number
-        Initial value of the controller's internal clock
+        Initial value of the controller's internal clock.
     sampling_time : : number
-        Controller's sampling time (in seconds)        
+        Controller's sampling time (in seconds).       
     
     References
     ----------
@@ -1504,7 +1489,7 @@ class CtrlNominal3WRobot:
    
     def reset(self, t0):
         """
-        Resets controller for use in multi-episode simulation
+        Resets controller for use in multi-episode simulation.
         
         """
         self.ctrl_clock = t0
@@ -1512,7 +1497,7 @@ class CtrlNominal3WRobot:
     
     def _zeta(self, xNI, theta):
         """
-        Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators)
+        Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators).
 
         """
         
@@ -1553,7 +1538,7 @@ class CtrlNominal3WRobot:
     
     def _kappa(self, xNI, theta): 
         """
-        Stabilizing controller for NI-part
+        Stabilizing controller for NI-part.
 
         """
         kappa_val = np.zeros(2)
@@ -1571,7 +1556,7 @@ class CtrlNominal3WRobot:
     
     def _Fc(self, xNI, eta, theta):
         """
-        Marginal function for ENDI constructed by nonsmooth backstepping. See details in the literature mentioned in the class documentation
+        Marginal function for ENDI constructed by nonsmooth backstepping. See details in the literature mentioned in the class documentation.
 
         """
         
@@ -1596,10 +1581,10 @@ class CtrlNominal3WRobot:
         
     def _Cart2NH(self, coords_Cart): 
         """
-        Transformation from Cartesian coordinates to non-holonomic (NH) coordinates
-        See Section VIII.A in [[1]_]
+        Transformation from Cartesian coordinates to non-holonomic (NH) coordinates.
+        See Section VIII.A in [[1]_].
         
-        The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`
+        The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`.
         
         References
         ----------
@@ -1628,10 +1613,10 @@ class CtrlNominal3WRobot:
   
     def _NH2ctrl_Cart(self, xNI, eta, uNI): 
         """
-        Get control for Cartesian NI from NH coordinates
-        See Section VIII.A in [[1]_]
+        Get control for Cartesian NI from NH coordinates.
+        See Section VIII.A in [[1]_].
         
-        The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`
+        The transformation is a bit different since the 3rd NI eqn reads for our case as: :math:`\\dot x_3 = x_2 u_1 - x_1 u_2`.
         
         References
         ----------
@@ -1650,9 +1635,9 @@ class CtrlNominal3WRobot:
 
     def compute_action(self, t, observation):
         """
-        See algorithm description in [[1]_], [[2]_]
+        See algorithm description in [[1]_], [[2]_].
         
-        **This algorithm needs full-state measurement of the robot**
+        **This algorithm needs full-state measurement of the robot**.
         
         References
         ----------
@@ -1701,7 +1686,7 @@ class CtrlNominal3WRobot:
 
     def compute_action_vanila(self, observation):
         """
-        Same as :func:`~ctrl_nominal_3wrobot.compute_action`, but without invoking the internal clock
+        Same as :func:`~CtrlNominal3WRobot.compute_action`, but without invoking the internal clock.
 
         """
         
@@ -1725,7 +1710,7 @@ class CtrlNominal3WRobot:
     
 class CtrlNominal3WRobotNI:
     """
-    Nominal parking controller for NI using disassembled subgradients
+    Nominal parking controller for NI using disassembled subgradients.
     
     """
     
@@ -1739,7 +1724,7 @@ class CtrlNominal3WRobotNI:
    
     def reset(self, t0):
         """
-        Resets controller for use in multi-episode simulation
+        Resets controller for use in multi-episode simulation.
         
         """
         self.ctrl_clock = t0
@@ -1747,7 +1732,7 @@ class CtrlNominal3WRobotNI:
     
     def _zeta(self, xNI):
         """
-        Analytic disassembled subgradient, without finding minimizer theta
+        Analytic disassembled subgradient, without finding minimizer theta.
 
         """
         
@@ -1800,7 +1785,7 @@ class CtrlNominal3WRobotNI:
     
     def _kappa(self, xNI): 
         """
-        Stabilizing controller for NI-part
+        Stabilizing controller for NI-part.
 
         """
         kappa_val = np.zeros(2)
@@ -1818,7 +1803,7 @@ class CtrlNominal3WRobotNI:
     
     def _F(self, xNI, eta, theta):
         """
-        Marginal function for NI
+        Marginal function for NI.
 
         """
         
@@ -1832,7 +1817,7 @@ class CtrlNominal3WRobotNI:
       
     def _Cart2NH(self, coords_Cart): 
         """
-        Transformation from Cartesian coordinates to non-holonomic (NH) coordinates
+        Transformation from Cartesian coordinates to non-holonomic (NH) coordinates.
 
         """
         
@@ -1850,7 +1835,7 @@ class CtrlNominal3WRobotNI:
   
     def _NH2ctrl_Cart(self, xNI, uNI): 
         """
-        Get control for Cartesian NI from NH coordinates       
+        Get control for Cartesian NI from NH coordinates.       
 
         """
 
@@ -1863,6 +1848,7 @@ class CtrlNominal3WRobotNI:
 
     def compute_action(self, t, observation):
         """
+        Compute sampled action.
         
         """
         
@@ -1901,7 +1887,7 @@ class CtrlNominal3WRobotNI:
 
     def compute_action_vanila(self, observation):
         """
-        Same as :func:`~ctrl_nominal_3wrobot_NI.compute_action`, but without invoking the internal clock
+        Same as :func:`~CtrlNominal3WRobotNI.compute_action`, but without invoking the internal clock.
 
         """
         

@@ -69,7 +69,7 @@ parser.add_argument('--dt', type=float, metavar='dt',
                     default=0.01,
                     help='Controller sampling time.' )
 parser.add_argument('--t1', type=float, metavar='t1',
-                    default=1.0,
+                    default=10.0,
                     help='Final time of episode.' )
 parser.add_argument('--Nruns', type=int,
                     default=1,
@@ -254,7 +254,7 @@ my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            critic_period=critic_period,
                                            critic_struct=critic_struct,
                                            stage_obj_struct=stage_obj_struct,
-                                           rcost_pars=[R1],
+                                           stage_obj_pars=[R1],
                                            observation_target=[])
 
 # Stabilizing RL agent
@@ -282,7 +282,7 @@ my_ctrl_RL_stab = controllers.CtrlRLStab(dim_input,
                                          critic_struct=critic_struct,
                                          actor_struct=actor_struct,
                                          stage_obj_struct=stage_obj_struct,
-                                         rcost_pars=[R1],
+                                         stage_obj_pars=[R1],
                                          observation_target=[],
                                          safe_ctrl=my_ctrl_nominal,
                                          safe_decay_rate=1e-4)
