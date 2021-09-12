@@ -79,7 +79,7 @@ parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
                     help='Initial state (as sequence of numbers); ' + 
                     'dimension is environment-specific!')
 parser.add_argument('--is_log_data', type=bool,
-                    default=True,
+                    default=False,
                     help='Flag to log data into a data file. Data are stored in simdata folder.')
 parser.add_argument('--is_visualization', type=bool,
                     default=True,

@@ -316,17 +316,45 @@ my_simulator = simulator.Simulator(sys_type = "diff_eqn",
                                    is_dyn_ctrl = is_dyn_ctrl)
 
 #----------------------------------------Initialization : : logger
-data_folder = 'simdata'
+if os.path.basename( os.path.normpath( os.path.abspath(os.getcwd()) ) ) == 'presets':
+    data_folder = '../simdata'
+else:
+    data_folder = 'simdata'
+
+pathlib.Path(data_folder).mkdir(parents=True, exist_ok=True) 
 
 date = datetime.now().strftime("%Y-%m-%d")
 time = datetime.now().strftime("%Hh%Mm%Ss")
 datafiles = [None] * Nruns
+
 for k in range(0, Nruns):
-    datafiles[k] = data_folder + '/sim__' + my_sys.name + '__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+    datafiles[k] = data_folder + '/' + my_sys.name + '__' + ctrl_mode + '__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
     
     if is_log_data:
+        print('Logging data to:    ' + datafiles[k])
+            
         with open(datafiles[k], 'w', newline='') as outfile:
             writer = csv.writer(outfile)
+            writer.writerow(['System', my_sys.name ] )
+            writer.writerow(['Controller', ctrl_mode ] )
+            writer.writerow(['dt', str(dt) ] )
+            writer.writerow(['state_init', str(state_init) ] )
+            writer.writerow(['is_est_model', str(is_est_model) ] )
+            writer.writerow(['model_est_stage', str(model_est_stage) ] )
+            writer.writerow(['model_est_period_multiplier', str(model_est_period_multiplier) ] )
+            writer.writerow(['model_order', str(model_order) ] )
+            writer.writerow(['prob_noise_pow', str(prob_noise_pow) ] )
+            writer.writerow(['Nactor', str(Nactor) ] )
+            writer.writerow(['pred_step_size_multiplier', str(pred_step_size_multiplier) ] )
+            writer.writerow(['buffer_size', str(buffer_size) ] )
+            writer.writerow(['stage_obj_struct', str(stage_obj_struct) ] )
+            writer.writerow(['R1_diag', str(R1_diag) ] )
+            writer.writerow(['R2_diag', str(R2_diag) ] )
+            writer.writerow(['Ncritic', str(Ncritic) ] )
+            writer.writerow(['gamma', str(gamma) ] )
+            writer.writerow(['critic_period_multiplier', str(critic_period_multiplier) ] )
+            writer.writerow(['critic_struct', str(critic_struct) ] )
+            writer.writerow(['actor_struct', str(actor_struct) ] )   
             writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'stage_obj', 'accum_obj', 'v [m/s]', 'omega [rad/s]'] )
 
 # Do not display annoying warnings when print is on
