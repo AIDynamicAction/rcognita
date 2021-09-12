@@ -408,8 +408,6 @@ class CtrlRLStab:
         elif self.critic_struct == 'quad-nomix':
             regressor_critic = chi * chi
 
-        regressor_critic
-
         return lmbd * w_critic @ regressor_critic + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
 
     def _w_actor_from_action(self, action, observation):
@@ -674,7 +672,9 @@ class CtrlRLStab:
 
 class CtrlOptPred:
     """
-    Class of predictive optimal controllers, primarily MPC and predictive RL, that optimize a finite-horizon cost.
+    Class of predictive optimal controllers, primarily model-predictive control and predictive reinforcement learning, that optimize a finite-horizon cost.
+    
+    Currently, the actor model is trivial: an action is generated directly without additional policy parameters.
         
     Attributes
     ----------
@@ -1175,33 +1175,29 @@ class CtrlOptPred:
                     # Drop probing noise
                     self.is_prob_noise = 0 
 
-    def _regressor_critic(self, observation, action):
+    def _critic(self, observation, action, w_critic):
         """
-        Features of the critic.
+        Critic: a routine that models something related to the objective, e.g., value function, Q-function, advantage etc.
         
-        In Q-learning mode, it uses both ``observation`` and ``action``. In value function approximation mode, it should use just ``observation``.
-        
-        Customization
-        -------------
-        
-        Adjust this method if you still sitck with a linearly parametrized approximator for Q-function, value function etc.
-        If you decide to switch to a non-linearly parametrized approximator, you need to alter the terms like ``w_critic @ self._regressor_critic( observation, action )`` 
-        within :func:`~controllers.CtrlOptPred._critic_cost`.
-        
+        Currently, this implementation is for linearly parametrized models.
+
         """
+
         if self.observation_target == []:
             chi = np.concatenate([observation, action])
         else:
             chi = np.concatenate([observation - self.observation_target, action])
         
         if self.critic_struct == 'quad-lin':
-            return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
+            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
         elif self.critic_struct == 'quadratic':
-            return np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
+            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
         elif self.critic_struct == 'quad-nomix':
-            return chi * chi    
+            regressor_critic = chi * chi
         elif self.critic_struct == 'quad-mix':
-            return np.concatenate([ observation**2, np.kron(observation, action), action**2 ]) 
+            regressor_critic = np.concatenate([ observation**2, np.kron(observation, action), action**2 ]) 
+
+        return w_critic @ regressor_critic
     
     def _critic_cost(self, w_critic):
         """
@@ -1224,16 +1220,18 @@ class CtrlOptPred:
             action_next = self.action_buffer[k, :]
             
             # Temporal difference
-            e = w_critic @ self._regressor_critic( observation_prev, action_prev )- \
-            self.gamma * self.w_critic_prev @ self._regressor_critic( observation_next, action_next )- \
-            self.stage_obj(observation_prev, action_prev)
+            
+            critic_prev = self._critic(observation_prev, action_prev, w_critic)
+            critic_next = self._critic(observation_next, action_next, self.w_critic_prev)            
+
+            e = critic_prev - self.gamma * critic_next - self.stage_obj(observation_prev, action_prev)
             
             Jc += 1/2 * e**2
             
         return Jc
         
         
-    def _critic(self):
+    def _critic_optimizer(self):
         """
         This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._critic_cost`.
 
@@ -1295,10 +1293,10 @@ class CtrlOptPred:
         elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of stage objectives
              for k in range(self.Nactor-1):
                 J += self.gamma**k * self.stage_obj(observation_sqn[k, :], my_action_sqn[k, :])
-             J += self.w_critic @ self._regressor_critic( observation_sqn[-1, :], my_action_sqn[-1, :] )
+             J += self._critic(observation_sqn[-1, :], my_action_sqn[-1, :], self.w_critic)
         elif self.mode=='SQL':     # RL: stacked Q-learning
              for k in range(self.Nactor): 
-                Q = self.w_critic @ self._regressor_critic( observation_sqn[k, :], my_action_sqn[k, :] )
+                Q = self._critic(observation_sqn[k, :], my_action_sqn[k, :], self.w_critic)
                 
                 # With state constraints via indicator function
                 # Q = w_critic @ self._regressor_critic( observation_sqn[k, :], my_action_sqn[k, :] ) + state_constraint_indicator(observation_sqn[k, 0])
@@ -1315,8 +1313,9 @@ class CtrlOptPred:
 
         return J
     
-    def _actor(self, observation):
+    def _actor_optimizer(self, observation):
         """
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._actor_cost`.
         See class documentation.
         
         Customization
@@ -1372,10 +1371,17 @@ class CtrlOptPred:
         try:
             if isGlobOpt:
                 minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation), my_action_sqn_init, minimizer_kwargs=minimizer_kwargs, niter = 10).x
+                action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation),
+                                          my_action_sqn_init,
+                                          minimizer_kwargs=minimizer_kwargs,
+                                          niter = 10).x
             else:
-                action_sqn = minimize(lambda action_sqn: self._actor_cost(action_sqn, observation), my_action_sqn_init,
-                                      method=actor_opt_method, tol=1e-7, bounds=bnds, options=actor_opt_options).x        
+                action_sqn = minimize(lambda action_sqn: self._actor_cost(action_sqn, observation),
+                                      my_action_sqn_init,
+                                      method=actor_opt_method,
+                                      tol=1e-7,
+                                      bounds=bnds,
+                                      options=actor_opt_options).x        
 
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
@@ -1430,10 +1436,10 @@ class CtrlOptPred:
                     return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
                 
                 elif not self.is_prob_noise and self.is_est_model:
-                    action = self._actor(observation)
+                    action = self._actor_optimizer(observation)
 
                 elif self.mode=='MPC':
-                    action = self._actor(observation)
+                    action = self._actor_optimizer(observation)
                     
             elif self.mode in ['RQL', 'SQL']:
                 # Critic
@@ -1447,7 +1453,7 @@ class CtrlOptPred:
                     # Update critic's internal clock
                     self.critic_clock = t
                     
-                    self.w_critic = self._critic()
+                    self.w_critic = self._critic_optimizer()
                     self.w_critic_prev = self.w_critic
                     
                     # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
@@ -1460,10 +1466,10 @@ class CtrlOptPred:
                 if self.is_prob_noise and self.is_est_model:
                     action = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
                 elif not self.is_prob_noise and self.is_est_model:
-                    action = self._actor(observation)
+                    action = self._actor_optimizer(observation)
                     
                 elif self.mode in ['RQL', 'SQL']:
-                    action = self._actor(observation) 
+                    action = self._actor_optimizer(observation) 
             
             self.action_curr = action
             
