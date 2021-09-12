@@ -170,8 +170,8 @@ class CtrlRLStab:
             
             .. math::
                 \\begin{array}{ll}
-        			\\hat x^+ & = A \\hat x + B action \\newline
-        			observation^+  & = C \\hat x + D action,
+        			\\hat x^+ & = A \\hat x + B action, \\newline
+        			observation^+  & = C \\hat x + D action.
                 \\end{array}             
             
             See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
@@ -394,32 +394,49 @@ class CtrlRLStab:
         elif self.critic_struct == 'quad-nomix':
             return chi * chi
         
-    def _regressor_actor(self, observation):
+    def _actor(self, observation, w_actor):
         """
-        Feature vector of the actor.
+        Actor: a routine that models the policy.
 
         """
-
-        chi = observation
 
         if self.actor_struct == 'quad-lin':
-            return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
+            regressor_actor = np.concatenate([ uptria2vec( np.outer(observation, observation) ), observation ])
         elif self.actor_struct == 'quadratic':
-            return np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
+            regressor_actor = np.concatenate([ uptria2vec( np.outer(observation, observation) ) ])   
         elif self.actor_struct == 'quad-nomix':
-            return chi * chi        
+            regressor_actor = observation * observation        
 
-    def _actor_critic_cost(self, W_lmbd_u):
+        return reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ regressor_actor
+
+    def _w_actor_from_action(self, action, observation):
         """
-        Joint actor-critic cost function.
+        Compute actor weights from a given action.
+        
+        The current implementation is for linearly parametrized models so far.
+
+        """
+        
+        if self.actor_struct == 'quad-lin':
+            regressor_actor = np.concatenate([ uptria2vec( np.outer(observation, observation) ), observation ])
+        elif self.actor_struct == 'quadratic':
+            regressor_actor = np.concatenate([ uptria2vec( np.outer(observation, observation) ) ])   
+        elif self.actor_struct == 'quad-nomix':
+            regressor_actor = observation * observation          
+        
+        return reshape(lstsq( np.array( [ regressor_actor ] ), np.array( [ action ] ) )[0].T, self.dim_actor ) 
+
+    def _actor_critic_cost(self, w_all):
+        """
+        Cost (loss) of joint actor-critic (stabilizing) a.k.a. JACS
        
         """        
         
         observation_sqn = self.observation_buffer[-self.Ncritic:,:]
         
-        w_critic = W_lmbd_u[:self.dim_critic]
-        # lmbd = W_lmbd_u[self.dim_critic+1]
-        w_actor = W_lmbd_u[-self.dim_actor:]         
+        w_critic = w_all[:self.dim_critic]
+        # lmbd = w_all[self.dim_critic+1]
+        w_actor = w_all[-self.dim_actor:]         
         
         Jc = 0
         
@@ -430,7 +447,7 @@ class CtrlRLStab:
             critic_prev = w_critic @ self._regressor_critic( observation_prev )
             critic_next = self.w_critic_prev @ self._regressor_critic( observation_next )
             
-            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation_prev )
+            action = self._actor(observation_prev, w_actor)
             
             # Temporal difference
             e = critic_prev - self.gamma * critic_next - self.stage_obj(observation_prev, action)
@@ -439,13 +456,17 @@ class CtrlRLStab:
         
         return Jc
 
-    def _actor_critic(self, observation):
+    def _actor_critic_optimizer(self, observation):
         """
         This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.CtrlRLStab._actor_critic_cost`.
         It implements the stabilizing constraints.
         
         The variable ``w_all`` here is a stack of actor, critic and auxiliary critic weights.
         
+        Important remark: although the current implementation concentrates on a joint coss (loss) of actor-critic (see :func:`~controllers.CtrlRLStab._actor_critic_cost`),
+        nothing stops us from doing a usual split actor-critic training.
+        The key point of CtrlRLStab agent is its stabilizing constraints that can actually be invoked as a filter (a safety checker), that replaces the action and 
+        critic parameters for safe ones if any of the stabilizing constraints are violated.
 
         """  
 
@@ -463,7 +484,7 @@ class CtrlRLStab:
             lmbd = w_all[self.dim_critic]
             w_actor = w_all[-self.dim_actor:] 
                         
-            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )
+            action = self._actor(observation, w_actor)
             
             observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
             
@@ -476,7 +497,7 @@ class CtrlRLStab:
             lmbd = w_all[self.dim_critic]
             w_actor = w_all[-self.dim_actor:]   
             
-            action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )
+            action = self._actor(observation, w_actor)
             
             observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
             
@@ -525,9 +546,9 @@ class CtrlRLStab:
         #                           np.hstack([self.Wmax, self.lmbd_max, self.Hmax]), 
         #                           keep_feasible=True)
         
-        self.w_actor_init = reshape(lstsq( np.array( [ self._regressor_actor( observation ) ] ),
-                                           np.array( [ self.safe_ctrl.compute_action_vanila( observation ) ] ) )[0].T, self.dim_actor )
-       
+        # ToDo: make a better routine to determine initial actor weights for the given action
+        self.w_actor_init = self._w_actor_from_action( self.safe_ctrl.compute_action_vanila( observation ), observation )
+        
         # DEBUG ===================================================================
         # ================================Constraint debugger
 
@@ -560,7 +581,7 @@ class CtrlRLStab:
         lmbd = w_all[self.dim_critic]
         w_actor = w_all[-self.dim_actor:]       
         
-        action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )       
+        action = self._actor(observation, w_actor)
         
         # DEBUG ===================================================================   
         # ================================Constraint debugger
@@ -583,7 +604,8 @@ class CtrlRLStab:
             lmbd = self.lmbd_init
 
             action = self.safe_ctrl.compute_action_vanila( observation )
-            w_actor = reshape( lstsq( np.array( [ self._regressor_actor( observation ) ] ), np.array( [ action ] ) )[0].T, self.dim_actor )
+            
+            w_actor = self._w_actor_from_action( action, observation )
        
         # DEBUG ===================================================================   
         # ================================Put safe controller through        
@@ -630,7 +652,7 @@ class CtrlRLStab:
             self.action_buffer = push_vec(self.action_buffer, self.action_curr)
             self.observation_buffer = push_vec(self.observation_buffer, observation)          
             
-            w_critic, lmbd, action = self._actor_critic(observation)
+            w_critic, lmbd, action = self._actor_critic_optimizer(observation)
             
             self.w_critic_prev = w_critic            
             self.lmbd_prev = lmbd
@@ -666,7 +688,7 @@ class CtrlOptPred:
              - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right)= \\sum_{k=1}^{N_a} \\gamma^{k-1} \\rho(y_k, u_k)`
            * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`\\rho`
              - :math:`J_a \\left( y_1, \\{action\}_{1}^{N_a}\\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\rho(y_k, u_k) + \\hat Q^{\\theta}(y_{N_a}, u_{N_a})` 
-           * - 'SQL' - RL/ADP via stacked Q-learning [[1]_]
+           * - 'SQL' - RL/ADP via stacked Q-learning
              - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\hat \\gamma^{k-1} Q^{\\theta}(y_{N_a}, u_{N_a})`               
         
         Here, :math:`\\theta` are the critic parameters (neural network weights, say) and :math:`y_1` is the current observation.
@@ -706,8 +728,8 @@ class CtrlOptPred:
         
         .. math::
             \\begin{array}{ll}
-    			\\hat x^+ & = A \\hat x + B action \\newline
-    			observation^+  & = C \\hat x + D action,
+    			\\hat x^+ & = A \\hat x + B action, \\newline
+    			observation^+  & = C \\hat x + D action.
             \\end{array}             
         
         See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
@@ -817,7 +839,7 @@ class CtrlOptPred:
                  - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right)= \\sum_{k=1}^{N_a} \\gamma^{k-1} \\rho(y_k, u_k)`
                * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`\\rho`
                  - :math:`J_a \\left( y_1, \\{action\}_{1}^{N_a}\\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\rho(y_k, u_k) + \\hat Q^{\\theta}(y_{N_a}, u_{N_a})` 
-               * - 'SQL' - RL/ADP via stacked Q-learning [[1]_]
+               * - 'SQL' - RL/ADP via stacked Q-learning
                  - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\hat Q^{\\theta}(y_{N_a}, u_{N_a})`               
             
             Here, :math:`\\theta` are the critic parameters (neural network weights, say) and :math:`y_1` is the current observation.
@@ -857,8 +879,8 @@ class CtrlOptPred:
             
             .. math::
                 \\begin{array}{ll}
-        			\\hat x^+ & = A \\hat x + B action \\newline
-        			observation^+  & = C \\hat x + D action,
+        			\\hat x^+ & = A \\hat x + B action, \\newline
+        			observation^+  & = C \\hat x + D action.
                 \\end{array}             
             
             See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.

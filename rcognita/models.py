@@ -13,16 +13,16 @@ class ModelSS:
             
     .. math::
         \\begin{array}{ll}
-			\\hat x^+ & = A \\hat x + B u \\newline
-			y^+  & = C \\hat x + D u,
+			\\hat x^+ & = A \\hat x + B u, \\newline
+			y^+  & = C \\hat x + D u.
         \\end{array}                 
         
     Attributes
     ---------- 
     A, B, C, D : : arrays of proper shape
-        State-space model parameters
+        State-space model parameters.
     x0set : : array
-        Initial state estimate
+        Initial state estimate.
             
     """
     

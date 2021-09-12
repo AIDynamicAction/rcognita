@@ -21,9 +21,9 @@ class Logger:
     Concrete loggers, associated with concrete system-controller setups, are should be built upon this class.
     To design a concrete logger: inherit this class, override:
         | :func:`~loggers.Logger.print_sim_step` :
-        | print a row of data of a single simulation step, typically into the console (required)
+        | print a row of data of a single simulation step, typically into the console (required).
         | :func:`~loggers.Logger.log_data_row` :
-        | same as above, but write to a file (required)
+        | same as above, but write to a file (required).
     
     """
     
