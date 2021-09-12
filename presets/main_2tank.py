@@ -62,23 +62,23 @@ parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
                     '----RQL: Q-learning actor-critic with Nactor-1 roll-outs of stage objective; ' +
                     '----SQL: stacked Q-learning.')
 parser.add_argument('--dt', type=float, metavar='dt',
-                    default=0.01,
+                    default=0.1,
                     help='Controller sampling time.' )
 parser.add_argument('--t1', type=float, metavar='t1',
-                    default=10.0,
+                    default=100.0,
                     help='Final time of episode.' )
 parser.add_argument('--Nruns', type=int,
                     default=1,
                     help='Number of episodes. Learned parameters are not reset after an episode.')
 parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
-                    default=['2', '1'],
+                    default=['2', '-2'],
                     help='Initial state (as sequence of numbers); ' + 
                     'dimension is environment-specific!')
 parser.add_argument('--is_log_data', type=bool,
                     default=False,
                     help='Flag to log data into a data file. Data are stored in simdata folder.')
 parser.add_argument('--is_visualization', type=bool,
-                    default=False,
+                    default=True,
                     help='Flag to produce graphical output.')
 parser.add_argument('--is_print_sim_step', type=bool,
                     default=True,
@@ -102,10 +102,10 @@ parser.add_argument('--action_manual', type=float,
                     default=[0.5], nargs='+',
                     help='Manual control action to be fed constant, system-specific!')
 parser.add_argument('--Nactor', type=int,
-                    default=3,
+                    default=10,
                     help='Horizon length (in steps) for predictive controllers.')
 parser.add_argument('--pred_step_size_multiplier', type=float,
-                    default=1.0,
+                    default=2.0,
                     help='Size of each prediction step in seconds is a pred_step_size_multiplier multiple of controller sampling time dt.')
 parser.add_argument('--buffer_size', type=int,
                     default=10,
