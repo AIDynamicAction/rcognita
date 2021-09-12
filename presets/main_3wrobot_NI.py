@@ -57,7 +57,7 @@ parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
                              'RQL',
                              'SQL',
                              'JACS'],
-                    default='MPC',
+                    default='nominal',
                     help='Control mode. Currently available: ' +
                     '----manual: manual constant control specified by action_manual; ' +
                     '----nominal: nominal controller, usually used to benchmark optimal controllers;' +                     
@@ -234,58 +234,60 @@ my_ctrl_nominal = controllers.CtrlNominal3WRobotNI(ctrl_gain=0.5, ctrl_bnds=ctrl
 my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            dim_output,
                                            ctrl_mode,
-                                           ctrl_bnds=ctrl_bnds,
-                                           t0=t0,
-                                           sampling_time=dt,
-                                           Nactor=Nactor,
-                                           pred_step_size=pred_step_size,
-                                           sys_rhs=my_sys._state_dyn,
-                                           sys_out=my_sys.out,
-                                           state_sys=state_init,
+                                           ctrl_bnds = ctrl_bnds,
+                                           action_init = [],
+                                           t0 = t0,
+                                           sampling_time = dt,
+                                           Nactor = Nactor,
+                                           pred_step_size = pred_step_size,
+                                           sys_rhs = my_sys._state_dyn,
+                                           sys_out = my_sys.out,
+                                           state_sys = state_init,
                                            prob_noise_pow = prob_noise_pow,
-                                           is_est_model=is_est_model,
-                                           model_est_stage=model_est_stage,
-                                           model_est_period=model_est_period,
-                                           buffer_size=buffer_size,
-                                           model_order=model_order,
-                                           model_est_checks=model_est_checks,
-                                           gamma=gamma,
-                                           Ncritic=Ncritic,
-                                           critic_period=critic_period,
-                                           critic_struct=critic_struct,
-                                           stage_obj_struct=stage_obj_struct,
-                                           stage_obj_pars=[R1],
-                                           observation_target=[])
+                                           is_est_model = is_est_model,
+                                           model_est_stage = model_est_stage,
+                                           model_est_period = model_est_period,
+                                           buffer_size = buffer_size,
+                                           model_order = model_order,
+                                           model_est_checks = model_est_checks,
+                                           gamma = gamma,
+                                           Ncritic = Ncritic,
+                                           critic_period = critic_period,
+                                           critic_struct = critic_struct,
+                                           stage_obj_struct = stage_obj_struct,
+                                           stage_obj_pars = [R1],
+                                           observation_target = [])
 
 # Stabilizing RL agent
 my_ctrl_RL_stab = controllers.CtrlRLStab(dim_input,
                                          dim_output,
                                          ctrl_mode,
-                                         ctrl_bnds=ctrl_bnds,
-                                         t0=t0,
-                                         sampling_time=dt,
-                                         Nactor=Nactor,
-                                         pred_step_size=pred_step_size,
-                                         sys_rhs=my_sys._state_dyn,
-                                         sys_out=my_sys.out,
-                                         state_sys=state_init,
+                                         ctrl_bnds = ctrl_bnds,
+                                         action_init = action_init,
+                                         t0 = t0,
+                                         sampling_time = dt,
+                                         Nactor = Nactor,
+                                         pred_step_size = pred_step_size,
+                                         sys_rhs = my_sys._state_dyn,
+                                         sys_out = my_sys.out,
+                                         state_sys = state_init,
                                          prob_noise_pow = prob_noise_pow,
-                                         is_est_model=is_est_model,
-                                         model_est_stage=model_est_stage,
-                                         model_est_period=model_est_period,
-                                         buffer_size=buffer_size,
-                                         model_order=model_order,
-                                         model_est_checks=model_est_checks,
-                                         gamma=gamma,
-                                         Ncritic=Ncritic,
-                                         critic_period=critic_period,
-                                         critic_struct=critic_struct,
-                                         actor_struct=actor_struct,
-                                         stage_obj_struct=stage_obj_struct,
-                                         stage_obj_pars=[R1],
-                                         observation_target=[],
-                                         safe_ctrl=my_ctrl_nominal,
-                                         safe_decay_rate=1e-4)
+                                         is_est_model = is_est_model,
+                                         model_est_stage = model_est_stage,
+                                         model_est_period = model_est_period,
+                                         buffer_size = buffer_size,
+                                         model_order = model_order,
+                                         model_est_checks = model_est_checks,
+                                         gamma = gamma,
+                                         Ncritic = Ncritic,
+                                         critic_period = critic_period,
+                                         critic_struct = critic_struct,
+                                         actor_struct = actor_struct,
+                                         stage_obj_struct = stage_obj_struct,
+                                         stage_obj_pars = [R1],
+                                         observation_target = [],
+                                         safe_ctrl = my_ctrl_nominal,
+                                         safe_decay_rate = 1e-4)
 
 if ctrl_mode == 'JACS':
     my_ctrl_benchm = my_ctrl_RL_stab
@@ -293,21 +295,21 @@ else:
     my_ctrl_benchm = my_ctrl_opt_pred
     
 #----------------------------------------Initialization : : simulator
-my_simulator = simulator.Simulator(sys_type="diff_eqn",
-                                   closed_loop_rhs=my_sys.closed_loop_rhs,
-                                   sys_out=my_sys.out,
-                                   state_init=state_init,
-                                   disturb_init=[],
-                                   action_init=action_init,
-                                   t0=t0,
-                                   t1=t1,
-                                   dt=dt,
-                                   max_step=dt/2,
-                                   first_step=1e-6,
-                                   atol=atol,
-                                   rtol=rtol,
-                                   is_disturb=is_disturb,
-                                   is_dyn_ctrl=is_dyn_ctrl)
+my_simulator = simulator.Simulator(sys_type = "diff_eqn",
+                                   closed_loop_rhs = my_sys.closed_loop_rhs,
+                                   sys_out = my_sys.out,
+                                   state_init = state_init,
+                                   disturb_init = [],
+                                   action_init = action_init,
+                                   t0 = t0,
+                                   t1 = t1,
+                                   dt = dt,
+                                   max_step = dt/2,
+                                   first_step = 1e-6,
+                                   atol = atol,
+                                   rtol = rtol,
+                                   is_disturb = is_disturb,
+                                   is_dyn_ctrl = is_dyn_ctrl)
 
 #----------------------------------------Initialization : : logger
 data_folder = 'simdata'
@@ -388,14 +390,14 @@ else:
         
         my_sys.receive_action(action)
         my_ctrl_benchm.receive_sys_state(my_sys._state)
-        my_ctrl_benchm.upd_icost(observation, action)
+        my_ctrl_benchm.upd_accum_obj(observation, action)
         
         xCoord = state_full[0]
         yCoord = state_full[1]
         alpha = state_full[2]
         
-        stage_obj = my_ctrl_benchm.rcost(observation, action)
-        accum_obj = my_ctrl_benchm.icost_val
+        stage_obj = my_ctrl_benchm.stage_obj(observation, action)
+        accum_obj = my_ctrl_benchm.accum_obj_val
         
         if is_print_sim_step:
             my_logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)

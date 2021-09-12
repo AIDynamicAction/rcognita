@@ -669,7 +669,7 @@ class Animator2Tank(Animator):
         self.axs_ctrl = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=(action_min-0.1, action_max+0.1), xlabel='t [s]')
         self.axs_ctrl.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
         self.line_ctrl, = self.axs_ctrl.plot(t0, p0, lw=0.5, label='p') 
-        self.axs_cost.legend(fancybox=True, loc='upper right')
+        self.axs_ctrl.legend(fancybox=True, loc='upper right')
         
         # Pack all lines together
         cLines = namedtuple('lines', ['line_h1', 'line_h2', 'line_stage_obj', 'line_accum_obj', 'line_ctrl'])

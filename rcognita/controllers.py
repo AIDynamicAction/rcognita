@@ -99,8 +99,9 @@ class CtrlRLStab:
     def __init__(self,
                  dim_input,
                  dim_output,
-                 mode='JACS',
-                 ctrl_bnds=[],
+                 mode = 'JACS',
+                 ctrl_bnds = [],
+                 action_init = [],
                  t0=0,
                  sampling_time=0.1,
                  Nactor=1,
@@ -138,6 +139,8 @@ class CtrlRLStab:
             Box control constraints.
             First element in each row is the lower bound, the second - the upper bound.
             If empty, control is unconstrained (default).
+        action_init : : array of shape ``[dim_input, ]``   
+            Initial action to initialize optimizers.         
         t0 : : number
             Initial value of the controller's internal clock.
         sampling_time : : number
@@ -234,9 +237,12 @@ class CtrlRLStab:
         self.action_sqn_min = rep_mat(self.action_min, 1, Nactor)
         self.action_sqn_max = rep_mat(self.action_max, 1, Nactor) 
         
-        self.action_curr = self.action_min/10
-        
-        self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
+        if len(action_init) == 0:
+            self.action_curr = self.action_min/10
+            self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
+        else:
+            self.action_curr = action_init
+            self.action_sqn_init = rep_mat( action_init , 1, self.Nactor)            
         
         self.action_buffer = np.zeros( [buffer_size, dim_input] )
         self.observation_buffer = np.zeros( [buffer_size, dim_output] )        
@@ -704,6 +710,8 @@ class CtrlOptPred:
         Box control constraints.
         First element in each row is the lower bound, the second - the upper bound.
         If empty, control is unconstrained (default).
+    action_init : : array of shape ``[dim_input, ]``   
+        Initial action to initialize optimizers.          
     t0 : : number
         Initial value of the controller's internal clock.
     sampling_time : : number
@@ -805,6 +813,7 @@ class CtrlOptPred:
                  dim_output,
                  mode='MPC',
                  ctrl_bnds=[],
+                 action_init = [],
                  t0=0,
                  sampling_time=0.1,
                  Nactor=1,
@@ -855,6 +864,8 @@ class CtrlOptPred:
             Box control constraints.
             First element in each row is the lower bound, the second - the upper bound.
             If empty, control is unconstrained (default).
+        action_init : : array of shape ``[dim_input, ]``   
+            Initial action to initialize optimizers.              
         t0 : : number
             Initial value of the controller's internal clock
         sampling_time : : number
@@ -959,9 +970,12 @@ class CtrlOptPred:
         self.action_sqn_min = rep_mat(self.action_min, 1, Nactor)
         self.action_sqn_max = rep_mat(self.action_max, 1, Nactor) 
         
-        self.action_curr = self.action_min/10
-        
-        self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
+        if len(action_init) == 0:
+            self.action_curr = self.action_min/10
+            self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
+        else:
+            self.action_curr = action_init
+            self.action_sqn_init = rep_mat( action_init , 1, self.Nactor)
         
         self.action_buffer = np.zeros( [buffer_size, dim_input] )
         self.observation_buffer = np.zeros( [buffer_size, dim_output] )        

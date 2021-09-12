@@ -54,33 +54,31 @@ parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
                     choices=['manual',
                              'MPC',
                              'RQL',
-                             'SQL',
-                             'JACS'],
+                             'SQL'],
                     default='MPC',
                     help='Control mode. Currently available: ' +
                     '----manual: manual constant control specified by action_manual; ' +
                     '----MPC:model-predictive control; ' +
                     '----RQL: Q-learning actor-critic with Nactor-1 roll-outs of stage objective; ' +
-                    '----SQL: stacked Q-learning; ' + 
-                    '----JACS: joint actor-critic (stabilizing), system-specific, needs proper setup.')
+                    '----SQL: stacked Q-learning.')
 parser.add_argument('--dt', type=float, metavar='dt',
                     default=0.01,
                     help='Controller sampling time.' )
 parser.add_argument('--t1', type=float, metavar='t1',
-                    default=1.0,
+                    default=10.0,
                     help='Final time of episode.' )
 parser.add_argument('--Nruns', type=int,
                     default=1,
                     help='Number of episodes. Learned parameters are not reset after an episode.')
 parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
-                    default=['2', '-2'],
+                    default=['2', '1'],
                     help='Initial state (as sequence of numbers); ' + 
                     'dimension is environment-specific!')
 parser.add_argument('--is_log_data', type=bool,
                     default=False,
                     help='Flag to log data into a data file. Data are stored in simdata folder.')
 parser.add_argument('--is_visualization', type=bool,
-                    default=True,
+                    default=False,
                     help='Flag to produce graphical output.')
 parser.add_argument('--is_print_sim_step', type=bool,
                     default=True,
@@ -101,7 +99,7 @@ parser.add_argument('--prob_noise_pow', type=float,
                     default=False,
                     help='Power of probing (exploration) noise.')
 parser.add_argument('--action_manual', type=float,
-                    default=[-5, -3], nargs='+',
+                    default=[0.5], nargs='+',
                     help='Manual control action to be fed constant, system-specific!')
 parser.add_argument('--Nactor', type=int,
                     default=3,
@@ -118,11 +116,11 @@ parser.add_argument('--stage_obj_struct', type=str,
                              'biquadratic'],
                     help='Structure of stage objective function.')
 parser.add_argument('--R1_diag', type=float, nargs='+',
-                    default=[10, 10, 0],
+                    default=[10, 10, 1],
                     help='Parameter of stage objective function. Must have proper dimension. ' +
                     'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
 parser.add_argument('--R2_diag', type=float, nargs='+',
-                    default=[10, 10, 0],
+                    default=[10, 10, 1],
                     help='Parameter of stage objective function . Must have proper dimension. ' + 
                     'Say, if chi = [observation, action], then a bi-quadratic stage objective reads chi**2.T diag(R2) chi**2 + chi.T diag(R1) chi, ' +
                     'where diag() is transformation of a vector to a diagonal matrix.')
@@ -226,47 +224,48 @@ observation_init = my_sys.out(state_init)
 my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            dim_output,
                                            ctrl_mode,
-                                           ctrl_bnds=ctrl_bnds,
-                                           t0=t0,
-                                           sampling_time=dt,
-                                           Nactor=Nactor,
-                                           pred_step_size=pred_step_size,
-                                           sys_rhs=my_sys._state_dyn,
-                                           sys_out=my_sys.out,
-                                           state_sys=state_init,
+                                           ctrl_bnds = ctrl_bnds,
+                                           action_init = action_init,
+                                           t0 = t0,
+                                           sampling_time = dt,
+                                           Nactor = Nactor,
+                                           pred_step_size = pred_step_size,
+                                           sys_rhs = my_sys._state_dyn,
+                                           sys_out = my_sys.out,
+                                           state_sys = state_init,
                                            prob_noise_pow = prob_noise_pow,
-                                           is_est_model=is_est_model,
-                                           model_est_stage=model_est_stage,
-                                           model_est_period=model_est_period,
-                                           buffer_size=buffer_size,
-                                           model_order=model_order,
-                                           model_est_checks=model_est_checks,
-                                           gamma=gamma,
-                                           Ncritic=Ncritic,
-                                           critic_period=critic_period,
-                                           critic_struct=critic_struct,
-                                           stage_obj_struct=stage_obj_struct,
-                                           stage_obj_pars=[R1],
-                                           observation_target=observation_target)
+                                           is_est_model = is_est_model,
+                                           model_est_stage = model_est_stage,
+                                           model_est_period = model_est_period,
+                                           buffer_size = buffer_size,
+                                           model_order = model_order,
+                                           model_est_checks = model_est_checks,
+                                           gamma = gamma,
+                                           Ncritic = Ncritic,
+                                           critic_period = critic_period,
+                                           critic_struct = critic_struct,
+                                           stage_obj_struct = stage_obj_struct,
+                                           stage_obj_pars = [R1],
+                                           observation_target = observation_target)
 
 my_ctrl_benchm = my_ctrl_opt_pred
     
 #----------------------------------------Initialization : : simulator
-my_simulator = simulator.Simulator(sys_type="diff_eqn",
-                                   closed_loop_rhs=my_sys.closed_loop_rhs,
-                                   sys_out=my_sys.out,
-                                   state_init=state_init,
-                                   disturb_init=[],
-                                   action_init=action_init,
-                                   t0=t0,
-                                   t1=t1,
-                                   dt=dt,
-                                   max_step=dt/2,
-                                   first_step=1e-6,
-                                   atol=atol,
-                                   rtol=rtol,
-                                   is_disturb=is_disturb,
-                                   is_dyn_ctrl=is_dyn_ctrl)
+my_simulator = simulator.Simulator(sys_type = "diff_eqn",
+                                   closed_loop_rhs = my_sys.closed_loop_rhs,
+                                   sys_out = my_sys.out,
+                                   state_init = state_init,
+                                   disturb_init = [],
+                                   action_init = action_init,
+                                   t0 = t0,
+                                   t1 = t1,
+                                   dt = dt,
+                                   max_step = dt/2,
+                                   first_step = 1e-6,
+                                   atol = atol,
+                                   rtol = rtol,
+                                   is_disturb = is_disturb,
+                                   is_dyn_ctrl = is_dyn_ctrl)
 
 #----------------------------------------Initialization : : logger
 data_folder = 'simdata'
@@ -280,13 +279,13 @@ for k in range(0, Nruns):
     if is_log_data:
         with open(datafiles[k], 'w', newline='') as outfile:
             writer = csv.writer(outfile)
-            writer.writerow(['t [s]', 'x [m]', 'y [m]', 'alpha [rad]', 'v [m/s]', 'omega [rad/s]', 'stage_obj', 'accum_obj', 'F [N]', 'M [N m]'] )
+            writer.writerow(['t [s]', 'h1', 'h2', 'p', 'stage_obj', 'accum_obj'] )
 
 # Do not display annoying warnings when print is on
 if is_print_sim_step:
     warnings.filterwarnings('ignore')
     
-my_logger = loggers.Logger3WRobot()
+my_logger = loggers.Logger2Tank()
 
 #----------------------------------------Main loop
 if is_visualization:
@@ -341,16 +340,14 @@ else:
         
         my_sys.receive_action(action)
         my_ctrl_benchm.receive_sys_state(my_sys._state)
-        my_ctrl_benchm.upd_icost(observation, action)
+        my_ctrl_benchm.upd_accum_obj(observation, action)
         
-        xCoord = state_full[0]
-        yCoord = state_full[1]
-        alpha = state_full[2]
-        v = state_full[3]
-        omega = state_full[4]        
+        h1 = state_full[0]
+        h2 = state_full[1]
+        p = action       
         
-        stage_obj = my_ctrl_benchm.rcost(observation, action)
-        accum_obj = my_ctrl_benchm.icost_val
+        stage_obj = my_ctrl_benchm.stage_obj(observation, action)
+        accum_obj = my_ctrl_benchm.accum_obj_val
         
         if is_print_sim_step:
             my_logger.print_sim_step(t, h1, h2, p, stage_obj, accum_obj)
