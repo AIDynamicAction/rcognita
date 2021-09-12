@@ -92,7 +92,7 @@ pip3 install rcognita[SIPPY]
 Its main idea is to have an explicit implementation of sampled controls with user-defined sampling time specification.
 The package consists of several modules, namely, `controllers`, `loggers`, `models`, `simulator`, `systems`, `utilities`, `visuals` and a collection of main modules (presets) for each agent-environment configuration.
 
-[This flowchart](./flowcharts/rcognita-flowchart-RLstab.pdf) shows interaction of the core `rcognita` classes contained in the said modules (the latter are not shown on the diagram).
+[This flowchart](./flowcharts/rcognita-flowchart-CtrlOptPred.pdf) shows interaction of the core `rcognita` classes contained in the said modules (the latter are not shown on the diagram).
 
 The main module is a preset, on the flowchart a 3-wheel robot.
 It initializes the system (the environment), the controllers (the agents, e. g., a safe agent, a benchmarking agent, a reinforcement learning agent etc.), the visualization engine called animator, the logger and the simulator.
