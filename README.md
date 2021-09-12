@@ -130,12 +130,16 @@ Auxiliary modules of the package are `models` and `utilities` which provide auxi
 
 [To table of content](#Table-of-content)
 
-After the package is installed, you may just `python` run one of the presets found [here](./presets).
+After the package is installed, you may just `python` run one of the presets found [here](./presets), say,
+```
+python3 main_3wrobot_NI.py
+```
+This will call the preset with default settings, description of which can be found in the preset accordingly.
+
 The naming convention is `main_ACRONYM`, where `ACRONYM` is actually related to the system (environment). 
 You may create your own by analogy.
 
-Just call help to get the detailed information on how to configure a preset.
-Say,
+For configuration of hyper-parameters, just call help on the required preset, say,
 ```
 python3 main_3wrobot_NI.py -h
 ```
