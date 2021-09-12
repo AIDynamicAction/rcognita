@@ -74,23 +74,15 @@ class CtrlRLStab:
     -----
     
     ``w_actor`` : weights.
-    
-    ``_regressor_actor``: regressor.
-    
-    ``_regressor_actor`` is a vector, not a matrix. So, if the environment is multi-input, the input is actually computed as, in case of a 1-layer net,
-    
-    ``action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )``.
-    
-    where ``observation`` is the output.
-    
-    Actor structure is defined via a string flag ``actor_struct``. Structures are analogous to the critic ones - read more in class description of ``controllers.CtrlOptPred``.
+
+    Feature structure is defined via a string flag ``actor_struct``. Read more on features in class description of ``controllers.CtrlOptPred``.
     
     Critic
     -----
     
     ``w_critic`` : weights.
     
-    ``_regressor_critic``: regressor.   
+    Feature structure is defined via a string flag ``critic_struct``. Read more on features in class description of ``controllers.CtrlOptPred``.
     
     Attributes
     ----------
@@ -376,27 +368,12 @@ class CtrlRLStab:
         
         """
         self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
-
-    def _regressor_critic(self, observation):
-        """
-        Feature vector of the critic.
-
-        """
-        if self.observation_target == []:
-            chi = observation
-        else:
-            chi = observation - self.observation_target
-        
-        if self.critic_struct == 'quad-lin':
-            return np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
-        elif self.critic_struct == 'quadratic':
-            return np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
-        elif self.critic_struct == 'quad-nomix':
-            return chi * chi
-        
+    
     def _actor(self, observation, w_actor):
         """
         Actor: a routine that models the policy.
+        
+        Currently, this implementation is for linearly parametrized models.
 
         """
 
@@ -408,6 +385,32 @@ class CtrlRLStab:
             regressor_actor = observation * observation        
 
         return reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ regressor_actor
+
+    def _critic(self, observation, w_critic, lmbd):
+        """
+        Critic: a routine that models something related to the objective, e.g., value function, Q-function, advantage etc.
+        
+        The parameter ``lmbd`` is needed here specifically for joint actor-critic (stabilizing) a.k.a. JACS.
+        
+        Currently, this implementation is for linearly parametrized models.
+
+        """
+
+        if self.observation_target == []:
+            chi = observation
+        else:
+            chi = observation - self.observation_target
+        
+        if self.critic_struct == 'quad-lin':
+            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
+        elif self.critic_struct == 'quadratic':
+            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
+        elif self.critic_struct == 'quad-nomix':
+            regressor_critic = chi * chi
+
+        regressor_critic
+
+        return lmbd * w_critic @ regressor_critic + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
 
     def _w_actor_from_action(self, action, observation):
         """
@@ -444,8 +447,8 @@ class CtrlRLStab:
             observation_prev = observation_sqn[k-1, :]
             observation_next = observation_sqn[k, :]
             
-            critic_prev = w_critic @ self._regressor_critic( observation_prev )
-            critic_next = self.w_critic_prev @ self._regressor_critic( observation_next )
+            critic_prev = self._critic(observation_prev, w_critic, 1)
+            critic_next = self._critic(observation_next, self.w_critic_prev, 1)
             
             action = self._actor(observation_prev, w_actor)
             
@@ -474,8 +477,8 @@ class CtrlRLStab:
             w_critic = w_all[:self.dim_critic]
             lmbd = w_all[self.dim_critic]
             
-            critic_curr = self.lmbd_prev * self.w_critic_prev @ self._regressor_critic( observation ) + ( 1 - self.lmbd_prev ) * self.safe_ctrl.compute_LF( observation )
-            critic_new = lmbd * w_critic @ self._regressor_critic( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
+            critic_curr = self._critic(observation, self.w_critic_prev, self.lmbd_prev)   
+            critic_new = self._critic(observation, w_critic, lmbd)
             
             return critic_new - critic_curr
             
@@ -488,7 +491,7 @@ class CtrlRLStab:
             
             observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
             
-            critic_next = lmbd * w_critic @ self._regressor_critic( observation_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation_next )
+            critic_next = self._critic(observation_next, w_critic, lmbd) 
             
             return self.safe_ctrl.compute_LF(observation_next) - critic_next        
         
@@ -501,8 +504,8 @@ class CtrlRLStab:
             
             observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
             
-            critic_new = lmbd * w_critic @ self._regressor_critic( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
-            critic_next = lmbd * w_critic @ self._regressor_critic( observation_next ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation_next )
+            critic_new = self._critic(observation, w_critic, lmbd)   
+            critic_next = self._critic(observation_next, w_critic, lmbd)   
             
             return critic_next - critic_new + self.safe_decay_rate
 
@@ -510,7 +513,7 @@ class CtrlRLStab:
             w_critic = w_all[:self.dim_critic]
             lmbd = w_all[self.dim_critic]
             
-            critic_new = lmbd * w_critic @ self._regressor_critic( observation ) + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
+            critic_new = self._critic(observation, w_critic, lmbd)
             
             return - critic_new
 
@@ -575,7 +578,9 @@ class CtrlRLStab:
         
         w_all = minimize(self._actor_critic_cost,
                             np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.w_actor_init]),
-                            method=opt_method, tol=1e-4, options=opt_options).x        
+                            method=opt_method,
+                            tol=1e-4,
+                            options=opt_options).x        
         
         w_critic = w_all[:self.dim_critic]
         lmbd = w_all[self.dim_critic]
