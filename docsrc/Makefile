@@ -18,9 +18,11 @@ BUILDDIR      = build
 github:
 	@make clean
 	@rm -rf ./modules/*
+	@cp ../README.rst ./README.rst
 	@make html
 	@rm -rf ../docs/*
 	@cp -a build/html/. ../docs
+	@rm -f ./README.rst
 
 
 help:
