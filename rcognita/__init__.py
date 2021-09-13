@@ -1,4 +1,4 @@
-__version__ = 'v0.1-pre1'
+__version__ = 'v0.1'
 
 from . import controllers
 from . import systems
