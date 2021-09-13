@@ -27,11 +27,14 @@ table_of_content = m.group(1)
 links_to_table = '`To table of content <#Table-of-content>`__'
 
 
+link_to_docs = 'A detailed documentation is available `here <https://aidynamicaction.github.io/rcognita/>`__.'
+
 
 for fragment in [logo,
                  example,
                  table_of_content,
-                 links_to_table]:
+                 links_to_table,
+                 link_to_docs]:
     s = s.replace(fragment, "")
 
 

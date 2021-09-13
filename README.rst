@@ -5,9 +5,8 @@ About
 
 ``rcognita`` is a framework for hybrid agent-enviroment simultion. The
 hybrid setting here means the actions are updated at discrete moments in
-time, whereas the environment dynamics are modelled time-continuous. A
-detailed documentation is available
-`here <https://aidynamicaction.github.io/rcognita/>`__.
+time, whereas the environment dynamics are modelled time-continuous. 
+A detailed documentation is available `here <https://aidynamicaction.github.io/rcognita/>`__.
 
 Example run with a mobile robot simulation
 ------------------------------------------
