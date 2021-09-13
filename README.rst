@@ -10,7 +10,7 @@ detailed documentation is available
 Example run with a mobile robot simulation
 ------------------------------------------
 
-.. img:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/demo/3wheel_robot_exm_run.gif
+.. image:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/demo/3wheel_robot_exm_run.gif
 
 Table of content
 ================
