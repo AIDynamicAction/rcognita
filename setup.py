@@ -20,8 +20,8 @@ setup(
         "Operating System :: OS Independent",
     ],
     packages=find_packages(),
-    long_description=open(join(dirname(__file__), 'README.md')).read(),
-    long_description_content_type='text/markdown',
+    long_description=open(join(dirname(__file__), 'README.rst')).read(),
+    long_description_content_type='text/x-rst',
     install_requires=[
         "matplotlib >= 3.2.2",
         "mpldatacursor @ git+https://github.com/AIDynamicAction/mpldatacursor.git#808f2929ce9d44778a5fc52b0bc3dd770495b3eb",
