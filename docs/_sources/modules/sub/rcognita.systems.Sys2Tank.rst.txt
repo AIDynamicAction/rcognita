@@ -22,4 +22,10 @@ rcognita.systems.Sys2Tank
 
    
    
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~Sys2Tank.name
+   
    

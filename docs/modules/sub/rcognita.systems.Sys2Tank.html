@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>rcognita.systems.Sys2Tank &mdash; rcognita 0.1 documentation</title>
+  <title>rcognita.systems.Sys2Tank &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -26,6 +26,7 @@
         <script src="../../_static/jquery.js"></script>
         <script src="../../_static/underscore.js"></script>
         <script src="../../_static/doctools.js"></script>
+        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     
     <script type="text/javascript" src="../../_static/js/theme.js"></script>
 
@@ -88,9 +89,9 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation-basic">Installation (basic)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#faq">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#for-developers">For developers</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Documentation</span></p>
 <ul class="current">
@@ -176,11 +177,47 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="rcognita.systems.Sys2Tank">
 <em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">rcognita.systems.</span></span><span class="sig-name descname"><span class="pre">Sys2Tank</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_disturb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctrl_bnds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.systems.Sys2Tank" title="Permalink to this definition">¶</a></dt>
-<dd><p>Two-tank system with nonlinearity</p>
+<dd><p>Two-tank system with nonlinearity.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="rcognita.systems.Sys2Tank.__init__">
 <span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_disturb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctrl_bnds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.systems.Sys2Tank.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initialize self.  See help(type(self)) for accurate signature.</p>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sys_type</strong> (<em>: string</em>) – <p>Type of system by description:</p>
+<div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code> : differential equation <span class="math notranslate nohighlight">\(\mathcal D state = f(state, action, disturb)\)</span></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_fnc</span></code> : difference equation <span class="math notranslate nohighlight">\(state^+ = f(state, action, disturb)\)</span></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_prob</span></code> :  by probability distribution <span class="math notranslate nohighlight">\(X^+ \sim P_X(state^+| state, action, disturb)\)</span></div>
+</div>
+</p></li>
+<li><p><strong>where</strong> – <div class="line-block">
+<div class="line"><span class="math notranslate nohighlight">\(state\)</span> : state</div>
+<div class="line"><span class="math notranslate nohighlight">\(action\)</span> : input</div>
+<div class="line"><span class="math notranslate nohighlight">\(disturb\)</span> : disturbance</div>
+</div>
+</p></li>
+<li><p><strong>time variable t is commonly used by ODE solvers</strong> (<em>The</em>) – </p></li>
+<li><p><strong>you shouldn't have it explicitly referenced in the definition</strong> (<em>and</em>) – </p></li>
+<li><p><strong>your system is non-autonomous.</strong> (<em>unless</em>) – </p></li>
+<li><p><strong>the latter case</strong> (<em>For</em>) – </p></li>
+<li><p><strong>however</strong> – </p></li>
+<li><p><strong>already have the input and disturbance at your disposal.</strong> (<em>you</em>) – </p></li>
+<li><p><strong>of the system are contained in pars attribute.</strong> (<em>Parameters</em>) – </p></li>
+<li><p><strong>dim_state</strong> (<em>: integer</em>) – System dimensions</p></li>
+<li><p><strong>dim_input</strong> (<em>: integer</em>) – System dimensions</p></li>
+<li><p><strong>dim_output</strong> (<em>: integer</em>) – System dimensions</p></li>
+<li><p><strong>dim_disturb</strong> (<em>: integer</em>) – System dimensions</p></li>
+<li><p><strong>pars</strong> (<em>: list</em>) – List of fixed parameters of the system</p></li>
+<li><p><strong>ctrl_bnds</strong> (: array of shape <code class="docutils literal notranslate"><span class="pre">[dim_input,</span> <span class="pre">2]</span></code>) – Box control constraints.
+First element in each row is the lower bound, the second - the upper bound.
+If empty, control is unconstrained (default)</p></li>
+<li><p><strong>is_dyn_ctrl</strong> (<em>: 0</em><em> or </em><em>1</em>) – If 1, the controller (a.k.a. agent) is considered as a part of the full state vector</p></li>
+<li><p><strong>is_disturb</strong> (<em>: 0</em><em> or </em><em>1</em>) – If 0, no disturbance is fed into the system</p></li>
+<li><p><strong>pars_disturb</strong> (<em>: list</em>) – Parameters of the disturbance model</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <p class="rubric">Methods</p>
@@ -191,16 +228,33 @@
 </colgroup>
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#rcognita.systems.Sys2Tank.__init__" title="rcognita.systems.Sys2Tank.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(sys_type, dim_state, dim_input, …)</p></td>
-<td><p>Initialize self.</p></td>
+<td><p><dl class="field-list simple">
+<dt class="field-odd">param sys_type</dt>
+<dd class="field-odd"><p>Type of system by description:</p>
+</dd>
+</dl>
+</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">closed_loop_rhs</span></code>(t, ksi)</p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">closed_loop_rhs</span></code>(t, state_full)</p></td>
 <td><p>Right-hand side of the closed-loop system description.</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">out</span></code>(x[, u])</p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">out</span></code>(state[, action])</p></td>
 <td><p>System output.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">receive_action</span></code>(u)</p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">receive_action</span></code>(action)</p></td>
 <td><p>Receive exogeneous control action to be fed into the system.</p></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Attributes</p>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">name</span></code></p></td>
+<td><p></p></td>
 </tr>
 </tbody>
 </table>

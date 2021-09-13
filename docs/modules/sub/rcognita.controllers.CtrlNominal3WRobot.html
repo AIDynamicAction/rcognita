@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>rcognita.controllers.CtrlNominal3WRobot &mdash; rcognita 0.1 documentation</title>
+  <title>rcognita.controllers.CtrlNominal3WRobot &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -88,9 +88,9 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation-basic">Installation (basic)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#faq">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#for-developers">For developers</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Documentation</span></p>
 <ul class="current">
@@ -180,11 +180,11 @@
 <dd><p>This is a class of nominal controllers for 3-wheel robots used for benchmarking of other controllers.</p>
 <p>The controller is sampled.</p>
 <p>For a 3-wheel robot with dynamical pushing force and steering torque (a.k.a. ENDI - extended non-holonomic double integrator) [<a class="footnote-reference brackets" href="#id4" id="id1">1</a>], we use here
-a controller designed by non-smooth backstepping (read more in [<a class="footnote-reference brackets" href="#id5" id="id2">2</a>], [<a class="footnote-reference brackets" href="#id6" id="id3">3</a>])</p>
+a controller designed by non-smooth backstepping (read more in [<a class="footnote-reference brackets" href="#id5" id="id2">2</a>], [<a class="footnote-reference brackets" href="#id6" id="id3">3</a>]).</p>
 <dl class="py attribute">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">m,</span> <span class="pre">I</span></span></dt>
-<dd><p>Mass and moment of inertia around vertical axis of the robot</p>
+<dd><p>Mass and moment of inertia around vertical axis of the robot.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: numbers</p>
@@ -195,7 +195,7 @@ a controller designed by non-smooth backstepping (read more in [<a class="footno
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rcognita.controllers.CtrlNominal3WRobot.ctrl_gain">
 <span class="sig-name descname"><span class="pre">ctrl_gain</span></span><a class="headerlink" href="#rcognita.controllers.CtrlNominal3WRobot.ctrl_gain" title="Permalink to this definition">¶</a></dt>
-<dd><p>Controller gain</p>
+<dd><p>Controller gain.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: number</p>
@@ -206,7 +206,7 @@ a controller designed by non-smooth backstepping (read more in [<a class="footno
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rcognita.controllers.CtrlNominal3WRobot.t0">
 <span class="sig-name descname"><span class="pre">t0</span></span><a class="headerlink" href="#rcognita.controllers.CtrlNominal3WRobot.t0" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initial value of the controller’s internal clock</p>
+<dd><p>Initial value of the controller’s internal clock.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: number</p>
@@ -217,7 +217,7 @@ a controller designed by non-smooth backstepping (read more in [<a class="footno
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rcognita.controllers.CtrlNominal3WRobot.sampling_time">
 <span class="sig-name descname"><span class="pre">sampling_time</span></span><a class="headerlink" href="#rcognita.controllers.CtrlNominal3WRobot.sampling_time" title="Permalink to this definition">¶</a></dt>
-<dd><p>Controller’s sampling time (in seconds)</p>
+<dd><p>Controller’s sampling time (in seconds).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: number</p>
@@ -255,17 +255,17 @@ via semiconcave function backstepping. In 2015 IEEE Conference on Control Applic
 <tr class="row-odd"><td><p><a class="reference internal" href="#rcognita.controllers.CtrlNominal3WRobot.__init__" title="rcognita.controllers.CtrlNominal3WRobot.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(m, I[, ctrl_gain, ctrl_bnds, t0, …])</p></td>
 <td><p>Initialize self.</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_LF</span></code>(y)</p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_LF</span></code>(observation)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_action</span></code>(t, y)</p></td>
-<td><p>See algorithm description in [<a class="footnote-reference brackets" href="#id4" id="id7">1</a>], [<a class="footnote-reference brackets" href="#id5" id="id8">2</a>]</p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_action</span></code>(t, observation)</p></td>
+<td><p>See algorithm description in [<a class="footnote-reference brackets" href="#id4" id="id7">1</a>], [<a class="footnote-reference brackets" href="#id5" id="id8">2</a>].</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_action_vanila</span></code>(y)</p></td>
-<td><p>Same as <code class="xref py py-func docutils literal notranslate"><span class="pre">compute_action()</span></code>, but without invoking the internal clock</p></td>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_action_vanila</span></code>(observation)</p></td>
+<td><p>Same as <code class="xref py py-func docutils literal notranslate"><span class="pre">compute_action()</span></code>, but without invoking the internal clock.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code>(t0)</p></td>
-<td><p>Resets controller for use in multi-episode simulation</p></td>
+<td><p>Resets controller for use in multi-episode simulation.</p></td>
 </tr>
 </tbody>
 </table>

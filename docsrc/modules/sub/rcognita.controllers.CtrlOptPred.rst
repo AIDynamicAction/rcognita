@@ -15,10 +15,10 @@ rcognita.controllers.CtrlOptPred
    
       ~CtrlOptPred.__init__
       ~CtrlOptPred.compute_action
-      ~CtrlOptPred.rcost
       ~CtrlOptPred.receive_sys_state
       ~CtrlOptPred.reset
-      ~CtrlOptPred.upd_icost
+      ~CtrlOptPred.stage_obj
+      ~CtrlOptPred.upd_accum_obj
    
    
 

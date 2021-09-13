@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>rcognita.loggers &mdash; rcognita 0.1 documentation</title>
+  <title>rcognita.loggers &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -88,9 +88,9 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html#installation-basic">Installation (basic)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../introduction.html#faq">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html#for-developers">For developers</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Documentation</span></p>
 <ul class="current">
@@ -171,7 +171,7 @@
             
   <section id="module-rcognita.loggers">
 <span id="rcognita-loggers"></span><h1><code class="docutils literal notranslate"><span class="pre">rcognita.loggers</span></code><a class="headerlink" href="#module-rcognita.loggers" title="Permalink to this headline">¶</a></h1>
-<p>This module contains the logger interface along with concrete realizations for each separate system</p>
+<p>This module contains the logger interface along with concrete realizations for each separate system.</p>
 <p>Remarks:</p>
 <ul class="simple">
 <li><p>All vectors are treated as of type [n,]</p></li>
@@ -186,7 +186,7 @@
 </colgroup>
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.loggers.Logger.html#rcognita.loggers.Logger" title="rcognita.loggers.Logger"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Logger</span></code></a>()</p></td>
-<td><p>Interface class for data loggers. Concrete loggers, associated with concrete system-controller setups, are should be built upon this class. To design a concrete logger: inherit this class, override:     | <code class="xref py py-func docutils literal notranslate"><span class="pre">print_sim_step()</span></code> :     | print a row of data of a single simulation step, typically into the console (required)     | <code class="xref py py-func docutils literal notranslate"><span class="pre">log_data_row()</span></code> :     | same as above, but write to a file (required).</p></td>
+<td><p>Interface class for data loggers. Concrete loggers, associated with concrete system-controller setups, are should be built upon this class. To design a concrete logger: inherit this class, override:     | <code class="xref py py-func docutils literal notranslate"><span class="pre">print_sim_step()</span></code> :     | print a row of data of a single simulation step, typically into the console (required). | <code class="xref py py-func docutils literal notranslate"><span class="pre">log_data_row()</span></code> :     | same as above, but write to a file (required).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.loggers.Logger2Tank.html#rcognita.loggers.Logger2Tank" title="rcognita.loggers.Logger2Tank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Logger2Tank</span></code></a>()</p></td>
 <td><p>Data logger for a 2-tank system.</p></td>

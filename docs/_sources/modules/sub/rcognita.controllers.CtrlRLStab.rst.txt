@@ -15,10 +15,10 @@ rcognita.controllers.CtrlRLStab
    
       ~CtrlRLStab.__init__
       ~CtrlRLStab.compute_action
-      ~CtrlRLStab.rcost
       ~CtrlRLStab.receive_sys_state
       ~CtrlRLStab.reset
-      ~CtrlRLStab.upd_icost
+      ~CtrlRLStab.stage_obj
+      ~CtrlRLStab.upd_accum_obj
    
    
 

@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>rcognita.simulator.Simulator &mdash; rcognita 0.1 documentation</title>
+  <title>rcognita.simulator.Simulator &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -89,9 +89,9 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation-basic">Installation (basic)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#faq">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#for-developers">For developers</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Documentation</span></p>
 <ul class="current">
@@ -173,16 +173,16 @@
 <h1>rcognita.simulator.Simulator<a class="headerlink" href="#rcognita-simulator-simulator" title="Permalink to this headline">¶</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="rcognita.simulator.Simulator">
-<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">rcognita.simulator.</span></span><span class="sig-name descname"><span class="pre">Simulator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">closed_loop_rhs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sys_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">u0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.005</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">first_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.simulator.Simulator" title="Permalink to this definition">¶</a></dt>
-<dd><p>Class for simulating closed loops (system-controllers)</p>
+<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">rcognita.simulator.</span></span><span class="sig-name descname"><span class="pre">Simulator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">closed_loop_rhs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sys_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state_init</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disturb_init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">action_init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.005</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">first_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.simulator.Simulator" title="Permalink to this definition">¶</a></dt>
+<dd><p>Class for simulating closed loops (system-controllers).</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rcognita.simulator.Simulator.sys_type">
 <span class="sig-name descname"><span class="pre">sys_type</span></span><a class="headerlink" href="#rcognita.simulator.Simulator.sys_type" title="Permalink to this definition">¶</a></dt>
 <dd><p>Type of system by description:</p>
 <div class="line-block">
-<div class="line"><code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code> : differential equation <span class="math notranslate nohighlight">\(\mathcal D x = f(x, u, q)\)</span></div>
-<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_fnc</span></code> : difference equation <span class="math notranslate nohighlight">\(x^+ = f(x, u, q)\)</span></div>
-<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_prob</span></code> :  by probability distribution <span class="math notranslate nohighlight">\(X^+ \sim P_X(x^+| x, u, q)\)</span></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code> : differential equation <span class="math notranslate nohighlight">\(\mathcal D state = f(state, u, q)\)</span></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_fnc</span></code> : difference equation <span class="math notranslate nohighlight">\(state^+ = f(state, u, q)\)</span></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_prob</span></code> :  by probability distribution <span class="math notranslate nohighlight">\(X^+ \sim P_X(state^+| state, u, q)\)</span></div>
 </div>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
@@ -195,7 +195,7 @@
 <dt class="sig sig-object py" id="rcognita.simulator.Simulator.where">
 <span class="sig-name descname"><span class="pre">where</span></span><a class="headerlink" href="#rcognita.simulator.Simulator.where" title="Permalink to this definition">¶</a></dt>
 <dd><div class="line-block">
-<div class="line"><span class="math notranslate nohighlight">\(x\)</span> : state</div>
+<div class="line"><span class="math notranslate nohighlight">\(state\)</span> : state</div>
 <div class="line"><span class="math notranslate nohighlight">\(u\)</span> : input</div>
 <div class="line"><span class="math notranslate nohighlight">\(q\)</span> : disturbance</div>
 </div>
@@ -206,7 +206,7 @@
 <span class="sig-name descname"><span class="pre">closed_loop_rhs</span></span><a class="headerlink" href="#rcognita.simulator.Simulator.closed_loop_rhs" title="Permalink to this definition">¶</a></dt>
 <dd><p>Right-hand side description of the closed-loop system.
 Say, if you instantiated a concrete system (i.e., as an instance of a subclass of <code class="docutils literal notranslate"><span class="pre">system</span></code> class with concrete <code class="docutils literal notranslate"><span class="pre">closed_loop_rhs</span></code> method) as <code class="docutils literal notranslate"><span class="pre">my_sys</span></code>,
-this could be just <code class="docutils literal notranslate"><span class="pre">my_sys.closed_loop_rhs</span></code></p>
+this could be just <code class="docutils literal notranslate"><span class="pre">my_sys.closed_loop_rhs</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: function</p>
@@ -218,7 +218,7 @@ this could be just <code class="docutils literal notranslate"><span class="pre">
 <dt class="sig sig-object py" id="rcognita.simulator.Simulator.sys_out">
 <span class="sig-name descname"><span class="pre">sys_out</span></span><a class="headerlink" href="#rcognita.simulator.Simulator.sys_out" title="Permalink to this definition">¶</a></dt>
 <dd><p>System output function.
-Same as above, this could be, say, <code class="docutils literal notranslate"><span class="pre">my_sys.out</span></code></p>
+Same as above, this could be, say, <code class="docutils literal notranslate"><span class="pre">my_sys.out</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: function</p>
@@ -229,7 +229,7 @@ Same as above, this could be, say, <code class="docutils literal notranslate"><s
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rcognita.simulator.Simulator.is_dyn_ctrl">
 <span class="sig-name descname"><span class="pre">is_dyn_ctrl</span></span><a class="headerlink" href="#rcognita.simulator.Simulator.is_dyn_ctrl" title="Permalink to this definition">¶</a></dt>
-<dd><p>If 1, the controller (a.k.a. agent) is considered as a part of the full state vector</p>
+<dd><p>If 1, the controller (a.k.a. agent) is considered as a part of the full state vector.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: 0 or 1</p>
@@ -239,8 +239,8 @@ Same as above, this could be, say, <code class="docutils literal notranslate"><s
 
 <dl class="py attribute">
 <dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">x0,</span> <span class="pre">q0,</span> <span class="pre">u0</span></span></dt>
-<dd><p>Initial values of the (open-loop) system state, disturbance and input</p>
+<span class="sig-name descname"><span class="pre">state_init,</span> <span class="pre">disturb_init,</span> <span class="pre">action_init</span></span></dt>
+<dd><p>Initial values of the (open-loop) system state, disturbance and input.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: vectors</p>
@@ -262,7 +262,7 @@ Same as above, this could be, say, <code class="docutils literal notranslate"><s
 <dl class="py attribute">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">max_step,</span> <span class="pre">first_step,</span> <span class="pre">atol,</span> <span class="pre">rtol</span></span></dt>
-<dd><p>Parameters for an ODE solver (used if <code class="docutils literal notranslate"><span class="pre">sys_type</span></code> is <code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code>)</p>
+<dd><p>Parameters for an ODE solver (used if <code class="docutils literal notranslate"><span class="pre">sys_type</span></code> is <code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code>).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: numbers</p>
@@ -276,8 +276,42 @@ Same as above, this could be, say, <code class="docutils literal notranslate"><s
 </div>
 <dl class="py method">
 <dt class="sig sig-object py" id="rcognita.simulator.Simulator.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">closed_loop_rhs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sys_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">q0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">u0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.005</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">first_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.simulator.Simulator.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initialize self.  See help(type(self)) for accurate signature.</p>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">closed_loop_rhs</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sys_out</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">state_init</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disturb_init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">action_init</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t0</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">t1</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dt</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.01</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.005</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">first_step</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-06</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">atol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rtol</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.simulator.Simulator.__init__" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>sys_type</strong> (<em>: string</em>) – <p>Type of system by description:</p>
+<div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code> : differential equation <span class="math notranslate nohighlight">\(\mathcal D state = f(state, u, q)\)</span></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_fnc</span></code> : difference equation <span class="math notranslate nohighlight">\(state^+ = f(state, u, q)\)</span></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_prob</span></code> :  by probability distribution <span class="math notranslate nohighlight">\(X^+ \sim P_X(state^+| state, u, q)\)</span></div>
+</div>
+</p></li>
+<li><p><strong>where</strong> – <div class="line-block">
+<div class="line"><span class="math notranslate nohighlight">\(state\)</span> : state</div>
+<div class="line"><span class="math notranslate nohighlight">\(u\)</span> : input</div>
+<div class="line"><span class="math notranslate nohighlight">\(q\)</span> : disturbance</div>
+</div>
+</p></li>
+<li><p><strong>closed_loop_rhs</strong> (<em>: function</em>) – Right-hand side description of the closed-loop system.
+Say, if you instantiated a concrete system (i.e., as an instance of a subclass of <code class="docutils literal notranslate"><span class="pre">System</span></code> class with concrete <code class="docutils literal notranslate"><span class="pre">closed_loop_rhs</span></code> method) as <code class="docutils literal notranslate"><span class="pre">my_sys</span></code>,
+this could be just <code class="docutils literal notranslate"><span class="pre">my_sys.closed_loop_rhs</span></code>.</p></li>
+<li><p><strong>sys_out</strong> (<em>: function</em>) – System output function.
+Same as above, this could be, say, <code class="docutils literal notranslate"><span class="pre">my_sys.out</span></code>.</p></li>
+<li><p><strong>is_dyn_ctrl</strong> (<em>: 0</em><em> or </em><em>1</em>) – If 1, the controller (a.k.a. agent) is considered as a part of the full state vector.</p></li>
+<li><p><strong>state_init</strong> (<em>: vectors</em>) – Initial values of the (open-loop) system state, disturbance and input.</p></li>
+<li><p><strong>disturb_init</strong> (<em>: vectors</em>) – Initial values of the (open-loop) system state, disturbance and input.</p></li>
+<li><p><strong>action_init</strong> (<em>: vectors</em>) – Initial values of the (open-loop) system state, disturbance and input.</p></li>
+<li><p><strong>t0</strong> (<em>: numbers</em>) – Initial, final times and time step size</p></li>
+<li><p><strong>t1</strong> (<em>: numbers</em>) – Initial, final times and time step size</p></li>
+<li><p><strong>dt</strong> (<em>: numbers</em>) – Initial, final times and time step size</p></li>
+<li><p><strong>max_step</strong> (<em>: numbers</em>) – Parameters for an ODE solver (used if <code class="docutils literal notranslate"><span class="pre">sys_type</span></code> is <code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code>).</p></li>
+<li><p><strong>first_step</strong> (<em>: numbers</em>) – Parameters for an ODE solver (used if <code class="docutils literal notranslate"><span class="pre">sys_type</span></code> is <code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code>).</p></li>
+<li><p><strong>atol</strong> (<em>: numbers</em>) – Parameters for an ODE solver (used if <code class="docutils literal notranslate"><span class="pre">sys_type</span></code> is <code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code>).</p></li>
+<li><p><strong>rtol</strong> (<em>: numbers</em>) – Parameters for an ODE solver (used if <code class="docutils literal notranslate"><span class="pre">sys_type</span></code> is <code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code>).</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <p class="rubric">Methods</p>
@@ -287,17 +321,22 @@ Same as above, this could be, say, <code class="docutils literal notranslate"><s
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#rcognita.simulator.Simulator.__init__" title="rcognita.simulator.Simulator.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(sys_type, closed_loop_rhs, sys_out, x0)</p></td>
-<td><p>Initialize self.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#rcognita.simulator.Simulator.__init__" title="rcognita.simulator.Simulator.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(sys_type, closed_loop_rhs, sys_out, …)</p></td>
+<td><p><dl class="field-list simple">
+<dt class="field-odd">param sys_type</dt>
+<dd class="field-odd"><p>Type of system by description:</p>
+</dd>
+</dl>
+</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_sim_step_data</span></code>()</p></td>
-<td><p>Collect current simulation data: time, system state and output, and, for completeness, full closed-loop state</p></td>
+<td><p>Collect current simulation data: time, system state and output, and, for completeness, full closed-loop state.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code>()</p></td>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">sim_step</span></code>()</p></td>
-<td><p>Do one simulation step and update current simulation data (time, system state and output)</p></td>
+<td><p>Do one simulation step and update current simulation data (time, system state and output).</p></td>
 </tr>
 </tbody>
 </table>

@@ -22,4 +22,10 @@ rcognita.systems.Sys3WRobotNI
 
    
    
+   .. rubric:: Attributes
+
+   .. autosummary::
+   
+      ~Sys3WRobotNI.name
+   
    

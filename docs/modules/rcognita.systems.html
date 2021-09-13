@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>rcognita.systems &mdash; rcognita 0.1 documentation</title>
+  <title>rcognita.systems &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -88,9 +88,9 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html#installation-basic">Installation (basic)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../introduction.html#faq">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html#for-developers">For developers</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Documentation</span></p>
 <ul class="current">
@@ -186,7 +186,7 @@
 </colgroup>
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.systems.Sys2Tank.html#rcognita.systems.Sys2Tank" title="rcognita.systems.Sys2Tank"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Sys2Tank</span></code></a>(sys_type, dim_state, dim_input, …)</p></td>
-<td><p>Two-tank system with nonlinearity</p></td>
+<td><p>Two-tank system with nonlinearity.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.systems.Sys3WRobot.html#rcognita.systems.Sys3WRobot" title="rcognita.systems.Sys3WRobot"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Sys3WRobot</span></code></a>(sys_type, dim_state, dim_input, …)</p></td>
 <td><p>System class: 3-wheel robot with dynamical actuators.</p></td>
@@ -195,7 +195,7 @@
 <td><p>System class: 3-wheel robot with static actuators (the NI - non-holonomic integrator).</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.systems.System.html#rcognita.systems.System" title="rcognita.systems.System"><code class="xref py py-obj docutils literal notranslate"><span class="pre">System</span></code></a>(sys_type, dim_state, dim_input, …)</p></td>
-<td><p>Interface class of dynamical systems a.k.a. environments. Concrete systems should be built upon this class. To design a concrete system: inherit this class, override:     | <code class="xref py py-func docutils literal notranslate"><span class="pre">_state_dyn()</span></code> :     | right-hand side of system description (required)     | <code class="xref py py-func docutils literal notranslate"><span class="pre">_disturb_dyn()</span></code> :     | right-hand side of disturbance model (if necessary)     | <code class="xref py py-func docutils literal notranslate"><span class="pre">_ctrl_dyn()</span></code> :     | right-hand side of controller dynamical model (if necessary)     | <code class="xref py py-func docutils literal notranslate"><span class="pre">out()</span></code> :     | system out (if not overridden, output is identical to state).</p></td>
+<td><p>Interface class of dynamical systems a.k.a. environments.</p></td>
 </tr>
 </tbody>
 </table>

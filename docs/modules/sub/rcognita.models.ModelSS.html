@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>rcognita.models.ModelSS &mdash; rcognita 0.1 documentation</title>
+  <title>rcognita.models.ModelSS &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -89,9 +89,9 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation-basic">Installation (basic)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#faq">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#for-developers">For developers</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Documentation</span></p>
 <ul class="current">
@@ -175,19 +175,16 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="rcognita.models.ModelSS">
 <em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">rcognita.models.</span></span><span class="sig-name descname"><span class="pre">ModelSS</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">B</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">C</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">D</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x0est</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.models.ModelSS" title="Permalink to this definition">¶</a></dt>
-<dd><blockquote>
-<div><p>Class of estimated models</p>
-<p>So far, uses just the state-space structure:</p>
-</div></blockquote>
+<dd><p>State-space model</p>
 <div class="math notranslate nohighlight">
 \[\begin{array}{ll}
-               \hat x^+ &amp; = A \hat x + B u \newline
-               y^+  &amp; = C \hat x + D u,
+                \hat x^+ &amp; = A \hat x + B u, \newline
+                y^+  &amp; = C \hat x + D u.
 \end{array}\]</div>
 <dl class="py attribute">
 <dt class="sig sig-object py">
 <span class="sig-name descname"><span class="pre">A,</span> <span class="pre">B,</span> <span class="pre">C,</span> <span class="pre">D</span></span></dt>
-<dd><p>State-space model parameters</p>
+<dd><p>State-space model parameters.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: arrays of proper shape</p>
@@ -198,18 +195,13 @@
 <dl class="py attribute">
 <dt class="sig sig-object py" id="rcognita.models.ModelSS.x0set">
 <span class="sig-name descname"><span class="pre">x0set</span></span><a class="headerlink" href="#rcognita.models.ModelSS.x0set" title="Permalink to this definition">¶</a></dt>
-<dd><p>Initial state estimate</p>
+<dd><p>Initial state estimate.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
 <dd class="field-odd"><p>: array</p>
 </dd>
 </dl>
 </dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">\*\*When</span> <span class="pre">introducing</span> <span class="pre">your</span> <span class="pre">custom</span> <span class="pre">model</span> <span class="pre">estimator,</span> <span class="pre">adjust</span> <span class="pre">this</span> <span class="pre">class**</span></span></dt>
-<dd></dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="rcognita.models.ModelSS.__init__">

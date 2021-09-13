@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>rcognita.controllers &mdash; rcognita 0.1 documentation</title>
+  <title>rcognita.controllers &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -88,9 +88,9 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html#installation-basic">Installation (basic)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../introduction.html#faq">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html#for-developers">For developers</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Documentation</span></p>
 <ul class="current">
@@ -172,7 +172,7 @@
             
   <section id="module-rcognita.controllers">
 <span id="rcognita-controllers"></span><h1><code class="docutils literal notranslate"><span class="pre">rcognita.controllers</span></code><a class="headerlink" href="#module-rcognita.controllers" title="Permalink to this headline">¶</a></h1>
-<p>This module contains controllers (agents)</p>
+<p>This module contains controllers (agents).</p>
 <p>Remarks:</p>
 <ul class="simple">
 <li><p>All vectors are treated as of type [n,]</p></li>
@@ -186,8 +186,8 @@
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.controllers.ctrl_selector.html#rcognita.controllers.ctrl_selector" title="rcognita.controllers.ctrl_selector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ctrl_selector</span></code></a>(t, y, uMan, ctrl_nominal, …)</p></td>
-<td><p>Main interface for various controllers</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.controllers.ctrl_selector.html#rcognita.controllers.ctrl_selector" title="rcognita.controllers.ctrl_selector"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ctrl_selector</span></code></a>(t, observation, action_manual, …)</p></td>
+<td><p>Main interface for various controllers.</p></td>
 </tr>
 </tbody>
 </table>
@@ -202,10 +202,10 @@
 <td><p>This is a class of nominal controllers for 3-wheel robots used for benchmarking of other controllers.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.controllers.CtrlNominal3WRobotNI.html#rcognita.controllers.CtrlNominal3WRobotNI" title="rcognita.controllers.CtrlNominal3WRobotNI"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CtrlNominal3WRobotNI</span></code></a>([ctrl_gain, ctrl_bnds, …])</p></td>
-<td><p>Nominal parking controller for NI using disassembled subgradients</p></td>
+<td><p>Nominal parking controller for NI using disassembled subgradients.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.controllers.CtrlOptPred.html#rcognita.controllers.CtrlOptPred" title="rcognita.controllers.CtrlOptPred"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CtrlOptPred</span></code></a>(dim_input, dim_output[, mode, …])</p></td>
-<td><p>Class of predictive optimal controllers, primarily MPC and predictive RL, that optimize a finite-horizon cost</p></td>
+<td><p>Class of predictive optimal controllers, primarily model-predictive control and predictive reinforcement learning, that optimize a finite-horizon cost.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="sub/rcognita.controllers.CtrlRLStab.html#rcognita.controllers.CtrlRLStab" title="rcognita.controllers.CtrlRLStab"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CtrlRLStab</span></code></a>(dim_input, dim_output[, mode, …])</p></td>
 <td><p>Class of reinforcement learning agents with stabilizing constraints.</p></td>

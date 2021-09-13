@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>rcognita.simulator &mdash; rcognita 0.1 documentation</title>
+  <title>rcognita.simulator &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -88,9 +88,9 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html#installation-basic">Installation (basic)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../introduction.html#faq">FAQ</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html#for-developers">For developers</a></li>
 </ul>
 <p class="caption"><span class="caption-text">API Documentation</span></p>
 <ul class="current">
@@ -169,10 +169,12 @@
   <section id="module-rcognita.simulator">
 <span id="rcognita-simulator"></span><h1><code class="docutils literal notranslate"><span class="pre">rcognita.simulator</span></code><a class="headerlink" href="#module-rcognita.simulator" title="Permalink to this headline">¶</a></h1>
 <p>This module contains one single class that simulates controller-system (agent-environment) loops.
-The system can be of three types:
-- discrete-time deterministic
-- continuous-time deterministic or stochastic
-- discrete-time stochastic (to model Markov decision processes)</p>
+The system can be of three types:</p>
+<ul class="simple">
+<li><p>discrete-time deterministic</p></li>
+<li><p>continuous-time deterministic or stochastic</p></li>
+<li><p>discrete-time stochastic (to model Markov decision processes)</p></li>
+</ul>
 <p>Remarks:</p>
 <ul class="simple">
 <li><p>All vectors are treated as of type [n,]</p></li>
@@ -186,8 +188,8 @@ The system can be of three types:
 <col style="width: 90%" />
 </colgroup>
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.simulator.Simulator.html#rcognita.simulator.Simulator" title="rcognita.simulator.Simulator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Simulator</span></code></a>(sys_type, closed_loop_rhs, sys_out, x0)</p></td>
-<td><p>Class for simulating closed loops (system-controllers)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="sub/rcognita.simulator.Simulator.html#rcognita.simulator.Simulator" title="rcognita.simulator.Simulator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Simulator</span></code></a>(sys_type, closed_loop_rhs, …[, …])</p></td>
+<td><p>Class for simulating closed loops (system-controllers).</p></td>
 </tr>
 </tbody>
 </table>
