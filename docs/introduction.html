@@ -334,6 +334,77 @@ preset, say,</p>
 <h2>Settings<a class="headerlink" href="#settings" title="Permalink to this headline">¶</a></h2>
 <p>Some key settings are described below (full description is available via
 <code class="docutils literal notranslate"><span class="pre">-h</span></code> option).</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 27%" />
+<col style="width: 12%" />
+<col style="width: 61%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ctrl_mode</span></code></p></td>
+<td><p>string</p></td>
+<td><p>Controller mode</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dt</span></code></p></td>
+<td><p>number</p></td>
+<td><p>Controller sampling time</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">t1</span></code></p></td>
+<td><p>number</p></td>
+<td><p>Final time</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">state_init</span></code></p></td>
+<td><p>list</p></td>
+<td><p>Initial state</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">is_log_data</span></code></p></td>
+<td><p>binary</p></td>
+<td><p>Flag to log data</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">is_visualization</span></code></p></td>
+<td><p>binary</p></td>
+<td><p>Flag to produce graphical output</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">is_print_sim_step</span></code></p></td>
+<td><p>binary</p></td>
+<td><p>Flag to print simulation step data</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">is_est_model</span></code></p></td>
+<td><p>binary</p></td>
+<td><p>If a model of the system is to be estimated online</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Nactor</span></code></p></td>
+<td><p>integer</p></td>
+<td><p>Horizon length (in steps) for predictive controllers</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stage_obj_struct</span></code></p></td>
+<td><p>string</p></td>
+<td><p>Structure of running objective function</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Ncritic</span></code></p></td>
+<td><p>integer</p></td>
+<td><p>Critic stack size (number of TDs)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">gamma</span></code></p></td>
+<td><p>number</p></td>
+<td><p>Discount factor</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">critic_struct</span></code></p></td>
+<td><p>string</p></td>
+<td><p>Structure of critic features</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">actor_struct</span></code></p></td>
+<td><p>string</p></td>
+<td><p>Structure of actor features</p></td>
+</tr>
+</tbody>
+</table>
 </section>
 <section id="advanced-customization">
 <h2>Advanced customization<a class="headerlink" href="#advanced-customization" title="Permalink to this headline">¶</a></h2>
