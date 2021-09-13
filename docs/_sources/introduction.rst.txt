@@ -48,3 +48,5 @@ In Linux-based OS, to build these wiki docs, run inside cloned repo folder:
     make
 
 Commit changes.
+
+.. .. include:: README.rst
