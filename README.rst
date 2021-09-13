@@ -1,4 +1,16 @@
+.. image:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/logo/rcognita-logo.png
 
+
+``rcognita`` is a framework for hybrid agent-enviroment simultion. The
+hybrid setting here means the actions are updated at discrete moments in
+time, whereas the environment dynamics are modelled time-continuous. A
+detailed documentation is available
+`here <https://aidynamicaction.github.io/rcognita/>`__.
+
+Example run with a mobile robot simulation
+------------------------------------------
+
+.. img:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/demo/3wheel_robot_exm_run.gif
 
 Table of content
 ================
