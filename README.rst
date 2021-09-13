@@ -1,6 +1,4 @@
-.. image:: ./gfx/logo/rcognita-logo.png
-  :width: 400
-  :alt: Alternative text
+
 
 ``rcognita`` is a framework for hybrid agent-enviroment simultion. The
 hybrid setting here means the actions are updated at discrete moments in
@@ -11,9 +9,7 @@ detailed documentation is available
 Example run with a mobile robot simulation
 ------------------------------------------
 
-.. image:: ./gfx/demo/3wheel_robot_exm_run.gif
-  :width: 400
-  :alt: Alternative text
+
 
 Table of content
 ================
