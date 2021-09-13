@@ -18,7 +18,7 @@ BUILDDIR      = build
 github:
 	@make clean
 	@rm -rf ./modules/*
-	@cp ../README.rst ./README.rst
+	@python3 ./strip_readme.py
 	@make html
 	@rm -rf ../docs/*
 	@cp -a build/html/. ../docs

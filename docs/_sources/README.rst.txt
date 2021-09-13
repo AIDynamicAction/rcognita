@@ -1,7 +1,6 @@
-.. image:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/logo/rcognita-logo.png
 
-Description
-===========
+About
+=====
 
 ``rcognita`` is a framework for hybrid agent-enviroment simultion. The
 hybrid setting here means the actions are updated at discrete moments in
@@ -9,24 +8,9 @@ time, whereas the environment dynamics are modelled time-continuous. A
 detailed documentation is available
 `here <https://aidynamicaction.github.io/rcognita/>`__.
 
-Example run with a mobile robot simulation
-------------------------------------------
 
-.. image:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/demo/3wheel_robot_exm_run.gif
 
-Table of content
-================
 
--  `Installation <#Installation>`__
--  `Basic <#Basic>`__
--  `With model estimation tools <#With-model-estimation-tools>`__
--  `General description <#General-description>`__
--  `Usage <#Usage>`__
--  `Settings <#Settings>`__
--  `Advanced customization <#Advanced-customization>`__
--  `Experimental things <#Experimental-things>`__
--  `Related literature <#Related-literature>`__
--  `Closing remarks <#Closing-remarks>`__
 
 Installation
 ============
@@ -34,7 +18,7 @@ Installation
 Basic
 -----
 
-`To table of content <#Table-of-content>`__
+
 
 Run in terminal:
 
@@ -58,7 +42,7 @@ say, just ``python``.
 With model estimation tools
 ---------------------------
 
-`To table of content <#Table-of-content>`__
+
 
 The package was tested with online model estimation using
 `SIPPY <https://github.com/CPCLAB-UNIPI/SIPPY>`__. The respective
@@ -108,7 +92,7 @@ Installing ``rcognita`` with ``SIPPY``
 General description
 ===================
 
-`To table of content <#Table-of-content>`__
+
 
 ``rcognita`` Python package is designed for hybrid simulation of agents
 and environments (generally speaking, not necessarily reinforcement
@@ -181,7 +165,7 @@ networks.
 Usage
 =====
 
-`To table of content <#Table-of-content>`__
+
 
 After the package is installed, you may just ``python`` run one of the
 presets found `here <./presets>`__, say,
@@ -206,7 +190,7 @@ preset, say,
 Settings
 --------
 
-`To table of content <#Table-of-content>`__
+
 
 Some key settings are described below (full description is available via
 ``-h`` option).
@@ -246,7 +230,7 @@ Some key settings are described below (full description is available via
 Advanced customization
 ----------------------
 
-`To table of content <#Table-of-content>`__
+
 
 -  **Custom environments**: realize ``system`` interface in the
    ``systems`` module. You might need nominal controllers for that, as
@@ -263,7 +247,7 @@ Advanced customization
 Experimental things
 -------------------
 
-`To table of content <#Table-of-content>`__
+
 
 An interface for dynamical controllers, which can be considered as
 extensions of the system state vector, is provided in ``_ctrl_dyn`` of
@@ -276,7 +260,7 @@ controllers.
 Related literature
 ==================
 
-`To table of content <#Table-of-content>`__
+
 
 -  `Online actor-critic via stacked Q-learning and Kalman filter for
    model estimation <https://arxiv.org/abs/2007.03999>`__
@@ -290,7 +274,7 @@ Related literature
 Closing remarks
 ===============
 
-`To table of content <#Table-of-content>`__
+
 
 Please contact `me <mailto:p.osinenko@gmail.com>`__ for any inquiries
 and don't forget to give me credit for usage of this code. If you are

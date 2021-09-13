@@ -88,7 +88,32 @@
             
               <ul class="current">
 <li class="toctree-l1 current"><a class="current reference internal" href="#">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="#installation-basic">Installation (basic)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#installation">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#basic">Basic</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#with-model-estimation-tools">With model estimation tools</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#installing-dependencies">Installing dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ubuntu-debian">Ubuntu/Debian:</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#arch">Arch</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#installing-scikit-build">Installing <code class="docutils literal notranslate"><span class="pre">scikit-build</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installing-rcognita-with-sippy">Installing <code class="docutils literal notranslate"><span class="pre">rcognita</span></code> with <code class="docutils literal notranslate"><span class="pre">SIPPY</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#general-description">General description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#usage">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#settings">Settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#advanced-customization">Advanced customization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#experimental-things">Experimental things</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="#related-literature">Related literature</a></li>
+<li class="toctree-l1"><a class="reference internal" href="#closing-remarks">Closing remarks</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#bibtex-reference">Bibtex reference</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="#getting-started">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="#for-developers">For developers</a></li>
 </ul>
@@ -165,13 +190,211 @@
             
   <section id="about">
 <h1>About<a class="headerlink" href="#about" title="Permalink to this headline">¶</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">rcognita</span></code> Python package is designed for hybrid simulation of agents and environments (generally speaking, not necessarily reinforcement learning agents).
-Its main idea is to have an explicit implementation of sampled controls with user-defined sampling time specification.</p>
+<p><code class="docutils literal notranslate"><span class="pre">rcognita</span></code> is a framework for hybrid agent-enviroment simultion. The
+hybrid setting here means the actions are updated at discrete moments in
+time, whereas the environment dynamics are modelled time-continuous. A
+detailed documentation is available
+<a class="reference external" href="https://aidynamicaction.github.io/rcognita/">here</a>.</p>
 </section>
-<section id="installation-basic">
-<h1>Installation (basic)<a class="headerlink" href="#installation-basic" title="Permalink to this headline">¶</a></h1>
-<p>The package can be installed via <cite>pip</cite> by typing in terminal:</p>
-<p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">rcognita</span></code></p>
+<section id="installation">
+<h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
+<section id="basic">
+<h2>Basic<a class="headerlink" href="#basic" title="Permalink to this headline">¶</a></h2>
+<p>Run in terminal:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip3</span> <span class="n">install</span> <span class="n">rcognita</span>
+</pre></div>
+</div>
+<p>Alternatively, one can install the package direcly form the master
+branch. The following instruction is for Unix-based systems, assuming a
+terminal and Python3 interpreter.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">AIDynamicAction</span><span class="o">/</span><span class="n">rcognita</span>
+<span class="n">cd</span> <span class="n">rcognita</span>
+<span class="n">python3</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">install</span>
+</pre></div>
+</div>
+<p>Notice that your Python 3 interpreter might be called something else,
+say, just <code class="docutils literal notranslate"><span class="pre">python</span></code>.</p>
+</section>
+<section id="with-model-estimation-tools">
+<h2>With model estimation tools<a class="headerlink" href="#with-model-estimation-tools" title="Permalink to this headline">¶</a></h2>
+<p>The package was tested with online model estimation using
+<a class="reference external" href="https://github.com/CPCLAB-UNIPI/SIPPY">SIPPY</a>. The respective
+functionality is implemented and enabled via <code class="docutils literal notranslate"><span class="pre">is_est_model</span></code>. Related
+parameters can be found in the documentation of the <code class="docutils literal notranslate"><span class="pre">CtrlOptPred</span></code>
+class.</p>
+<section id="installing-dependencies">
+<h3>Installing dependencies<a class="headerlink" href="#installing-dependencies" title="Permalink to this headline">¶</a></h3>
+<p>To install <code class="docutils literal notranslate"><span class="pre">SIPPY</span></code>, first take care of the dependencies:</p>
+<section id="ubuntu-debian">
+<h4>Ubuntu/Debian:<a class="headerlink" href="#ubuntu-debian" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="o">-</span><span class="n">y</span> <span class="n">build</span><span class="o">-</span><span class="n">essential</span> <span class="n">gfortran</span> <span class="n">cmake</span> <span class="n">libopenblas</span><span class="o">-</span><span class="n">dev</span>
+</pre></div>
+</div>
+</section>
+<section id="arch">
+<h4>Arch<a class="headerlink" href="#arch" title="Permalink to this headline">¶</a></h4>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pacman</span> <span class="o">-</span><span class="n">Sy</span> <span class="n">gcc</span> <span class="n">gcc</span><span class="o">-</span><span class="n">fortran</span> <span class="n">cmake</span> <span class="n">base</span><span class="o">-</span><span class="n">devel</span> <span class="n">openblas</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="installing-scikit-build">
+<h3>Installing <code class="docutils literal notranslate"><span class="pre">scikit-build</span></code><a class="headerlink" href="#installing-scikit-build" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">scikit</span><span class="o">-</span><span class="n">build</span>
+</pre></div>
+</div>
+<p>or, using <code class="docutils literal notranslate"><span class="pre">Anaconda</span></code>,</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">conda</span> <span class="n">install</span> <span class="n">scikit</span><span class="o">-</span><span class="n">build</span>
+</pre></div>
+</div>
+</section>
+<section id="installing-rcognita-with-sippy">
+<h3>Installing <code class="docutils literal notranslate"><span class="pre">rcognita</span></code> with <code class="docutils literal notranslate"><span class="pre">SIPPY</span></code><a class="headerlink" href="#installing-rcognita-with-sippy" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip3</span> <span class="n">install</span> <span class="n">rcognita</span><span class="p">[</span><span class="n">SIPPY</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+<section id="general-description">
+<h1>General description<a class="headerlink" href="#general-description" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">rcognita</span></code> Python package is designed for hybrid simulation of agents
+and environments (generally speaking, not necessarily reinforcement
+learning agents). Its main idea is to have an explicit implementation of
+sampled controls with user-defined sampling time specification. The
+package consists of several modules, namely, <code class="docutils literal notranslate"><span class="pre">controllers</span></code>,
+<code class="docutils literal notranslate"><span class="pre">loggers</span></code>, <code class="docutils literal notranslate"><span class="pre">models</span></code>, <code class="docutils literal notranslate"><span class="pre">simulator</span></code>, <code class="docutils literal notranslate"><span class="pre">systems</span></code>, <code class="docutils literal notranslate"><span class="pre">utilities</span></code>,
+<code class="docutils literal notranslate"><span class="pre">visuals</span></code> and a collection of main modules (presets) for each
+agent-environment configuration.</p>
+<p><a class="reference external" href="./flowcharts/rcognita-flowchart-CtrlOptPred.pdf">This flowchart</a>
+shows interaction of the core <code class="docutils literal notranslate"><span class="pre">rcognita</span></code> classes contained in the said
+modules (the latter are not shown on the diagram).</p>
+<p>The main module is a preset, on the flowchart a 3-wheel robot. It
+initializes the system (the environment), the controllers (the agents,
+e. g., a safe agent, a benchmarking agent, a reinforcement learning
+agent etc.), the visualization engine called animator, the logger and
+the simulator. The latter is a multi-purpose device for simulating
+agent-environment loops of different types (specified by <code class="docutils literal notranslate"><span class="pre">sys_type</span></code>).</p>
+<p>Depending on <code class="docutils literal notranslate"><span class="pre">sys_type</span></code>, the environment can either be described by a
+differential equation (including stochastic ones), a difference equation
+(for discrete-time systems), or by a probability distribution (for,
+e.g., Markov decision processes).</p>
+<p>The parameter <code class="docutils literal notranslate"><span class="pre">dt</span></code> determines the maximal step size for the numerical
+solver in case of differential equations. The main method of this class
+is <code class="docutils literal notranslate"><span class="pre">sim_step</span></code> which performs one solver step, whereas reset
+re-initializes the simulator after an episode.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">Logger</span></code> class is an interface defining stubs of a
+print-to-console method print sim step, and print-to-file method log
+data row, respectively. Concrete loggers realize these methods.</p>
+<p>A similar class inheritance scheme is used in <code class="docutils literal notranslate"><span class="pre">Animator</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">System</span></code>. The core data of <code class="docutils literal notranslate"><span class="pre">Animator</span></code>’s subclasses are
+<code class="docutils literal notranslate"><span class="pre">objects</span></code>, which include entities to be updated on the screen, and
+their parameters stored in <code class="docutils literal notranslate"><span class="pre">pars</span></code>.</p>
+<p>A concrete realization of a system interface must realize <code class="docutils literal notranslate"><span class="pre">sys_dyn</span></code>,
+which is the “right-handside” of the environment description, optionally
+disturbance dynamics via <code class="docutils literal notranslate"><span class="pre">disturb_dyn</span></code>, optionally controller dynamics
+(if the latter is, e.g., time-varying), and the output function <code class="docutils literal notranslate"><span class="pre">out</span></code>.
+The method <code class="docutils literal notranslate"><span class="pre">receive_action</span></code> gets a control action and stores it.
+Everything is packed together in the <code class="docutils literal notranslate"><span class="pre">closed_loop_rhs</span></code> for the use in
+<code class="docutils literal notranslate"><span class="pre">Simulator</span></code>.</p>
+<p>Finally, the <code class="docutils literal notranslate"><span class="pre">controllers</span></code> module contains various agent types. One of
+them is <code class="docutils literal notranslate"><span class="pre">CtrlOptPred</span></code> – the class of predictive objective-optimizing
+agents (model-predictive control and predictive reinforcement learning)
+as shown in <a class="reference external" href="./flowcharts/rcognita-flowchart-CtrlOptPred.pdf">this
+flowchart</a>. Notice
+it contains an explicit specification of the sampling time <code class="docutils literal notranslate"><span class="pre">dt</span></code>.</p>
+<p>The method <code class="docutils literal notranslate"><span class="pre">_critic</span></code> computes a model of something related to the
+value, e.g., value function, Q-function or advantage. In turn,
+<code class="docutils literal notranslate"><span class="pre">_critic_cost</span></code> defines a cost (loss) function to fir the critic
+(commonly based on temporal errors). The method <code class="docutils literal notranslate"><span class="pre">_critic_optimizer</span></code>
+actually optimizes the critic cost. The principle is analogous with the
+actor, except that it optimizes an objective along a prediction horizon.
+The details can be found in the code documentation. The method
+<code class="docutils literal notranslate"><span class="pre">compute_action</span></code> essentially watches the internal clock and performs
+an action updates when a time sample has elapsed.</p>
+<p>Auxiliary modules of the package are <code class="docutils literal notranslate"><span class="pre">models</span></code> and <code class="docutils literal notranslate"><span class="pre">utilities</span></code> which
+provide auxiliary functions and data structures, such as neural
+networks.</p>
+</section>
+<section id="usage">
+<h1>Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h1>
+<p>After the package is installed, you may just <code class="docutils literal notranslate"><span class="pre">python</span></code> run one of the
+presets found <a class="reference external" href="./presets">here</a>, say,</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="n">main_3wrobot_NI</span><span class="o">.</span><span class="n">py</span>
+</pre></div>
+</div>
+<p>This will call the preset with default settings, description of which
+can be found in the preset accordingly.</p>
+<p>The naming convention is <code class="docutils literal notranslate"><span class="pre">main_ACRONYM</span></code>, where <code class="docutils literal notranslate"><span class="pre">ACRONYM</span></code> is actually
+related to the system (environment). You may create your own by analogy.</p>
+<p>For configuration of hyper-parameters, just call help on the required
+preset, say,</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="n">main_3wrobot_NI</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">h</span>
+</pre></div>
+</div>
+<section id="settings">
+<h2>Settings<a class="headerlink" href="#settings" title="Permalink to this headline">¶</a></h2>
+<p>Some key settings are described below (full description is available via
+<code class="docutils literal notranslate"><span class="pre">-h</span></code> option).</p>
+</section>
+<section id="advanced-customization">
+<h2>Advanced customization<a class="headerlink" href="#advanced-customization" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Custom environments</strong>: realize <code class="docutils literal notranslate"><span class="pre">system</span></code> interface in the
+<code class="docutils literal notranslate"><span class="pre">systems</span></code> module. You might need nominal controllers for that, as
+well as an animator, a logger etc.</p></li>
+<li><p><strong>Custom running cost</strong>: adjust <code class="docutils literal notranslate"><span class="pre">rcost</span></code> in controllers</p></li>
+<li><p><strong>Custom AC method</strong>: simplest way – by adding a new mode and
+updating <code class="docutils literal notranslate"><span class="pre">_actor_cost</span></code>, <code class="docutils literal notranslate"><span class="pre">_critic_cost</span></code> and, possibly, <code class="docutils literal notranslate"><span class="pre">_actor</span></code>,
+<code class="docutils literal notranslate"><span class="pre">_critic</span></code>. For deep net AC structures, use, say,
+<a class="reference external" href="https://pytorch.org/">PyTorch</a></p></li>
+<li><p><strong>Custom model estimator</strong>: so far, the framework offers a
+state-space model structure. You may use any other one. In case of
+neural nets, use, e.g., <a class="reference external" href="https://pytorch.org/">PyTorch</a></p></li>
+</ul>
+</section>
+<section id="experimental-things">
+<h2>Experimental things<a class="headerlink" href="#experimental-things" title="Permalink to this headline">¶</a></h2>
+<p>An interface for dynamical controllers, which can be considered as
+extensions of the system state vector, is provided in <code class="docutils literal notranslate"><span class="pre">_ctrl_dyn</span></code> of
+the <code class="docutils literal notranslate"><span class="pre">systems</span></code> module. RL is usually understood as a static controller,
+i.e., a one which assigns actions directly to outputs. A dynamical
+controller does this indirectly, via an internal state as intermediate
+link. ynamical controllers can overcome some limitations of static
+controllers.</p>
+</section>
+</section>
+<section id="related-literature">
+<h1>Related literature<a class="headerlink" href="#related-literature" title="Permalink to this headline">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference external" href="https://arxiv.org/abs/2007.03999">Online actor-critic via stacked Q-learning and Kalman filter for
+model estimation</a></p></li>
+<li><p><a class="reference external" href="https://arxiv.org/abs/1906.02580">More on fusion of model-predictive control and reinforcement
+learing</a></p></li>
+<li><p><a class="reference external" href="https://arxiv.org/abs/2006.14034">More on “JACS”, joint actor-critic
+(stabilizing)</a></p></li>
+<li><p><a class="reference external" href="https://arxiv.org/abs/2108.04802">Some comparison of model-predictive control vs. stacked
+Q-learning</a></p></li>
+</ul>
+</section>
+<section id="closing-remarks">
+<h1>Closing remarks<a class="headerlink" href="#closing-remarks" title="Permalink to this headline">¶</a></h1>
+<p>Please contact <a class="reference external" href="mailto:p&#46;osinenko&#37;&#52;&#48;gmail&#46;com">me</a> for any inquiries
+and don’t forget to give me credit for usage of this code. If you are
+interested in stacked Q-learning, kindly read the
+<a class="reference external" href="https://arxiv.org/abs/2007.03999">paper</a>.</p>
+<p>Original author: P. Osinenko, 2020</p>
+<section id="bibtex-reference">
+<h2>Bibtex reference<a class="headerlink" href="#bibtex-reference" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@misc</span><span class="p">{</span><span class="n">rcognita2020</span><span class="p">,</span>
+<span class="n">author</span> <span class="o">=</span>   <span class="p">{</span><span class="n">Pavel</span> <span class="n">Osinenko</span><span class="p">},</span>
+<span class="n">title</span> <span class="o">=</span>    <span class="p">{</span><span class="n">Rcognita</span><span class="p">:</span> <span class="n">a</span> <span class="n">framework</span> <span class="k">for</span> <span class="n">hybrid</span> <span class="n">agent</span><span class="o">-</span><span class="n">enviroment</span> <span class="n">simultion</span><span class="p">},</span>
+<span class="n">howpublished</span> <span class="o">=</span> <span class="p">{</span>\<span class="n">url</span><span class="p">{</span><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">AIDynamicAction</span><span class="o">/</span><span class="n">rcognita</span><span class="p">}},</span>
+<span class="n">year</span> <span class="o">=</span> <span class="p">{</span><span class="mi">2020</span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
 </section>
 <section id="getting-started">
 <h1>Getting started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h1>

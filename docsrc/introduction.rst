@@ -1,15 +1,4 @@
-About
-=====
-
-``rcognita`` Python package is designed for hybrid simulation of agents and environments (generally speaking, not necessarily reinforcement learning agents).
-Its main idea is to have an explicit implementation of sampled controls with user-defined sampling time specification.
-
-Installation (basic)
-====================
-
-The package can be installed via `pip` by typing in terminal:
-
-``pip install rcognita``
+.. include:: README.rst
 
 Getting started
 ===============
@@ -48,5 +37,3 @@ In Linux-based OS, to build these wiki docs, run inside cloned repo folder:
     make
 
 Commit changes.
-
-.. .. include:: README.rst

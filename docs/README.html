@@ -9,7 +9,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Description &mdash; rcognita v0.1-pre1 documentation</title>
+  <title>About &mdash; rcognita v0.1-pre1 documentation</title>
   
 
   
@@ -86,7 +86,11 @@
             
               <ul>
 <li class="toctree-l1"><a class="reference internal" href="introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="introduction.html#installation-basic">Installation (basic)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="introduction.html#installation">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="introduction.html#general-description">General description</a></li>
+<li class="toctree-l1"><a class="reference internal" href="introduction.html#usage">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="introduction.html#related-literature">Related literature</a></li>
+<li class="toctree-l1"><a class="reference internal" href="introduction.html#closing-remarks">Closing remarks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="introduction.html#getting-started">Getting started</a></li>
 <li class="toctree-l1"><a class="reference internal" href="introduction.html#for-developers">For developers</a></li>
 </ul>
@@ -144,7 +148,7 @@
     
       <li><a href="index.html">Docs</a> &raquo;</li>
         
-      <li>Description</li>
+      <li>About</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -161,39 +165,18 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <img alt="https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/logo/rcognita-logo.png" src="https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/logo/rcognita-logo.png" />
-<section id="description">
-<h1>Description<a class="headerlink" href="#description" title="Permalink to this headline">¶</a></h1>
+  <section id="about">
+<h1>About<a class="headerlink" href="#about" title="Permalink to this headline">¶</a></h1>
 <p><code class="docutils literal notranslate"><span class="pre">rcognita</span></code> is a framework for hybrid agent-enviroment simultion. The
 hybrid setting here means the actions are updated at discrete moments in
 time, whereas the environment dynamics are modelled time-continuous. A
 detailed documentation is available
 <a class="reference external" href="https://aidynamicaction.github.io/rcognita/">here</a>.</p>
-<section id="example-run-with-a-mobile-robot-simulation">
-<h2>Example run with a mobile robot simulation<a class="headerlink" href="#example-run-with-a-mobile-robot-simulation" title="Permalink to this headline">¶</a></h2>
-<img alt="https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/demo/3wheel_robot_exm_run.gif" src="https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/demo/3wheel_robot_exm_run.gif" />
-</section>
-</section>
-<section id="table-of-content">
-<h1>Table of content<a class="headerlink" href="#table-of-content" title="Permalink to this headline">¶</a></h1>
-<ul class="simple">
-<li><p><a class="reference external" href="#Installation">Installation</a></p></li>
-<li><p><a class="reference external" href="#Basic">Basic</a></p></li>
-<li><p><a class="reference external" href="#With-model-estimation-tools">With model estimation tools</a></p></li>
-<li><p><a class="reference external" href="#General-description">General description</a></p></li>
-<li><p><a class="reference external" href="#Usage">Usage</a></p></li>
-<li><p><a class="reference external" href="#Settings">Settings</a></p></li>
-<li><p><a class="reference external" href="#Advanced-customization">Advanced customization</a></p></li>
-<li><p><a class="reference external" href="#Experimental-things">Experimental things</a></p></li>
-<li><p><a class="reference external" href="#Related-literature">Related literature</a></p></li>
-<li><p><a class="reference external" href="#Closing-remarks">Closing remarks</a></p></li>
-</ul>
 </section>
 <section id="installation">
 <h1>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h1>
 <section id="basic">
 <h2>Basic<a class="headerlink" href="#basic" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <p>Run in terminal:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip3</span> <span class="n">install</span> <span class="n">rcognita</span>
 </pre></div>
@@ -211,7 +194,6 @@ say, just <code class="docutils literal notranslate"><span class="pre">python</s
 </section>
 <section id="with-model-estimation-tools">
 <h2>With model estimation tools<a class="headerlink" href="#with-model-estimation-tools" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <p>The package was tested with online model estimation using
 <a class="reference external" href="https://github.com/CPCLAB-UNIPI/SIPPY">SIPPY</a>. The respective
 functionality is implemented and enabled via <code class="docutils literal notranslate"><span class="pre">is_est_model</span></code>. Related
@@ -253,7 +235,6 @@ class.</p>
 </section>
 <section id="general-description">
 <h1>General description<a class="headerlink" href="#general-description" title="Permalink to this headline">¶</a></h1>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <p><code class="docutils literal notranslate"><span class="pre">rcognita</span></code> Python package is designed for hybrid simulation of agents
 and environments (generally speaking, not necessarily reinforcement
 learning agents). Its main idea is to have an explicit implementation of
@@ -314,7 +295,6 @@ networks.</p>
 </section>
 <section id="usage">
 <h1>Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h1>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <p>After the package is installed, you may just <code class="docutils literal notranslate"><span class="pre">python</span></code> run one of the
 presets found <a class="reference external" href="./presets">here</a>, say,</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="n">main_3wrobot_NI</span><span class="o">.</span><span class="n">py</span>
@@ -331,13 +311,11 @@ preset, say,</p>
 </div>
 <section id="settings">
 <h2>Settings<a class="headerlink" href="#settings" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <p>Some key settings are described below (full description is available via
 <code class="docutils literal notranslate"><span class="pre">-h</span></code> option).</p>
 </section>
 <section id="advanced-customization">
 <h2>Advanced customization<a class="headerlink" href="#advanced-customization" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <ul class="simple">
 <li><p><strong>Custom environments</strong>: realize <code class="docutils literal notranslate"><span class="pre">system</span></code> interface in the
 <code class="docutils literal notranslate"><span class="pre">systems</span></code> module. You might need nominal controllers for that, as
@@ -354,7 +332,6 @@ neural nets, use, e.g., <a class="reference external" href="https://pytorch.org/
 </section>
 <section id="experimental-things">
 <h2>Experimental things<a class="headerlink" href="#experimental-things" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <p>An interface for dynamical controllers, which can be considered as
 extensions of the system state vector, is provided in <code class="docutils literal notranslate"><span class="pre">_ctrl_dyn</span></code> of
 the <code class="docutils literal notranslate"><span class="pre">systems</span></code> module. RL is usually understood as a static controller,
@@ -366,7 +343,6 @@ controllers.</p>
 </section>
 <section id="related-literature">
 <h1>Related literature<a class="headerlink" href="#related-literature" title="Permalink to this headline">¶</a></h1>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <ul class="simple">
 <li><p><a class="reference external" href="https://arxiv.org/abs/2007.03999">Online actor-critic via stacked Q-learning and Kalman filter for
 model estimation</a></p></li>
@@ -380,7 +356,6 @@ Q-learning</a></p></li>
 </section>
 <section id="closing-remarks">
 <h1>Closing remarks<a class="headerlink" href="#closing-remarks" title="Permalink to this headline">¶</a></h1>
-<p><a class="reference external" href="#Table-of-content">To table of content</a></p>
 <p>Please contact <a class="reference external" href="mailto:p&#46;osinenko&#37;&#52;&#48;gmail&#46;com">me</a> for any inquiries
 and don’t forget to give me credit for usage of this code. If you are
 interested in stacked Q-learning, kindly read the
