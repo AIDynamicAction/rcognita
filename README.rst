@@ -1,4 +1,4 @@
-.. image:: ../gfx/logo/rcognita-logo.png
+.. image:: ./gfx/logo/rcognita-logo.png
   :width: 400
   :alt: Alternative text
 
@@ -11,7 +11,7 @@ detailed documentation is available
 Example run with a mobile robot simulation
 ------------------------------------------
 
-.. image:: ../gfx/demo/3wheel_robot_exm_run.gif
+.. image:: ./gfx/demo/3wheel_robot_exm_run.gif
   :width: 400
   :alt: Alternative text
 
