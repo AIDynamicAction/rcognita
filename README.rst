@@ -5,8 +5,7 @@
 About
 =====
 
-``rcognita`` is a framework for agent-enviroment simulation with a flexible configuration.
-A menu of predictive and safe reinforcement learning agents is available.
+``rcognita`` is a flexibly configurable framework for agent-enviroment simulation with a menu of predictive and safe reinforcement learning controllers.
 A detailed documentation is available `here <https://aidynamicaction.github.io/rcognita/>`__.
 
 Example run with a mobile robot simulation
