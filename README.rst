@@ -1,5 +1,6 @@
 .. image:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/logo/rcognita-logo.png
-  :width: 400
+  :width: 100
+  :align: center
 
 About
 =====
