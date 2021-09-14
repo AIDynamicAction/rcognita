@@ -18,16 +18,14 @@ Table of content
 
 *  `Installation <#Installation>`__
     -  `Basic <#Basic>`__
-*  `With model estimation tools <#With-model-estimation-tools>`__
+    -  `With model estimation tools <#With-model-estimation-tools>`__
 *  `General description <#General-description>`__
 *  `Usage <#Usage>`__
-*  `Settings <#Settings>`__
-*  `Advanced customization <#Advanced-customization>`__
-*  `Experimental things <#Experimental-things>`__
+    -  `Settings <#Settings>`__
+    -  `Advanced customization <#Advanced-customization>`__
+    -  `Experimental things <#Experimental-things>`__
 *  `Related literature <#Related-literature>`__
 *  `Closing remarks <#Closing-remarks>`__
-
-
 
 Installation
 ============
