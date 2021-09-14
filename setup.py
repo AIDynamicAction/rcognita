@@ -24,7 +24,7 @@ setup(
     long_description_content_type='text/x-rst',
     install_requires=[
         "matplotlib >= 3.2.2",
-        "mpldatacursor-rcognita == 0.7.1",
+        "mpldatacursor-rcognita == 0.7.2",
         "numpy >= 1.20.1",
         "scipy >= 1.5.0",
         "svgpath2mpl == 0.2.1",

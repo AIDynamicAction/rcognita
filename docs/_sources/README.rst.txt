@@ -1,12 +1,10 @@
+  :width: 200
+  :align: center
 
 About
 =====
 
-``rcognita`` is a framework for hybrid agent-enviroment simultion. The
-hybrid setting here means the actions are updated at discrete moments in
-time, whereas the environment dynamics are modelled time-continuous. 
-
-
+``rcognita`` is a flexibly configurable framework for agent-enviroment simulation with a menu of predictive and safe reinforcement learning controllers.
 
 
 
