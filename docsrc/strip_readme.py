@@ -11,8 +11,9 @@ with open(target, "r") as f:
     s = f.read()
     
 
-logo = ".. image:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/logo/rcognita-logo.png\n"
-
+logo_top = ".. image:: https://raw.githubusercontent.com/AIDynamicAction/rcognita/d0c7d1173b51e0ed5df044cf1fb1c92eca53d819/gfx/logo/rcognita-logo.png\n"
+m = re.search(f"({logo_top}.*?\n)[a-zA-Z0-9\s]*?\n=", s, re.S)
+logo = m.group(1)
 
 m = re.search("(Example run with a mobile robot simulation\n.*?\n)[a-zA-Z0-9\s]*?\n=", 
               s, flags=re.S)

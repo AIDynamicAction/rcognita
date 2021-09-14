@@ -1,5 +1,3 @@
-  :width: 200
-  :align: center
 
 About
 =====
