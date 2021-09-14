@@ -24,7 +24,7 @@ setup(
     long_description_content_type='text/x-rst',
     install_requires=[
         "matplotlib >= 3.2.2",
-        "mpldatacursor @ git+https://github.com/AIDynamicAction/mpldatacursor.git#808f2929ce9d44778a5fc52b0bc3dd770495b3eb",
+        "mpldatacursor-rcognita == 0.7.1",
         "numpy >= 1.20.1",
         "scipy >= 1.5.0",
         "svgpath2mpl == 0.2.1",
@@ -34,7 +34,7 @@ setup(
         "shapely == 1.7.1"],
     extras_require={
         "SIPPY" : 
-            ["SIPPY@git+https://github.com/AIDynamicAction/SIPPY.git#c2be509876a688dc5ba03cb66fd33c0a07463b74"]},
+            ["sippy-rcognita == 0.2.1"]},
     python_requires=">=3.6",
 )
     
