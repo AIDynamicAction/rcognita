@@ -5,9 +5,8 @@
 About
 =====
 
-``rcognita`` is a framework for hybrid agent-enviroment simultion. The
-hybrid setting here means the actions are updated at discrete moments in
-time, whereas the environment dynamics are modelled time-continuous. 
+``rcognita`` is a framework for agent-enviroment simulation with a flexible configuration.
+A menu of predictive and safe reinforcement learning agents is available.
 A detailed documentation is available `here <https://aidynamicaction.github.io/rcognita/>`__.
 
 Example run with a mobile robot simulation
