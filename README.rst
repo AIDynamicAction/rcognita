@@ -18,7 +18,7 @@ Table of content
 ================
 
 *  `Installation <#Installation>`__
-   -  `Basic <#Basic>`__
+*  `Basic <#Basic>`__
 *  `With model estimation tools <#With-model-estimation-tools>`__
 *  `General description <#General-description>`__
 *  `Usage <#Usage>`__
