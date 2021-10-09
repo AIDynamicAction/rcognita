@@ -294,8 +294,17 @@ class Sys3WRobot(System):
         nonholonomic double integrator”. In: Kybernetika 53.4 (2017), pp. 578–594
     
     """ 
-    name = '3wrobot'
-       
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.name = '3wrobot'
+        
+        if self.is_disturb:
+            self.sigma_disturb = self.pars_disturb[0]
+            self.mu_disturb = self.pars_disturb[1]
+            self.tau_disturb = self.pars_disturb[2]
+    
     def _state_dyn(self, t, state, action, disturb=[]):   
         m, I = self.pars[0], self.pars[1]
 
@@ -329,14 +338,9 @@ class Sys3WRobot(System):
         
         """       
         Ddisturb = np.zeros(self.dim_disturb)
-        
-        if self.is_disturb:
-            sigma_disturb = self.pars_disturb[0]
-            mu_disturb = self.pars_disturb[1]
-            tau_disturb = self.pars_disturb[2]
-            
-            for k in range(0, self.dim_disturb):
-                Ddisturb[k] = - tau_disturb[k] * ( disturb[k] + sigma_disturb[k] * (randn() + mu_disturb[k]) )
+   
+        for k in range(0, self.dim_disturb):
+            Ddisturb[k] = - self.tau_disturb[k] * ( disturb[k] + self.sigma_disturb[k] * (randn() + self.mu_disturb[k]) )
                 
         return Ddisturb   
     
@@ -352,13 +356,28 @@ class Sys3WRobotNI(System):
     
     
     """ 
-    name = '3wrobotNI'
-       
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.name = '3wrobotNI'
+        
+        if self.is_disturb:
+            self.sigma_disturb = self.pars_disturb[0]
+            self.mu_disturb = self.pars_disturb[1]
+            self.tau_disturb = self.pars_disturb[2]
+    
     def _state_dyn(self, t, state, action, disturb=[]):   
         Dstate = np.zeros(self.dim_state)
-        Dstate[0] = action[0] * np.cos( state[2] )
-        Dstate[1] = action[0] * np.sin( state[2] )
-        Dstate[2] = action[1]
+        
+        if self.is_disturb and (disturb != []):
+            Dstate[0] = action[0] * np.cos( state[2] ) + disturb[0]
+            Dstate[1] = action[0] * np.sin( state[2] ) + disturb[0]
+            Dstate[2] = action[1] + disturb[1]
+        else:
+            Dstate[0] = action[0] * np.cos( state[2] )
+            Dstate[1] = action[0] * np.sin( state[2] )
+            Dstate[2] = action[1]           
              
         return Dstate    
  
@@ -369,13 +388,8 @@ class Sys3WRobotNI(System):
         """       
         Ddisturb = np.zeros(self.dim_disturb)
         
-        if self.is_disturb:
-            sigma_disturb = self.pars_disturb[0]
-            mu_disturb = self.pars_disturb[1]
-            tau_disturb = self.pars_disturb[2]
-            
-            for k in range(0, self.dim_disturb):
-                Ddisturb[k] = - tau_disturb[k] * ( disturb[k] + sigma_disturb[k] * (randn() + mu_disturb[k]) )
+        for k in range(0, self.dim_disturb):
+            Ddisturb[k] = - self.tau_disturb[k] * ( disturb[k] + self.sigma_disturb[k] * (randn() + self.mu_disturb[k]) )
                 
         return Ddisturb   
     
@@ -389,7 +403,11 @@ class Sys2Tank(System):
     Two-tank system with nonlinearity.
     
     """
-    name = '2tank'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.name = '2tank'    
     
     def _state_dyn(self, t, state, action, disturb=[]):     
         tau1, tau2, K1, K2, K3 = self.pars
