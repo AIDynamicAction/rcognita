@@ -89,8 +89,8 @@ def uptria2vec(mat):
     
     k = 0
     for i in range(n):
-        for j in range(n):
-            vec[j] = mat[i, j]
+        for j in range(i, n):
+            vec[k] = mat[i, j]
             k += 1
             
     return vec
