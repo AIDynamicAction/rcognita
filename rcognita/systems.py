@@ -2,18 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 This module contains a generic interface for systems (environments) as well as concrete systems as realizations of the former
-
 Remarks: 
-
 - All vectors are treated as of type [n,]
 - All buffers are treated as of type [L, n] where each row is a vector
 - Buffers are updated from bottom to top
-
 """
 
 import numpy as np
 from numpy.random import randn
-
+from scipy.optimize import fsolve
 class System:
     """
     Interface class of dynamical systems a.k.a. environments.
@@ -201,7 +198,6 @@ class System:
         """
         Receive exogeneous control action to be fed into the system.
         This action is commonly computed by your controller (agent) using the system output :func:`~systems.system.out`. 
-
         Parameters
         ----------
         action : : array of shape ``[dim_input, ]``
@@ -294,17 +290,8 @@ class Sys3WRobot(System):
         nonholonomic double integrator”. In: Kybernetika 53.4 (2017), pp. 578–594
     
     """ 
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-        self.name = '3wrobot'
-        
-        if self.is_disturb:
-            self.sigma_disturb = self.pars_disturb[0]
-            self.mu_disturb = self.pars_disturb[1]
-            self.tau_disturb = self.pars_disturb[2]
-    
+    name = '3wrobot'
+       
     def _state_dyn(self, t, state, action, disturb=[]):   
         m, I = self.pars[0], self.pars[1]
 
@@ -338,9 +325,14 @@ class Sys3WRobot(System):
         
         """       
         Ddisturb = np.zeros(self.dim_disturb)
-   
-        for k in range(0, self.dim_disturb):
-            Ddisturb[k] = - self.tau_disturb[k] * ( disturb[k] + self.sigma_disturb[k] * (randn() + self.mu_disturb[k]) )
+        
+        if self.is_disturb:
+            sigma_disturb = self.pars_disturb[0]
+            mu_disturb = self.pars_disturb[1]
+            tau_disturb = self.pars_disturb[2]
+            
+            for k in range(0, self.dim_disturb):
+                Ddisturb[k] = - tau_disturb[k] * ( disturb[k] + sigma_disturb[k] * (randn() + mu_disturb[k]) )
                 
         return Ddisturb   
     
@@ -356,28 +348,13 @@ class Sys3WRobotNI(System):
     
     
     """ 
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-        self.name = '3wrobotNI'
-        
-        if self.is_disturb:
-            self.sigma_disturb = self.pars_disturb[0]
-            self.mu_disturb = self.pars_disturb[1]
-            self.tau_disturb = self.pars_disturb[2]
-    
+    name = '3wrobotNI'
+       
     def _state_dyn(self, t, state, action, disturb=[]):   
         Dstate = np.zeros(self.dim_state)
-        
-        if self.is_disturb and (disturb != []):
-            Dstate[0] = action[0] * np.cos( state[2] ) + disturb[0]
-            Dstate[1] = action[0] * np.sin( state[2] ) + disturb[0]
-            Dstate[2] = action[1] + disturb[1]
-        else:
-            Dstate[0] = action[0] * np.cos( state[2] )
-            Dstate[1] = action[0] * np.sin( state[2] )
-            Dstate[2] = action[1]           
+        Dstate[0] = action[0] * np.cos( state[2] )
+        Dstate[1] = action[0] * np.sin( state[2] )
+        Dstate[2] = action[1]
              
         return Dstate    
  
@@ -388,8 +365,13 @@ class Sys3WRobotNI(System):
         """       
         Ddisturb = np.zeros(self.dim_disturb)
         
-        for k in range(0, self.dim_disturb):
-            Ddisturb[k] = - self.tau_disturb[k] * ( disturb[k] + self.sigma_disturb[k] * (randn() + self.mu_disturb[k]) )
+        if self.is_disturb:
+            sigma_disturb = self.pars_disturb[0]
+            mu_disturb = self.pars_disturb[1]
+            tau_disturb = self.pars_disturb[2]
+            
+            for k in range(0, self.dim_disturb):
+                Ddisturb[k] = - tau_disturb[k] * ( disturb[k] + sigma_disturb[k] * (randn() + mu_disturb[k]) )
                 
         return Ddisturb   
     
@@ -403,11 +385,7 @@ class Sys2Tank(System):
     Two-tank system with nonlinearity.
     
     """
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        
-        self.name = '2tank'    
+    name = '2tank'
     
     def _state_dyn(self, t, state, action, disturb=[]):     
         tau1, tau2, K1, K2, K3 = self.pars
@@ -425,4 +403,205 @@ class Sys2Tank(System):
     
     def out(self, state, action=[]):
         observation = state
-        return observation   
+        return observation 
+
+class SFC_System(System):
+    """
+    Economic system .
+    
+    """
+    name = 'SFC_economics'
+    
+    def _state_dyn(self, t, state, action, disturb=[]): 
+
+        
+        #Initial parametres
+        a0= 0.5658628
+        a1= 0.83
+        a2= 0.04
+        k0= 0.1086334242
+        k1= 0.35
+        k2= 0.025
+        k3= 0.1
+        k4 = 0.5
+        k5 = 0.1
+        v0= 0.22382378 
+        v1= 0.2
+        v2= 0.2
+        v3= 0.1
+        w0= 0.38973415 #(Model 1)
+        w1 = 0.01
+        w2 = 0.02
+        w3 = 0.02
+        f0 = 0.09826265506
+        f1 = 0.2
+        f2 = 0.6
+        g0 = 0.2352693030
+        g1 = 0.3
+        g2 = 0.04
+        g3 = 0
+        z0 = 0.3
+        z1 = 0.5
+        z2 = 0.45
+        z3 = 0.033333
+        theta = 0.1
+        lambda_in = 0.050005
+        lambda_0 = 0.159143
+        delta = 0.0625
+        r0 = 0.67652
+        sf = 0.34097798866 
+        theta_b = 0.2862767
+
+        #Interest Rates
+        #ib = 0.015 
+        
+        m1b= 0.005 
+        m2b = 0.005
+        
+        ib = action
+        dim_action = 1
+    
+
+        #Initial values
+        Y_1 = 100
+        C_1 = 60
+        I_1= 25
+        G_1= 15
+        BD_1 = 45
+        B_1 = 0
+        BP_1 =  0.979955
+        BT_1 = 0
+        DIV_1 = 20
+        DIVe_1 = 13.33  
+        DIVh_1 = 6.66
+        Vg_1 = 0
+        E_1 = 3
+        Ee_1 = 2
+        Eh_1 = 1
+        g_1 = 0.0625
+        Hh_1 = 9.54858
+        Hb_1 = 2.250225
+        K_2 = K_1 = 400
+        L_2 = L_1 = 100
+        pe_1 = 35
+        rl_1= 0.02
+        r_1 = 0.02
+        rb_1= 0.02
+        TB_1= 0.393063 
+        TCB_1 = 0.176982075  
+        T_1 = 7.47687
+        UP_1 = 23.6813
+        Vh_1 = 89.54858  
+        YHSh_1 = 67.2918
+        YDh_1 =  67.2918
+        W_1= 67.652
+        H_1= 11.798805 
+        RF_1= 11.798805
+        pb_1= 50
+        Ve_1=K_1+pe_1*Ee_1-L_1-pe_1*E_1
+        
+        CGh_1=YHSh_1-YDh_1
+        
+        re_1=pb_1*B_1/(Vh_1)-v0-v1*rb_1+v2*id_1
+
+        #from equation 15 
+        ree_1=(pe_1*Ee_1/(pe_1*Ee_1+K_1)-f0-f2*(UP_1/K_2))/f1
+        
+        initial_conditions=[G_1,Y_1,C_1,I_1,B_1, YDh_1,W_1,T_1,CGh_1, YHSh_1,Vg_1,
+                            Eh_1,Vh_1,re_1,pe_1,BD_1,K_1,Ee_1, ree_1, L_1, UP_1, E_1, Ve_1, BT_1, RF_1]
+
+        G_1, Y_1, C_1, I_1, B_1, YDh_1, W_1, T_1, CGh_1, YHSh_1,\
+        Vg_1, Eh_1, Vh_1, re_1, pe_1, BD_1, K_1, Ee_1, ree_1, L_1,\
+        UP_1, E_1, Ve_1, BT_1, RF_1, L_2, K_2 = state
+
+        Ve_1=K_1+pe_1*Ee_1-L_1-pe_1*E_1
+        Vb_1=K_1-Vh_1-Ve_1-Vg_1
+        CGh_1=YHSh_1-YDh_1
+        id_1=ib_1-m2b
+        re_1=pb_1*B_1/(Vh_1)-v0-v1*rb_1+v2*id_1
+
+    #from equation 15 
+        ree_1=(pe_1*Ee_1/(pe_1*Ee_1+K_1)-f0-f2*(UP_1/K_2))/f1
+        DIV=(1-sf)*(Y_1-W_1-rl_1*L_2)
+        DIVe=DIV*(Ee_1/E_1)
+        DIVh=DIV-DIVe
+        #Hh=lambda_0*C :we use this fact:
+
+        #Control ib
+        rl=ib+m1b
+        ideposit=ib-m2b
+
+        r=rl
+        rb=r
+        pb=1/rb
+
+        TB=theta_b*(rl*L_1+r*BT_1-ideposit*BD_1-ib*RF_1)
+        BP=(1-theta_b)*(rl*L_1+r*BT_1-ideposit*BD_1-ib*RF_1)
+        TCB=ib*RF_1
+        Vb=Vb_1+BP
+
+        #solve economic system:
+
+
+        def economic_system(x):
+
+            equations=[x[1] -x[2]-x[3]-x[0], #1
+                   x[5] -x[6]-ideposit*BD_1 - B_1-DIVh + x[7], #2
+                    x[9]-x[5]- x[8],#3
+                       x[7]-theta*(x[6]+ideposit*BD_1+B_1+DIVh),#4
+                   x[2]-a0-a1*x[9]-a2*Vh_1,#5
+                   pb*x[4]-(x[12]*(v0+v1*rb-v2*ideposit-v3*x[13])),#6
+                   x[14]*x[11]-x[12]*(w0-w1*rb-w2*ideposit+w3*x[13]),#7
+
+                   x[15]-BD_1-x[5]+x[2]+pb*(x[4]-B_1)+x[14]*(x[11]-Eh_1)+(lambda_0*x[2]-Hh_1),#9
+
+                   x[8]-B_1*(pb-pb_1)-Eh_1*(x[14]-pe_1), #10
+                   x[12]-x[15]-pb*x[4]-x[14]*x[11]-lambda_0*x[2], #11
+                   #save K_2 can save K_1 instead 
+                   x[3]-(k0+k1*(UP_1/K_2)+k2*((x[1]-Y_1)/Y_1)-k3*(L_1/K_1)-k4*rl-k5*x[18])*K_1,#12,#13 
+                   x[16]-K_1-x[3]+delta*K_1, #14
+                   x[13]*x[17]-(x[16]+x[14]*x[17])*(f0+f1*x[18]+f2*(x[20]/K_1)), #15
+                   x[19]-x[16]*(g0+g1*(UP_1/K_1)+g2*re_1-g3*rl), #16
+
+                   x[3]+x[14]*(x[17]-Ee_1)-x[20]-x[14]*(x[21]-E_1)-(x[19]-L_1),#17
+
+                   x[20]-x[1]+x[6]+rl*L_1+DIVh,#18
+
+                   x[6]-r0*x[1], #19
+
+                   x[13]-((x[14]-pe_1)/pe_1)-DIV/(pe_1*E_1),#20
+
+                   x[11]+x[17]-x[21],#24
+
+                   x[22]-x[16]-x[14]*x[17]+x[19]+x[14]*x[21],#26
+
+                   x[23]-BT_1-x[0]-r*BT_1-B_1+x[7]+TB+TCB+pb*(x[4]-B_1),#27
+
+                   x[10]+x[23]+pb*x[4],#29
+
+                   x[24]-RF_1-(lambda_in*x[15]-Hb_1)-(x[19]-L_1)-(x[23]-BT_1)+BP+(x[15]-BD_1),#32
+
+                   x[24]-lambda_in*x[15]-lambda_0*x[2], #36  and H=RF, Hh=lambda_0*C, Hb=lambda_in*BD
+
+                   x[10]+x[22]+x[12]+Vb-x[16]] #last accounting of wealth and capital  
+            return equations
+
+        roots = fsolve(economic_system, initial_conditions)
+        #transition
+        G, Y, C, I, B, YDh, W, T, CGh, YHSh, Vg,\
+        Eh, Vh, re, pe, BD, K, Ee, ree, L, UP, E, Ve, BT, RF=roots
+
+
+        Dstate = [G, Y, C, I, B, YDh, W, T, CGh, YHSh, Vg,
+        Eh, Vh, re, pe, BD, K, Ee, ree, L, UP, E, Ve, BT, RF,
+        L_1. K_1]
+
+        #Dstate - state
+        return Dstate    
+ 
+    def _disturb_dyn(self, t, disturb):   
+        pass
+    
+    def out(self, state, action=[]):
+        observation = state
+        return observation  
