@@ -91,4 +91,27 @@ class Logger2Tank(Logger):
     def log_data_row(self, datafile, t, h1, h2, p, stage_obj, accum_obj):
         with open(datafile, 'a', newline='') as outfile:
                 writer = csv.writer(outfile)
-                writer.writerow([t, h1, h2, p, stage_obj, accum_obj])                
+                writer.writerow([t, h1, h2, p, stage_obj, accum_obj])
+
+        
+class LoggerSFC(Logger):
+    """
+    Data logger for a SFC system.
+    
+    """
+    def print_sim_step(self, t, Y_output, Labor, Investment, Consumption, inflation,  stage_obj, accum_obj):
+         
+    
+        row_header = ['t [s]', 'Y_output', 'Labor', 'Investment','Consumption','inflation', 'stage_obj', 'accum_obj']  
+        row_data = [t,  Y_output, Labor, Investment, Consumption, inflation,  stage_obj, accum_obj] 
+        row_format = ('8.1f', '8.4f', '8.4f', '8.4f', '8.4f',  '8.4f', '8.4f', '8.2f')   
+        table = tabulate([row_header, row_data], floatfmt=row_format, headers='firstrow', tablefmt='grid')
+    
+        print(table)
+    
+    def log_data_row(self, datafile, t, Y_output, Labor, Investment, Consumption, inflation, stage_obj, accum_obj):
+        with open(datafile, 'a', newline='') as outfile:
+                writer = csv.writer(outfile)
+                writer.writerow([t,  Y_output, Labor, Investment, Consumption, inflation, stage_obj, accum_obj])
+
+
