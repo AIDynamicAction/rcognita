@@ -803,7 +803,7 @@ class Animator2Tank(Animator):
     
             # upd_line(self.line_h1, np.nan)
         
-class AnimatorSFC:
+class AnimatorSFC(Animator):
     """
     Interface class of visualization machinery for simulation of system-controller loops.
     To design a concrete animator: inherit this class, override:
