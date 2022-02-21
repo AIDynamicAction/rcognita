@@ -410,7 +410,12 @@ class SFC_System(System):
     Economic system .
     
     """
-    name = 'SFC_economics'
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.name = 'SFC_economics'
+        self.inflation = 0.0
+        self.output_growth  = 0.0
     
     def _state_dyn(self, t, state, action, disturb=[]): 
 
@@ -460,7 +465,7 @@ class SFC_System(System):
         
         ib = action
         dim_action = 1
-    
+        ib_1 = ib
 
         #Initial values
         Y_1 = 100
@@ -501,7 +506,7 @@ class SFC_System(System):
         Ve_1=K_1+pe_1*Ee_1-L_1-pe_1*E_1
         
         CGh_1=YHSh_1-YDh_1
-        
+        id_1=ib_1-m2b
         re_1=pb_1*B_1/(Vh_1)-v0-v1*rb_1+v2*id_1
 
         #from equation 15 
@@ -594,14 +599,30 @@ class SFC_System(System):
 
         Dstate = [G, Y, C, I, B, YDh, W, T, CGh, YHSh, Vg,
         Eh, Vh, re, pe, BD, K, Ee, ree, L, UP, E, Ve, BT, RF,
-        L_1. K_1]
+        L_1, K_1]
+        #update inflation
+        self.inflation = (pe - pe_1)/pe_1
+        self.output_growth = (Y-Y_1)/Y_1
 
         #Dstate - state
         return Dstate    
+    
+   
  
     def _disturb_dyn(self, t, disturb):   
         pass
     
     def out(self, state, action=[]):
         observation = state
-        return observation  
+
+        Y_output = state[1]
+        Kapital = state[16]
+        Labor = state[19]
+        Investment = state[3]
+        Consumption = state[2]
+        inflation =  self.inflation
+        output_growth  = self.output_growth
+
+        observation = [Y_output, inflation]
+        
+        return observation   
