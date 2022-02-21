@@ -119,7 +119,7 @@ parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
                              'nominal',
                              'MPC'],
                              
-                    default='nominal',
+                    default='manual',
                     help='Control mode. Currently available: ' +
                     '----manual: manual constant control specified by action_manual; ' +
                     '----nominal: nominal controller, usually used to benchmark optimal controllers;' +                    
@@ -159,7 +159,7 @@ parser.add_argument('--t1', type=float, metavar='t1',
                     default=10.0,
                     help='Final time of episode.' )
 parser.add_argument('--pred_step_size_multiplier', type=float,
-                    default=2.0,
+                    default=1.0,
                     help='Size of each prediction step in seconds is a pred_step_size_multiplier multiple of controller sampling time dt.')
 
 
@@ -219,6 +219,26 @@ parser.add_argument('--actor_struct', type=str,
                     '----quad-lin: quadratic-linear; ' +
                     '----quadratic: quadratic; ' +
                     '----quad-nomix: quadratic, no mixed terms.')
+
+parser.add_argument('--is_log_data', type=bool,
+                    default=False,
+                    help='Flag to log data into a data file. Data are stored in simdata folder.')
+
+parser.add_argument('--is_visualization', type=bool,
+                    default=True,
+                    help='Flag to produce graphical output.')
+
+parser.add_argument('--is_print_sim_step', type=bool,
+                    default=True,
+                    help='Flag to print simulation data into terminal.') 
+
+parser.add_argument('--is_playback', type=bool,
+                    default=False,
+                    help='Flag to playback') 
+
+parser.add_argument('--stage_obj_init', type=float,
+                    default=0.0,
+                    help='The initial value of stage objective to plot') 
 
 args = parser.parse_args()
 
@@ -282,8 +302,12 @@ observation_init = my_sys_eco.out(args.state_init)
 
 #----------------------------------------Initialization : : controller
 #my_ctrl_nominal = controllers.CtrlNominal3WRobot(m, I, ctrl_gain=5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
-
+my_ctrl_nominal=[]
 # Predictive optimal controller
+#lambda function 
+#state = state + self.pred_step_size * self.sys_rhs([], state, my_action_sqn[k-1, :])
+#lambda tmp_time, state, action: my_sys_eco._state_dyn(tmp_time, state, action)-state
+
 my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            dim_output,
                                            ctrl_mode,
@@ -293,7 +317,8 @@ my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            sampling_time = dt,
                                            Nactor = Nactor,
                                            pred_step_size = pred_step_size,
-                                           sys_rhs = my_sys_eco._state_dyn,
+                                           sys_rhs = lambda tmp_time, state, action: my_sys_eco._state_dyn(tmp_time, 
+                                                                state, action)-state,
                                            sys_out = my_sys_eco.out,
                                            state_sys = state_init,
                                            prob_noise_pow = prob_noise_pow,
@@ -331,7 +356,7 @@ my_simulator = simulator.Simulator(sys_type = "discr_fnc",
                                    is_dyn_ctrl = is_dyn_ctrl)
 
 #----------------------------------------Initialization : : logger
-if os.path.basename( os.path.normpath( os.path.abspath(os.getcwd()) ) ) == 'presets':
+if os.path.basename(os.path.normpath( os.path.abspath(os.getcwd()) ) ) == 'presets':
     data_folder = '../simdata'
 else:
     data_folder = 'simdata'
@@ -343,22 +368,92 @@ time = datetime.now().strftime("%Hh%Mm%Ss")
 datafiles = [None] * Nruns
 
 for k in range(0, Nruns):
-    datafiles[k] = data_folder + '/' + my_sys.name + '__' + ctrl_mode + '__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
-    
-   #Logging iof necessary
+    datafiles[k] = data_folder + '/' + my_sys_eco.name + '__' + ctrl_mode + '__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
+    # Logging if necessary
+    if is_log_data:
+        print('Logging data to:    ' + datafiles[k])
+            
+        with open(datafiles[k], 'w', newline='') as outfile:
+            writer = csv.writer(outfile)
+            writer.writerow(['System', my_sys_eco.name ] )
+            writer.writerow(['Controller', ctrl_mode ] )
+            writer.writerow(['dt', str(dt) ] )
+            writer.writerow(['state_init', str(state_init) ] )
+            writer.writerow(['is_est_model', str(is_est_model) ] )
+            writer.writerow(['model_est_stage', str(model_est_stage) ] )
+            writer.writerow(['model_est_period_multiplier', str(model_est_period_multiplier) ] )
+            writer.writerow(['model_order', str(model_order) ] )
+            writer.writerow(['prob_noise_pow', str(prob_noise_pow) ] )
+            writer.writerow(['Nactor', str(Nactor) ] )
+            writer.writerow(['pred_step_size_multiplier', str(pred_step_size_multiplier) ] )
+            writer.writerow(['buffer_size', str(buffer_size) ] )
+            writer.writerow(['stage_obj_struct', str(stage_obj_struct) ] )
+            writer.writerow(['R1_diag', str(R1_diag) ] )
+            writer.writerow(['Ncritic', str(Ncritic) ] )
+            writer.writerow(['gamma', str(gamma) ] )
+            writer.writerow(['critic_period_multiplier', str(critic_period_multiplier) ] )
+            writer.writerow(['critic_struct', str(critic_struct) ] )
+            writer.writerow(['actor_struct', str(actor_struct) ] )          
+            writer.writerow(['t [s]', 'h1', 'h2', 'p', 'stage_obj', 'accum_obj'] )
+
             
         
 # Do not display annoying warnings when print is on
+
 if is_print_sim_step:
     warnings.filterwarnings('ignore')
     
-#my_logger = loggers.Logger3WRobot()
+my_logger = loggers.LoggerSFC()
 
 #----------------------------------------Main loop
-   
-run_curr = 1
-#=Why we need this ?
-datafile = datafiles[0]
+if is_visualization:
+    
+    action_min, action_max = ctrl_bnds
+    
+    state_full_init = my_simulator.state_full
+    #is_playback = False
+    #stage_obj_init = 0
+    
+    my_animator = visuals.AnimatorSFC(objects=(my_simulator,
+                                                     my_sys_eco,
+                                                     my_ctrl_nominal,
+                                                     my_ctrl_benchm,
+                                                     datafiles,
+                                                     controllers.ctrl_selector,
+                                                     my_logger),
+                                            pars=(state_init,
+                                                  action_init,
+                                                  t0,
+                                                  t1,
+                                                  state_full_init,
+                                                  ctrl_mode,
+                                                  action_manual,
+                                                  action_min, 
+                                                  action_max,
+                                                  Nruns,
+                                                  is_print_sim_step, 
+                                                  is_log_data, 
+                                                  is_playback,
+                                                   stage_obj_init))
+
+    anm = animation.FuncAnimation(my_animator.fig_sim,
+                                  my_animator.animate,
+                                  init_func=my_animator.init_anim,
+                                  blit=False, interval=dt/1e6, repeat=False)
+    
+    my_animator.get_anm(anm)
+    
+    cId = my_animator.fig_sim.canvas.mpl_connect('key_press_event', lambda event: on_key_press(event, anm))
+    
+    anm.running = True
+    
+    my_animator.fig_sim.tight_layout()
+    
+    plt.show()
+    
+else:   
+    run_curr = 1
+    datafile = datafiles[0]
 
 while True:
     
@@ -366,8 +461,8 @@ while True:
     
     t, state, observation, state_full = my_simulator.get_sim_step_data()
     
-    action = controllers.ctrl_selector(t, observation, action_manual, 
-    [], my_ctrl_benchm, ctrl_mode)
+    action = controllers.ctrl_selector(t, observation, action_manual, my_ctrl_nominal, 
+    my_ctrl_benchm, ctrl_mode)
     
 
     my_sys_eco.receive_action(action)
@@ -379,11 +474,23 @@ while True:
     stage_obj = my_ctrl_benchm.stage_obj(observation, action)
     accum_obj = my_ctrl_benchm.accum_obj_val
     
-    # if is_print_sim_step:
-    #     my_logger.print_sim_step(t, xCoord, yCoord, alpha, v, omega, stage_obj, accum_obj, action)
+    #printing state parametres 
+
+
+    Y_output = state[1]
+    Kapital = state[16]
+    Labor = state[19]
+    Investment = state[3]
+    Consumption = state[2]
+    Y_output, inflation = observation
+
+    # Y_output, Labor, Investment, Consumption, inflation,  stage_obj, accum_obj)
+    # ?? output growth rate??
+    if is_print_sim_step:
+        my_logger.print_sim_step(t, Y_output, Labor, Investment, Consumption, inflation, stage_obj, accum_obj, action)
         
-    # if is_log_data:
-    #     my_logger.log_data_row(datafile, t, xCoord, yCoord, alpha, v, omega, stage_obj, accum_obj, action)
+    if is_log_data:
+        my_logger.log_data_row(datafile, t, Y_output, Labor, Investment, Consumption, inflation, stage_obj, accum_obj, action)
     
     if t >= t1:  
         if is_print_sim_step:
@@ -394,8 +501,8 @@ while True:
         if run_curr > Nruns:
             break
             
-        # if is_log_data:
-        #     datafile = datafiles[run_curr-1]
+        if is_log_data:
+            datafile = datafiles[run_curr-1]
         
         # Reset simulator
         my_simulator.status = 'running'
