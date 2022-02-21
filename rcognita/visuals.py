@@ -801,4 +801,239 @@ class Animator2Tank(Animator):
             #         else:
             #             self.reset_line(item)
     
-            # upd_line(self.line_h1, np.nan)                
+            # upd_line(self.line_h1, np.nan)
+        
+class AnimatorSFC:
+    """
+    Interface class of visualization machinery for simulation of system-controller loops.
+    To design a concrete animator: inherit this class, override:
+        | :func:`~visuals.Animator.__init__` :
+        | define necessary visual elements (required)
+        | :func:`~visuals.Animator.init_anim` :
+        | initialize necessary visual elements (required)        
+        | :func:`~visuals.Animator.animate` :
+        | animate visual elements (required)
+    
+    Attributes
+    ----------
+    objects : : tuple
+        Objects to be updated within animation cycle
+    pars : : tuple
+        Fixed parameters of objects and visual elements      
+    
+    """
+    def __init__(self, objects=[], pars=[]):
+        self.objects = objects
+        self.pars = pars
+        
+        # Unpack entities
+        self.simulator, self.sys, self.ctrl_nominal, self.ctrl_benchmarking, self.datafiles, self.ctrl_selector, self.logger = self.objects
+        
+        state_init, \
+        action_init, \
+        t0, \
+        t1, \
+        state_full_init, \
+        ctrl_mode, \
+        action_manual, \
+        action_min, \
+        action_max, \
+        Nruns, \
+        is_print_sim_step, \
+        is_log_data, \
+        is_playback, \
+        stage_obj_init = self.pars
+        
+        # Store some parameters for later use
+        self.t0 = t0
+        self.state_full_init = state_full_init
+        self.t1 = t1
+        self.ctrl_mode = ctrl_mode
+        self.action_manual = action_manual
+        self.Nruns = Nruns
+        self.is_print_sim_step = is_print_sim_step
+        self.is_log_data = is_log_data
+        self.is_playback = is_playback
+        
+        
+        
+        Y_0 = self.state_init[1]
+        Kapital_0 = self.state_init[16]
+        
+        inlfation_lwl0 = 0
+        plt.close('all')
+     
+        self.fig_sim = plt.figure(figsize=(10,10))    
+            
+        #inflation plot
+        self.axs_inflation = self.fig_sim.add_subplot(221, autoscale_on=False, xlim=(t0,t1), ylim=( 0, 7),
+         xlabel='t [s]', title='Inflation')
+        self.axs_inflation.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.line_inflation, = self.axs_inflation.plot(t0, inlfation_lwl0, 'b-', lw=0.5, label=r'inflation $\pi$')
+        self.axs_inflation.legend(fancybox=True, loc='upper right')
+        
+        # what is format_coord
+        #self.axs_sol.format_coord = lambda state, observation: '%2.2f, %2.2f' % (state,observation)
+        
+
+        # Solution of output and capital
+        self.axs_outcap = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1),
+         ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
+        
+        self.axs_outcap.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.line_output, = self.axs_outcap.plot(t0, Y_0, 'b-', lw=0.5, label=r'Output')
+        self.line_capital, = self.axs_outcap.plot(t0, Kapital_0, 'r-', lw=0.5, label=r'Kapital') 
+        self.axs_outcap.legend(fancybox=True, loc='upper right')
+        #self.axs_sol.format_coord = lambda state,observation: '%2.2f, %2.2f' % (state,observation)
+        
+        # Cost
+        if is_playback:
+            stage_obj = stage_obj_init
+        else:
+            observation_init = self.sys.out(state_init)
+            stage_obj = self.ctrl_benchmarking.stage_obj(observation_init, action_init)
+        
+        self.axs_cost = self.fig_sim.add_subplot(223, autoscale_on=False, xlim=(t0,t1), ylim=(0, 1e4*stage_obj), yscale='symlog', xlabel='t [s]')
+        
+        text_accum_obj = r'$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.3f}'.format(accum_obj = 0)
+        self.text_accum_obj_handle = self.fig_sim.text(0.05, 0.5, text_accum_obj, horizontalalignment='left', verticalalignment='center')
+        self.line_stage_obj, = self.axs_cost.plot(t0, stage_obj, 'r-', lw=0.5, label='Stage obj.')
+        self.line_accum_obj, = self.axs_cost.plot(t0, 0, 'g-', lw=0.5, label=r'$\int \mathrm{Stage\,obj.} \,\mathrm{d}t$')
+        self.axs_cost.legend(fancybox=True, loc='upper right')
+        
+        # Control
+        self.axs_ctrl = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=(action_min-0.1, action_max+0.1), xlabel='t [s]')
+        self.axs_ctrl.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
+        self.line_ctrl, = self.axs_ctrl.plot(t0, action_init, lw=0.5, label='CB interest rate ') 
+        self.axs_ctrl.legend(fancybox=True, loc='upper right')
+        
+        # Pack all lines together
+        cLines = namedtuple('lines', ['line_inflation', 'line_output', 'line_capital','line_stage_obj', 'line_accum_obj', 'line_ctrl'])
+        self.lines = cLines(line_inflation=self.line_inflation,
+                            line_output=self.line_output,
+                            line_capital=self.line_capital,
+                            line_stage_obj=self.line_stage_obj,
+                            line_accum_obj=self.line_accum_obj,
+                            line_ctrl=self.line_ctrl)
+    
+        # Enable data cursor
+        for item in self.lines:
+            if isinstance(item, list):
+                for subitem in item:
+                    datacursor(subitem)
+            else:
+                datacursor(item)   
+
+
+
+        
+    
+    def init_anim(self):
+        state_init, *_ = self.pars      
+        
+        self.run_curr = 1
+        self.datafile_curr = self.datafiles[0]
+
+     
+    def animate(self, k):
+        if self.is_playback:
+            self.upd_sim_data_row()
+            t = self.t
+            state_full = self.state_full
+            action = self.action
+            stage_obj = self.stage_obj
+            accum_obj = self.accum_obj 
+        else:
+            self.simulator.sim_step()
+            
+            t, state, observation, state_full = self.simulator.get_sim_step_data()
+            
+            action = self.ctrl_selector(t, observation, self.action_manual, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
+
+            self.sys.receive_action(action)
+            self.ctrl_benchmarking.receive_sys_state(self.sys._state) 
+            self.ctrl_benchmarking.upd_accum_obj(observation, action)
+            
+            stage_obj = self.ctrl_benchmarking.stage_obj(observation, action)
+            accum_obj = self.ctrl_benchmarking.accum_obj_val
+        
+        #printing state parametres 
+        Y_output = state[1]
+        Kapital = state[16]
+        Labor = state[19]
+        Investment = state[3]
+        Consumption = state[2]
+        Y_output, inflation = observation
+        
+        if self.is_print_sim_step:
+            
+            self.logger.print_sim_step(t,  t, Y_output, Labor, Investment, Consumption, inflation,  stage_obj, accum_obj)
+        if is_log_data:
+            my_logger.log_data_row(datafile, t, Y_output, Labor, Investment, Consumption, inflation, stage_obj, accum_obj, action)
+
+        # # Main plotting of output, capital and inflation update
+        upd_line(self.line_output, t, Y_output)
+        upd_line(self.line_capital, t, Kapital)
+        upd_line(self.line_inflation, t, inflation)
+    
+        # Cost
+        upd_line(self.line_stage_obj, t, stage_obj)
+        upd_line(self.line_accum_obj, t, accum_obj)
+        text_accum_obj = r'$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.1f}'.format(accum_obj = accum_obj)
+        upd_text(self.text_accum_obj_handle, text_accum_obj)
+        
+        # Control
+        #for (line, action_single) in zip(self.lines_ctrl, action):
+        upd_line(self.line_ctrl, t, action)
+    
+
+        if t >= self.t1:  
+            if self.is_print_sim_step:
+                    print('.....................................Run {run:2d} done.....................................'.format(run = self.run_curr))
+                
+            self.run_curr += 1
+            
+            if self.run_curr > self.Nruns:
+                print('Animation done...')
+                self.stop_anm()
+                return
+            
+            if self.is_log_data:
+                self.datafile_curr = self.datafiles[self.run_curr-1]
+            
+            # Reset simulator
+            self.simulator.reset()
+            
+            # Reset controller
+            if self.ctrl_mode !='nominal':
+                self.ctrl_benchmarking.reset(self.t0)
+            else:
+                self.ctrl_nominal.reset(self.t0)
+            
+            accum_obj = 0     
+            
+            reset_line(self.line_output)
+            reset_line(self.line_capital)
+            reset_line(self.line_inflation)
+            reset_line(self.line_ctrl)
+            reset_line(self.line_stage_obj)
+            reset_line(self.line_accum_obj)
+
+   def set_sim_data(self, ts, Y, K, inflation, action_interest, reward, accum_objs):
+        """
+        This function is needed for playback purposes when simulation data were generated elsewhere.
+        It feeds data into the animator from outside.
+        The simulation step counter ``curr_step`` is reset accordingly.
+        """   
+        self.ts, self.Y, self.K,self.inflation, self.action_interest = ts, Y, K, inflation, action_interest
+        self.reward, self.accum_objs = reward, accum_objs
+        self.curr_step = 0
+        
+    def upd_sim_data_row(self):
+        self.t = self.ts[self.curr_step]
+        #self.state_full = np.array([self.h1s[self.curr_step], self.h2s[self.curr_step]])
+        self.stage_obj = self.reward[self.curr_step]
+        self.accum_obj = self.accum_objs[self.curr_step]
+        self.action = np.array([self.ps[self.curr_step]])
+        
+        self.curr_step = self.curr_step + 1
