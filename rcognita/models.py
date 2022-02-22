@@ -42,7 +42,56 @@ class ModelSS:
     def updateIC(self, x0setNew):
         self.x0set = x0setNew
          
-class ModelNN:
-    def __init__(self, *args, **kwargs):
-        raise NotImplementedError(f"Class {self.__class__} is not yet implemented.")
+# class ModelNN:
+#     def __init__(self, *args, **kwargs):
+#         raise NotImplementedError(f"Class {self.__class__} is not yet implemented.")
     # if self.dt != dt -> error
+
+class ModelRNN:
+    """
+    Class of recurrent neural network models
+
+    .. math::
+        \\begin{array}{ll}
+			\\hat y^+ & = \\vaprhi(y, u)
+        \\end{array}
+
+    Attributes
+    ----------
+    weights: : array of proper shape
+        Neural weights.
+    observation_est_init : : array
+        Initial estimate of observation.
+
+    """
+
+    def __init__(self, weights, dim_observation, dim_action, dim_hidden):
+        super().__init__()
+        self.fc1 = nn.Linear(dim_observation + dim_action, dim_hidden)
+        self.fc2 = nn.Linear(dim_hidden, dim_observation)
+        self.relu = nn.LeakyReLU()
+
+        self.weights = weights
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu(x)
+        x = self.fc2(x)
+
+        return x
+
+    def model_out(self, observation, action):
+        """
+        Output estimated observation
+        """
+
+        #return RNN(observation, action, self.weights)  # Implement RNN output via torch
+
+        return self.forward(np.concatenate(observation, action))
+
+    def updateIC(self, observation_est_init_new):
+        """
+        Update initial condition
+        """
+
+        self.observation_est_init = observation_est_init_new

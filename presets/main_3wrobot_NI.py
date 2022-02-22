@@ -37,6 +37,7 @@ from rcognita import systems
 from rcognita import controllers
 from rcognita import loggers
 from rcognita import visuals
+from rcognita import estimators
 from rcognita.utilities import on_key_press
 
 import argparse
@@ -363,6 +364,8 @@ if is_print_sim_step:
     
 my_logger = loggers.Logger3WRobotNI()
 
+my_estimator = estimators.Estimator_RNN(dim_action = 2, dim_observation, dim_hidden, buffer_size = 10)
+
 #----------------------------------------Main loop
 if is_visualization:
     
@@ -417,7 +420,18 @@ else:
         my_simulator.sim_step()
         
         t, state, observation, state_full = my_simulator.get_sim_step_data()
-        
+
+        #############################################
+        # ESTIMATOR UNDER DEVELOPMENT
+        #############################################
+
+        my_estimator.receive_sys_IO(observation, action)
+
+        loss = my_estimator.output_loss()
+        print("estimator loss: ", loss)
+
+        #############################################
+
         action = controllers.ctrl_selector(t, observation, action_manual, my_ctrl_nominal, my_ctrl_benchm, ctrl_mode)
         
         my_sys.receive_action(action)
