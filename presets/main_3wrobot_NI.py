@@ -364,7 +364,8 @@ if is_print_sim_step:
     
 my_logger = loggers.Logger3WRobotNI()
 
-my_estimator = estimators.Estimator_RNN(dim_action = 2, dim_observation, dim_hidden, buffer_size = 10)
+my_estimator = estimators.Estimator_RNN(dim_action = dim_input, dim_observation = dim_output,
+                                        dim_hidden = 10, buffer_size = 10)
 
 #----------------------------------------Main loop
 if is_visualization:
