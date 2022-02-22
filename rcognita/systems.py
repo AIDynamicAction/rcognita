@@ -11,6 +11,7 @@ Remarks:
 import numpy as np
 from numpy.random import randn
 from scipy.optimize import fsolve
+
 class System:
     """
     Interface class of dynamical systems a.k.a. environments.
@@ -234,9 +235,13 @@ class System:
             # Fetch the control action stored in the system
             action = self.action
         
-        if self.ctrl_bnds.any():
-            for k in range(self.dim_input):
-                action[k] = np.clip(action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
+        #if self.ctrl_bnds.any():
+        print('action',action)
+        print('action dim',action.shape)
+        print('action dtype',action.dtype)
+
+        for k in range(self.dim_input):
+            action[k] = np.clip(action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
         
         rhs_full_state[0:self.dim_state] = self._state_dyn(t, state, action, disturb)
         
@@ -463,7 +468,7 @@ class SFC_System(System):
         m1b= 0.005 
         m2b = 0.005
         
-        ib = action
+        ib = action[0]
         dim_action = 1
         ib_1 = ib
 

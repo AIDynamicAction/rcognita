@@ -2,13 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 This module contains an interface class `animator` along with concrete realizations, each of which is associated with a corresponding system.
-
 Remarks: 
-
 - All vectors are treated as of type [n,]
 - All buffers are treated as of type [L, n] where each row is a vector
 - Buffers are updated from bottom to top
-
 """
 
 import numpy as np
@@ -68,7 +65,6 @@ class Animator:
     def stop_anm(self):
         """
         Stops animation, provided that ``self.anm`` was defined via ``get_anm``.
-
         """
         self.anm.event_source.stop()           
         # plt.close('all')
@@ -210,7 +206,6 @@ class Animator3WRobot(Animator):
         This function is needed for playback purposes when simulation data were generated elsewhere.
         It feeds data into the animator from outside.
         The simulation step counter ``curr_step`` is reset accordingly.
-
         """   
         self.ts, self.xCoords, self.yCoords, self.alphas, self.vs, self.omegas = ts, xCoords, yCoords, alphas, vs, omegas
         self.rs, self.accum_objs, self.Fs, self.Ms = rs, accum_objs, Fs, Ms
@@ -460,7 +455,6 @@ class Animator3WRobotNI(Animator):
         This function is needed for playback purposes when simulation data were generated elsewhere.
         It feeds data into the animator from outside.
         The simulation step counter ``curr_step`` is reset accordingly.
-
         """   
         self.ts, self.xCoords, self.yCoords, self.alphas = ts, xCoords, yCoords, alphas
         self.rs, self.accum_objs, self.vs, self.omegas = rs, accum_objs, vs, omegas
@@ -692,7 +686,6 @@ class Animator2Tank(Animator):
         This function is needed for playback purposes when simulation data were generated elsewhere.
         It feeds data into the animator from outside.
         The simulation step counter ``curr_step`` is reset accordingly.
-
         """   
         self.ts, self.h1s, self.h2s, self.ps = ts, h1s, h2s, ps
         self.rs, self.accum_objs = rs, accum_objs
@@ -829,8 +822,7 @@ class AnimatorSFC(Animator):
         # Unpack entities
         self.simulator, self.sys, self.ctrl_nominal, self.ctrl_benchmarking, self.datafiles, self.ctrl_selector, self.logger = self.objects
         
-        state_init, \
-        action_init, \
+        state_init, action_init, \
         t0, \
         t1, \
         state_full_init, \
@@ -854,7 +846,7 @@ class AnimatorSFC(Animator):
         self.is_print_sim_step = is_print_sim_step
         self.is_log_data = is_log_data
         self.is_playback = is_playback
-        
+        self.state_init=state_init
         
         
         Y_0 = self.state_init[1]
@@ -878,7 +870,7 @@ class AnimatorSFC(Animator):
 
         # Solution of output and capital
         self.axs_outcap = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1),
-         ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
+         ylim=( 0, 100000), xlabel='t [s]')
         
         self.axs_outcap.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
         self.line_output, = self.axs_outcap.plot(t0, Y_0, 'b-', lw=0.5, label=r'Output')
@@ -966,10 +958,9 @@ class AnimatorSFC(Animator):
         Y_output, inflation = observation
         
         if self.is_print_sim_step:
-            
-            self.logger.print_sim_step(t,  t, Y_output, Labor, Investment, Consumption, inflation,  stage_obj, accum_obj)
-        if is_log_data:
-            my_logger.log_data_row(datafile, t, Y_output, Labor, Investment, Consumption, inflation, stage_obj, accum_obj, action)
+            self.logger.print_sim_step(t, Y_output, Labor, Investment, Consumption, inflation,  stage_obj, accum_obj, action)
+        if self.is_log_data:
+            self.logger.log_data_row(self.datafile_curr, t, Y_output, Labor, Investment, Consumption, inflation, stage_obj, accum_obj, action)
 
         # # Main plotting of output, capital and inflation update
         upd_line(self.line_output, t, Y_output)
@@ -984,6 +975,7 @@ class AnimatorSFC(Animator):
         
         # Control
         #for (line, action_single) in zip(self.lines_ctrl, action):
+        
         upd_line(self.line_ctrl, t, action)
     
 
@@ -1005,7 +997,7 @@ class AnimatorSFC(Animator):
             self.simulator.reset()
             
             # Reset controller
-            if self.ctrl_mode !='nominal':
+            if self.ctrl_mode!='nominal':
                 self.ctrl_benchmarking.reset(self.t0)
             else:
                 self.ctrl_nominal.reset(self.t0)
@@ -1019,7 +1011,7 @@ class AnimatorSFC(Animator):
             reset_line(self.line_stage_obj)
             reset_line(self.line_accum_obj)
 
-   def set_sim_data(self, ts, Y, K, inflation, action_interest, reward, accum_objs):
+    def set_sim_data(self, ts, Y, K, inflation, action_interest, reward, accum_objs):
         """
         This function is needed for playback purposes when simulation data were generated elsewhere.
         It feeds data into the animator from outside.
@@ -1034,6 +1026,6 @@ class AnimatorSFC(Animator):
         #self.state_full = np.array([self.h1s[self.curr_step], self.h2s[self.curr_step]])
         self.stage_obj = self.reward[self.curr_step]
         self.accum_obj = self.accum_objs[self.curr_step]
-        self.action = np.array([self.ps[self.curr_step]])
+        self.action = np.array([self.action_interest[self.curr_step]])
         
         self.curr_step = self.curr_step + 1
