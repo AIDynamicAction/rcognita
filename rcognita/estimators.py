@@ -10,6 +10,8 @@ from .utilities import upd_text
 from .utilities import to_col_vec
 from .utilities import push_vec
 
+import torch
+
 import rcognita.models as models
 
 class Estimator_RNN:
@@ -25,21 +27,21 @@ class Estimator_RNN:
         self.dim_hidden      = dim_hidden
 
         if (model is None):
-            self.model = model
+            self.model = models.ModelRNN(None, self.dim_observation, self.dim_action, self.dim_hidden)
 
         else:
-            self.model = models.ModelRNN(self.dim_observation, self.dim_action, self.dim_hidden)
+            self.model = model
 
-        self.observation_buffer = np.zeros([self.buffer_size, self.dim_observation])
-        self.action_buffer      = np.zeros([self.buffer_size, self.dim_action])
+        self.observation_buffer = np.zeros((self.buffer_size, self.dim_observation))
+        self.action_buffer      = np.zeros((self.buffer_size, self.dim_action))
 
         self.Nbackprops = Nbackprops
 
     def receive_sys_IO(self, observation, action):
         # push observation, action to buffers -- see functionality in controllers.py, line 1463
 
-        self.observation_buffer = push_vec(self.observation_buffer[1:, :], observation)
-        self.action_buffer      = push_vec(self.action_buffer[1:, :], action)
+        self.observation_buffer = push_vec(self.observation_buffer, observation)
+        self.action_buffer      = push_vec(self.action_buffer, action)
 
     def update_params(self):
         """
@@ -55,9 +57,10 @@ class Estimator_RNN:
 
         loss = 0
 
-        for i in range(len(self.observation_buffer) - 1):
-            y_pred = self.model.model_out(np.concatenate(self.observation_buffer[i], self.action_buffer[i]))
+        for i in range(self.buffer_size - 1):
+            #y_pred = self.model.model_out(np.concatenate((self.observation_buffer[i, :], self.action_buffer[i, :])))
+            y_pred = self.model.model_out(self.observation_buffer[i, :], self.action_buffer[i, :])
 
-            loss += np.linalg.norm(y_pred - self.observation_buffer[i + 1])
+            loss += np.linalg.norm((y_pred.detach().numpy() - self.observation_buffer[i + 1, :]))
 
         return loss

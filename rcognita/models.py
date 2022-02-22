@@ -7,47 +7,55 @@ Updates to come.
 
 """
 
+import numpy as np
+import torch
+from torch import nn, optim
+import torch.nn.functional as F
+import copy
+
+
 class ModelSS:
     """
     State-space model
-            
+
     .. math::
         \\begin{array}{ll}
 			\\hat x^+ & = A \\hat x + B u, \\newline
 			y^+  & = C \\hat x + D u.
-        \\end{array}                 
-        
+        \\end{array}
+
     Attributes
-    ---------- 
+    ----------
     A, B, C, D : : arrays of proper shape
         State-space model parameters.
     x0set : : array
         Initial state estimate.
-            
+
     """
-    
+
     def __init__(self, A, B, C, D, x0est):
         self.A = A
         self.B = B
         self.C = C
         self.D = D
         self.x0est = x0est
-        
+
     def upd_pars(self, Anew, Bnew, Cnew, Dnew):
         self.A = Anew
         self.B = Bnew
         self.C = Cnew
         self.D = Dnew
-        
+
     def updateIC(self, x0setNew):
         self.x0set = x0setNew
-         
+
+
 # class ModelNN:
 #     def __init__(self, *args, **kwargs):
 #         raise NotImplementedError(f"Class {self.__class__} is not yet implemented.")
-    # if self.dt != dt -> error
+# if self.dt != dt -> error
 
-class ModelRNN:
+class ModelRNN(nn.Module):
     """
     Class of recurrent neural network models
 
@@ -74,6 +82,8 @@ class ModelRNN:
         self.weights = weights
 
     def forward(self, x):
+        x = x.float()
+
         x = self.fc1(x)
         x = self.relu(x)
         x = self.fc2(x)
@@ -85,9 +95,12 @@ class ModelRNN:
         Output estimated observation
         """
 
-        #return RNN(observation, action, self.weights)  # Implement RNN output via torch
+        # return RNN(observation, action, self.weights)  # Implement RNN output via torch
 
-        return self.forward(np.concatenate(observation, action))
+        concat = np.concatenate((observation, action))
+        to_torch = torch.tensor(concat)
+
+        return self.forward(to_torch)
 
     def updateIC(self, observation_est_init_new):
         """
