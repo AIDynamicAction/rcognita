@@ -1,7 +1,5 @@
-
 """
 Preset: SFC economic model
-
 3-wheel robot with dynamical actuators.
 """
 
@@ -173,7 +171,7 @@ parser.add_argument('--stage_obj_struct', type=str,
                              'biquadratic'],
                     help='Structure of stage objective function.')
 parser.add_argument('--R1_diag', type=float, nargs='+',
-                    default=[1, 1],
+                    default=[1, 1, 1],
                     help='Parameter of stage objective function. Must have proper dimension. ' +
                     'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
 
@@ -228,10 +226,6 @@ parser.add_argument('--is_visualization', type=bool,
                     default=True,
                     help='Flag to produce graphical output.')
 
-parser.add_argument('--is_print_sim_step', type=bool,
-                    default=True,
-                    help='Flag to print simulation data into terminal.') 
-
 parser.add_argument('--is_playback', type=bool,
                     default=False,
                     help='Flag to playback') 
@@ -244,8 +238,8 @@ args = parser.parse_args()
 
 #----------------------------------------Post-processing of arguments
 # Convert `pi` to a number pi
-for k in range(len(args.state_init)):
-    args.state_init[k] = eval( args.state_init[k].replace('pi', str(np.pi)) )
+# for k in range(len(args.state_init)):
+#     args.state_init[k] = eval( args.state_init[k].replace('pi', str(np.pi)) )
 
 args.state_init = np.array(args.state_init)
 
@@ -259,7 +253,8 @@ globals().update(vars(args))
 is_disturb = 0
 is_dyn_ctrl = 0
 # Control constraints
-ctrl_bnds = np.array([0, 1])
+ctrl_bnds = np.array([0, 1]).reshape(1,-1)
+#ctrl_bnds = [[0,1]]
 t0 = 0
 atol = 1e-5
 rtol = 1e-3
@@ -287,9 +282,12 @@ observation_target = np.array([0.01, 0.03])
 
 #----------------------------------------Initialization : : system
 #``discr_fnc`` : difference equation :math:`state^+ = f(state, action, disturb)`
-my_sys_eco = systems.SFC_economy(sys_type="discr_fnc",
+my_sys_eco = systems.SFC_System(sys_type="discr_fnc",
                                      dim_state=dim_state,
                                      dim_input=dim_input,
+                                     dim_output=1,
+                                     dim_disturb=0,
+                                     ctrl_bnds = ctrl_bnds,
                                      is_dyn_ctrl=is_dyn_ctrl,
                                      is_disturb=is_disturb,
                                      pars_disturb=[])
@@ -307,7 +305,7 @@ my_ctrl_nominal=[]
 #lambda function 
 #state = state + self.pred_step_size * self.sys_rhs([], state, my_action_sqn[k-1, :])
 #lambda tmp_time, state, action: my_sys_eco._state_dyn(tmp_time, state, action)-state
-
+print('----------------------------------------Initialization : : controllers.CtrlOptPred')
 my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            dim_output,
                                            ctrl_mode,
@@ -339,6 +337,7 @@ my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
 my_ctrl_benchm = my_ctrl_opt_pred
     
 #----------------------------------------Initialization : : simulator
+print('----------------------------------------Initialization : : simulator')
 my_simulator = simulator.Simulator(sys_type = "discr_fnc",
                                    closed_loop_rhs = my_sys_eco.closed_loop_rhs,
                                    sys_out = my_sys_eco.out,
@@ -356,6 +355,7 @@ my_simulator = simulator.Simulator(sys_type = "discr_fnc",
                                    is_dyn_ctrl = is_dyn_ctrl)
 
 #----------------------------------------Initialization : : logger
+print('----------------------------------------Initialization : : logger')
 if os.path.basename(os.path.normpath( os.path.abspath(os.getcwd()) ) ) == 'presets':
     data_folder = '../simdata'
 else:
@@ -366,7 +366,7 @@ pathlib.Path(data_folder).mkdir(parents=True, exist_ok=True)
 date = datetime.now().strftime("%Y-%m-%d")
 time = datetime.now().strftime("%Hh%Mm%Ss")
 datafiles = [None] * Nruns
-
+print('----------------------------------------datafiles')
 for k in range(0, Nruns):
     datafiles[k] = data_folder + '/' + my_sys_eco.name + '__' + ctrl_mode + '__' + date + '__' + time + '__run{run:02d}.csv'.format(run=k+1)
     # Logging if necessary
@@ -408,11 +408,13 @@ my_logger = loggers.LoggerSFC()
 #----------------------------------------Main loop
 if is_visualization:
     
-    action_min, action_max = ctrl_bnds
+    action_min, action_max = 0, 1
     
     state_full_init = my_simulator.state_full
     #is_playback = False
     #stage_obj_init = 0
+
+
     
     my_animator = visuals.AnimatorSFC(objects=(my_simulator,
                                                      my_sys_eco,
@@ -491,7 +493,7 @@ while True:
         
     if is_log_data:
         my_logger.log_data_row(datafile, t, Y_output, Labor, Investment, Consumption, inflation, stage_obj, accum_obj, action)
-    
+        print('logging  log_data_row')
     if t >= t1:  
         if is_print_sim_step:
             print('.....................................Run {run:2d} done.....................................'.format(run = run_curr))
