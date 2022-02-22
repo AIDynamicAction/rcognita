@@ -415,6 +415,8 @@ if is_visualization:
 else:   
     run_curr = 1
     datafile = datafiles[0]
+
+    action = action_init
     
     while True:
         
