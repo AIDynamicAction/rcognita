@@ -41,14 +41,14 @@ class Estimator_RNN:
         self.observation_buffer = push_vec(self.observation_buffer[1:, :], observation)
         self.action_buffer      = push_vec(self.action_buffer[1:, :], action)
 
-    def update_params():
+    def update_params(self):
         """
         Update neural network weights
         """
 
         # Torch backprop (Nbackprops times, say) on loss = model accuracy over buffers
 
-    def output_loss():
+    def output_loss(self):
         """
         Return current loss
         """
