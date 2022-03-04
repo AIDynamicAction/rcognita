@@ -413,7 +413,9 @@ class Animator3WRobotNI(Animator):
         self.axs_sol = self.fig_sim.add_subplot(222, autoscale_on=False, xlim=(t0,t1), ylim=( 2 * np.min([xMin, yMin]), 2 * np.max([xMax, yMax]) ), xlabel='t [s]')
         self.axs_sol.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
         self.line_norm, = self.axs_sol.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
-        self.line_alpha, = self.axs_sol.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]') 
+        self.line_alpha, = self.axs_sol.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
+        self.est_loss, = self.axs_sol.plot(t0, alpha0 + 1, 'r-', lw=0.5, label=r'$est loss')
+
         self.axs_sol.legend(fancybox=True, loc='upper right')
         self.axs_sol.format_coord = lambda state,observation: '%2.2f, %2.2f' % (state,observation)
         
@@ -484,9 +486,27 @@ class Animator3WRobotNI(Animator):
         self.scatter_sol = self.axs_xy_plane.scatter(xCoord0, yCoord0, marker=self.robot_marker.marker, s=400, c='b')
         self.run_curr = 1
         self.datafile_curr = self.datafiles[0]
-    
+
+    def no_playback(self):
+        self.simulator.sim_step()
+
+        t, state, observation, state_full = self.simulator.get_sim_step_data()
+
+        action = self.ctrl_selector(t, observation, self.action_manual, self.ctrl_nominal, self.ctrl_benchmarking,
+                                    self.ctrl_mode)
+
+        self.sys.receive_action(action)
+        self.ctrl_benchmarking.receive_sys_state(self.sys._state)
+        self.ctrl_benchmarking.upd_accum_obj(observation, action)
+
+        stage_obj = self.ctrl_benchmarking.stage_obj(observation, action)
+        accum_obj = self.ctrl_benchmarking.accum_obj_val
+
+        return t, state, observation, state_full, action, stage_obj, accum_obj
+
     def animate(self, k):
-        
+        est_loss = None
+
         if self.is_playback:
             self.upd_sim_data_row()
             t = self.t
@@ -496,18 +516,7 @@ class Animator3WRobotNI(Animator):
             accum_obj = self.accum_obj        
             
         else:
-            self.simulator.sim_step()
-            
-            t, state, observation, state_full = self.simulator.get_sim_step_data()
-            
-            action = self.ctrl_selector(t, observation, self.action_manual, self.ctrl_nominal, self.ctrl_benchmarking, self.ctrl_mode)
-        
-            self.sys.receive_action(action)
-            self.ctrl_benchmarking.receive_sys_state(self.sys._state) 
-            self.ctrl_benchmarking.upd_accum_obj(observation, action)
-            
-            stage_obj = self.ctrl_benchmarking.stage_obj(observation, action)
-            accum_obj = self.ctrl_benchmarking.accum_obj_val
+            t, state, observation, state_full, action, stage_obj, accum_obj, est_loss = self.no_playback()
         
         xCoord = state_full[0]
         yCoord = state_full[1]
@@ -536,10 +545,17 @@ class Animator3WRobotNI(Animator):
         # # Solution
         upd_line(self.line_norm, t, la.norm([xCoord, yCoord]))
         upd_line(self.line_alpha, t, alpha)
-    
+
+        if (est_loss is None):
+            upd_line(self.est_loss, t, 0)
+
+        else:
+            upd_line(self.est_loss, t, est_loss / 30.0)
+
         # Cost
         upd_line(self.line_stage_obj, t, stage_obj)
         upd_line(self.line_accum_obj, t, accum_obj)
+
         text_accum_obj = r'$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.1f}'.format(accum_obj = accum_obj)
         upd_text(self.text_accum_obj_handle, text_accum_obj)
         

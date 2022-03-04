@@ -11,6 +11,8 @@ from .utilities import to_col_vec
 from .utilities import push_vec
 
 import torch
+import torch.optim as optim
+import torch.nn as nn
 
 import rcognita.models as models
 
@@ -32,6 +34,9 @@ class Estimator_RNN:
         else:
             self.model = model
 
+        self.criterion = nn.MSELoss()
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.001, momentum=0.9)
+
         self.observation_buffer = np.zeros((self.buffer_size, self.dim_observation))
         self.action_buffer      = np.zeros((self.buffer_size, self.dim_action))
 
@@ -50,17 +55,20 @@ class Estimator_RNN:
 
         # Torch backprop (Nbackprops times, say) on loss = model accuracy over buffers
 
+        self.loss.backward()
+
     def output_loss(self):
         """
         Return current loss
         """
 
-        loss = 0
+        self.loss = 0
 
         for i in range(self.buffer_size - 1):
             #y_pred = self.model.model_out(np.concatenate((self.observation_buffer[i, :], self.action_buffer[i, :])))
             y_pred = self.model.model_out(self.observation_buffer[i, :], self.action_buffer[i, :])
 
-            loss += np.linalg.norm((y_pred.detach().numpy() - self.observation_buffer[i + 1, :]))
+            #loss += np.linalg.norm((y_pred.detach().numpy() - self.observation_buffer[i + 1, :]))
+            self.loss += self.criterion(y_pred, torch.tensor(self.observation_buffer[i + 1, :]))
 
-        return loss
+        return self.loss.detach().numpy()

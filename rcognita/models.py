@@ -79,10 +79,15 @@ class ModelRNN(nn.Module):
         self.fc2 = nn.Linear(dim_hidden, dim_observation)
         self.relu = nn.LeakyReLU()
 
-        self.weights = weights
+        if (weights is not None):
+            self.load_state_dict(weights)
+
+        self.double()
 
     def forward(self, x):
-        x = x.float()
+        #print("x type", type(x))
+
+        x = x.double()
 
         x = self.fc1(x)
         x = self.relu(x)
