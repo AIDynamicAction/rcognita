@@ -414,7 +414,7 @@ class Animator3WRobotNI(Animator):
         self.axs_sol.plot([t0, t1], [0, 0], 'k--', lw=0.75)   # Help line
         self.line_norm, = self.axs_sol.plot(t0, la.norm([xCoord0, yCoord0]), 'b-', lw=0.5, label=r'$\Vert(x,y)\Vert$ [m]')
         self.line_alpha, = self.axs_sol.plot(t0, alpha0, 'r-', lw=0.5, label=r'$\alpha$ [rad]')
-        self.est_loss, = self.axs_sol.plot(t0, alpha0 + 1, 'r-', lw=0.5, label=r'$est loss')
+        self.est_loss, = self.axs_sol.plot(t0, alpha0 + 1, 'g-', lw=0.5, label=r'estimator loss')
 
         self.axs_sol.legend(fancybox=True, loc='upper right')
         self.axs_sol.format_coord = lambda state,observation: '%2.2f, %2.2f' % (state,observation)
@@ -543,14 +543,17 @@ class Animator3WRobotNI(Animator):
         self.scatter_sol = self.axs_xy_plane.scatter(xCoord, yCoord, marker=self.robot_marker.marker, s=400, c='b')
         
         # # Solution
-        upd_line(self.line_norm, t, la.norm([xCoord, yCoord]))
+        x_norm = la.norm([xCoord, yCoord])
+
+        upd_line(self.line_norm, t, x_norm)
         upd_line(self.line_alpha, t, alpha)
 
         if (est_loss is None):
             upd_line(self.est_loss, t, 0)
 
         else:
-            upd_line(self.est_loss, t, est_loss / 30.0)
+            upd_line(self.est_loss, t, est_loss / 9)
+            #upd_line(self.est_loss, t, est_loss / la.norm([xCoord, yCoord, alpha]) / 3.0)
 
         # Cost
         upd_line(self.line_stage_obj, t, stage_obj)
