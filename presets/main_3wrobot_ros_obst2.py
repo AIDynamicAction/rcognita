@@ -517,6 +517,7 @@ class ROS_preset:
         self.lock.acquire()
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         self.constraints = self.obstacles_parser(np.array(dt.ranges))
+        self.constraints = list(({'type': 'ineq', 'fun': constr}) for constr in self.constraints)
         print(np.array(dt.ranges))
         self.lock.release()
 
