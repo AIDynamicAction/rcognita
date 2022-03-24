@@ -518,7 +518,7 @@ class ROS_preset:
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         self.constraints = self.obstacles_parser(np.array(dt.ranges))
         self.constraints = list(({'type': 'ineq', 'fun': constr}) for constr in self.constraints)
-        print(np.array(dt.ranges))
+        #print(np.array(dt.ranges))
         self.lock.release()
 
     def spin(self, is_print_sim_step=False, is_log_data=False):
@@ -648,7 +648,7 @@ if __name__ == "__main__":
                                 'biquadratic'],
                         help='Structure of stage objective function.')
     parser.add_argument('--R1_diag', type=float, nargs='+',
-                        default=[1, 1, 1, 0, 0],
+                        default=[10, 1, 1, 0, 0],
                         help='Parameter of stage objective function. Must have proper dimension. ' +
                         'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
     parser.add_argument('--R2_diag', type=float, nargs='+',
