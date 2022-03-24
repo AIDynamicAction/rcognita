@@ -37,7 +37,7 @@ except ModuleNotFoundError:
                   ' to install sippy at https://github.com/AIDynamicAction/rcognita\n', 
                   UserWarning, __file__, 33)
 
-def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode):
+def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode, constraints):
     """
     Main interface for various controllers.
 
@@ -58,7 +58,7 @@ def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking
     elif mode=='nominal': 
         action = ctrl_nominal.compute_action(t, observation)
     else: # Controller for benchmakring
-        action = ctrl_benchmarking.compute_action(t, observation)
+        action = ctrl_benchmarking.compute_action(t, observation, constraints)
         
     return action
 
@@ -1370,7 +1370,7 @@ class CtrlOptPred:
         # Optimization method of actor    
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
         # actor_opt_method = 'SLSQP' # Standard
-        actor_opt_method = 'SLSQP'
+        actor_opt_method = 'trust-constr'
         if actor_opt_method == 'trust-constr':
             actor_opt_options = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
         else:

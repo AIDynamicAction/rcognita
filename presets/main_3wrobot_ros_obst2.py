@@ -412,6 +412,8 @@ class ROS_preset:
         self.dt = 0.0
         self.time_start = 0.0
 
+        self.constraints = [({'type': 'ineq', 'fun': lambda x: -1})]
+
         # connection to ROS topics
         self.pub_cmd_vel = rospy.Publisher("/cmd_vel", Twist, queue_size=1, latch=False)
         self.sub_odom = rospy.Subscriber("/odom", Odometry, self.odometry_callback)
@@ -515,6 +517,7 @@ class ROS_preset:
         self.lock.acquire()
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         self.constraints = self.obstacles_parser(np.array(dt.ranges))
+        print(np.array(dt.ranges))
         self.lock.release()
 
     def spin(self, is_print_sim_step=False, is_log_data=False):
@@ -528,7 +531,8 @@ class ROS_preset:
 
             velocity = Twist()
 
-            action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, self.ctrl_benchm, self.ctrl_mode)
+            action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, 
+                                                self.ctrl_benchm, self.ctrl_mode, self.constraints)
             action = np.clip(action, [-0.22, -2.0], [0.22, 2.0])
             
             self.system.receive_action(action)
@@ -643,7 +647,7 @@ if __name__ == "__main__":
                                 'biquadratic'],
                         help='Structure of stage objective function.')
     parser.add_argument('--R1_diag', type=float, nargs='+',
-                        default=[1, 10, 1, 0, 0],
+                        default=[1, 1, 1, 0, 0],
                         help='Parameter of stage objective function. Must have proper dimension. ' +
                         'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
     parser.add_argument('--R2_diag', type=float, nargs='+',
