@@ -1327,7 +1327,7 @@ class CtrlOptPred:
 
         return J
     
-    def _actor_optimizer(self, observation):
+    def _actor_optimizer(self, observation, constraints=None):
         """
         This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._actor_cost`.
         See class documentation.
@@ -1384,7 +1384,8 @@ class CtrlOptPred:
         
         try:
             if isGlobOpt:
-                minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
+                minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 
+                'constraints': constraints, 'tol': 1e-7, 'options': actor_opt_options}
                 action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation),
                                           my_action_sqn_init,
                                           minimizer_kwargs=minimizer_kwargs,
@@ -1395,6 +1396,7 @@ class CtrlOptPred:
                                       method=actor_opt_method,
                                       tol=1e-7,
                                       bounds=bnds,
+                                      constraints=constraints,
                                       options=actor_opt_options).x        
 
         except ValueError:
@@ -1426,7 +1428,7 @@ class CtrlOptPred:
         
         return action_sqn[:self.dim_input]    # Return first action
                     
-    def compute_action(self, t, observation):
+    def compute_action(self, t, observation, constraints=None):
         """
         Main method. See class documentation.
         
@@ -1450,10 +1452,10 @@ class CtrlOptPred:
                     return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
                 
                 elif not self.is_prob_noise and self.is_est_model:
-                    action = self._actor_optimizer(observation)
+                    action = self._actor_optimizer(observation, constraints)
 
                 elif self.mode=='MPC':
-                    action = self._actor_optimizer(observation)
+                    action = self._actor_optimizer(observation, constraints)
                     
             elif self.mode in ['RQL', 'SQL']:
                 # Critic
