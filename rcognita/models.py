@@ -76,8 +76,8 @@ class ModelRNN(nn.Module):
     def __init__(self, weights, dim_observation, dim_action, dim_hidden):
         super().__init__()
         self.fc1 = nn.Linear(dim_observation + dim_action, dim_hidden)
+        self.relu1 = nn.LeakyReLU()
         self.fc2 = nn.Linear(dim_hidden, dim_observation)
-        self.relu = nn.LeakyReLU()
 
         if (weights is not None):
             self.load_state_dict(weights)

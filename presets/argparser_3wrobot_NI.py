@@ -34,13 +34,13 @@ parser.add_argument('--dt', type=float, metavar='dt',
                     default=0.01,
                     help='Controller sampling time.' )
 parser.add_argument('--t1', type=float, metavar='t1',
-                    default=10.0,
+                    default=6.0,
                     help='Final time of episode.' )
 parser.add_argument('--Nruns', type=int,
                     default=1,
                     help='Number of episodes. Learned parameters are not reset after an episode.')
 parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
-                    default=['5', '5', '-3*pi/4'],
+                    default=['5', '5', '-5*pi/4'],
                     help='Initial state (as sequence of numbers); ' + 
                     'dimension is environment-specific!')
 parser.add_argument('--is_log_data', type=str2bool,

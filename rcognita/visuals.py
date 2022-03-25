@@ -402,7 +402,10 @@ class Animator3WRobotNI(Animator):
         self.axs_xy_plane.set_aspect('equal', adjustable='box')
         self.axs_xy_plane.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
         self.axs_xy_plane.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
+
         self.line_traj, = self.axs_xy_plane.plot(xCoord0, yCoord0, 'b--', lw=0.5)
+        self.line_traj_pred, = self.axs_xy_plane.plot(xCoord0, yCoord0, 'g--', lw=0.5)
+
         self.robot_marker = RobotMarker(angle=alpha_deg0)
         text_time = 't = {time:2.3f}'.format(time = t0)
         self.text_time_handle = self.axs_xy_plane.text(0.05, 0.95, text_time,
@@ -502,7 +505,7 @@ class Animator3WRobotNI(Animator):
         stage_obj = self.ctrl_benchmarking.stage_obj(observation, action)
         accum_obj = self.ctrl_benchmarking.accum_obj_val
 
-        return t, state, observation, state_full, action, stage_obj, accum_obj
+        return t, state, observation, state_full, action, stage_obj, accum_obj, None, None
 
     def animate(self, k):
         est_loss = None
@@ -516,12 +519,18 @@ class Animator3WRobotNI(Animator):
             accum_obj = self.accum_obj        
             
         else:
-            t, state, observation, state_full, action, stage_obj, accum_obj, est_loss = self.no_playback()
+            t, state, observation, state_full, action, stage_obj, accum_obj, est_loss, last_pred = self.no_playback()
         
-        xCoord = state_full[0]
-        yCoord = state_full[1]
+        #xCoord = state_full[0]
+        #yCoord = state_full[1]
+        xCoord = observation[0]
+        yCoord = observation[1]
+
         alpha = state_full[2]
         alpha_deg = alpha/np.pi*180
+
+        xCoordPred = last_pred[0]
+        yCoordPred = last_pred[1]
 
         if self.is_print_sim_step:
             self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
@@ -532,8 +541,12 @@ class Animator3WRobotNI(Animator):
         # xy plane  
         text_time = 't = {time:2.3f}'.format(time = t)
         upd_text(self.text_time_handle, text_time)
+
         upd_line(self.line_traj, xCoord, yCoord)  # Update the robot's track on the plot
-            
+
+        if (t > 0.0):
+            upd_line(self.line_traj_pred, xCoordPred, yCoordPred) # Update the robot's estimated track on the plot
+
         self.robot_marker.rotate(1e-3)    # Rotate the robot on the plot  
         self.scatter_sol.remove()
         self.scatter_sol = self.axs_xy_plane.scatter(5, 5, marker=self.robot_marker.marker, s=400, c='b')       
@@ -552,7 +565,7 @@ class Animator3WRobotNI(Animator):
             upd_line(self.est_loss, t, 0)
 
         else:
-            upd_line(self.est_loss, t, est_loss / 9)
+            upd_line(self.est_loss, t, est_loss)
             #upd_line(self.est_loss, t, est_loss / la.norm([xCoord, yCoord, alpha]) / 3.0)
 
         # Cost
