@@ -1368,8 +1368,8 @@ class CtrlOptPred:
         # my_constraints = {'type': 'ineq', 'fun': state_constraint}
 
         # Optimization method of actor    
-        # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-        # actor_opt_method = 'SLSQP' # Standard
+        # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powel
+        
         actor_opt_method = 'SLSQP'
         if actor_opt_method == 'trust-constr':
             actor_opt_options = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
