@@ -37,7 +37,7 @@ except ModuleNotFoundError:
                   ' to install sippy at https://github.com/AIDynamicAction/rcognita\n', 
                   UserWarning, __file__, 33)
 
-def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode, constraints):
+def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode, constraints=[]):
     """
     Main interface for various controllers.
 
