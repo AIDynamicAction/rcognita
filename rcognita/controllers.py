@@ -1421,7 +1421,7 @@ class CtrlOptPred:
                 x1, y1 = constr[0]
                 x2, y2 = constr[2]
                 final_constraints.append(
-                    sp.optimize.NonlinearConstraint(partial(constraint, y=y, x1=x1, y1=y1, x2=x2, y2=y2), 0, np.inf)
+                    sp.optimize.NonlinearConstraint(partial(constraint, y=observation, x1=x1, y1=y1, x2=x2, y2=y2), 0, np.inf)
                 )
 
         #if constraints:

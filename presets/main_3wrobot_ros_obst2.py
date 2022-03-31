@@ -77,8 +77,8 @@ class Obstacles_parser:
         self.T_d = T_d
         self.safe_margin = self.W * safe_margin_mult
 
-    def __call__(self, l):
-        self.new_blocks, self.lines, self.circles, self.x, self.y = self.get_obstacles(l)
+    def __call__(self, l, state):
+        self.new_blocks, self.lines, self.circles, self.x, self.y = self.get_obstacles(l, state)
         self.constraints = self.get_functions()
         return self.constraints
 
@@ -250,7 +250,7 @@ class Obstacles_parser:
             L.append((block[0], block[-1]))
             return [block]
 
-    def get_obstacles(self, l, rng=360, fillna='const'):
+    def get_obstacles(self, l, rng=360, fillna='const', state=np.array([2, 2, np.pi])):
         if fillna == 'const':
             fill_const = 1000
             nans = np.isnan(l)
@@ -264,10 +264,18 @@ class Obstacles_parser:
             nans, idx_fun = self.nan_helper(l, mode=2)
             l[nans]= np.interp(idx_fun(nans), idx_fun(~nans), l[~nans]) + np.random.rand(nans.sum()) * 0.01
             
+        state_coord = state[:2].reshape(-1, 1)
+        state_angle = state[2]
+        rot_mat = np.array([[np.cos(state_angle), -np.sin(state_angle)], 
+                            [np.sin(state_angle), np.cos(state_angle)]])
+
         degrees = np.arange(rng)
         angles = np.radians(degrees)
         x = l * np.cos(angles)
         y = l * np.sin(angles)
+
+        all_coords = rot_mat @ np.column_stack([x, y]).T + state_coord
+        x, y = all_coords[0, :], all_coords[1, :]
         
         points = []
 
@@ -528,11 +536,11 @@ class ROS_preset:
             obstacles = self.obstacles_parser.get_obstacles(np.array(dt.ranges))
             self.line_constrs = [self.obstacles_parser.get_buffer_area(i) for i in obstacles[0]]
             self.circle_constrs = obstacles[1]
-            self.constraints = self.obstacles_parser(np.array(dt.ranges))
+            self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_dstate))
             #self.constraints = list(({'type': 'ineq', 'fun': constr}) for constr in self.constraints)
         except ValueError:
             self.constraints = []
-        print('RANGES:', np.array(dt.ranges))
+        #print('RANGES:', np.array(dt.ranges))
         #print('CONSTRAINTS:', self.constraints)
         self.lock.release()
 
