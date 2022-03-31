@@ -25,6 +25,7 @@ from scipy.optimize import NonlinearConstraint
 from numpy.linalg import lstsq
 from numpy import reshape
 import warnings
+from functools import partial
 
 # For debugging purposes
 from tabulate import tabulate
@@ -37,7 +38,7 @@ except ModuleNotFoundError:
                   ' to install sippy at https://github.com/AIDynamicAction/rcognita\n', 
                   UserWarning, __file__, 33)
 
-def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode, constraints=[]):
+def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode, constraints=[], line_constraints=[]):
     """
     Main interface for various controllers.
 
@@ -58,7 +59,7 @@ def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking
     elif mode=='nominal': 
         action = ctrl_nominal.compute_action(t, observation)
     else: # Controller for benchmakring
-        action = ctrl_benchmarking.compute_action(t, observation, constraints)
+        action = ctrl_benchmarking.compute_action(t, observation, constraints, line_constraints)
         
     return action
 
@@ -1072,9 +1073,11 @@ class CtrlOptPred:
             chi = np.concatenate([observation - self.observation_target, action])
         
         stage_obj = 0
+        #print('ACTION:', action)
 
         if self.stage_obj_struct == 'quadratic':
             R1 = self.stage_obj_pars[0]
+            #print('SHAPES:', chi.shape, R1.shape)
             stage_obj = chi @ R1 @ chi
         elif self.stage_obj_struct == 'biquadratic':
             R1 = self.stage_obj_pars[0]
@@ -1327,7 +1330,7 @@ class CtrlOptPred:
 
         return J
     
-    def _actor_optimizer(self, observation, constraints=None):
+    def _actor_optimizer(self, observation, constraints=None, line_constraints=None):
         """
         This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._actor_cost`.
         See class documentation.
@@ -1369,6 +1372,36 @@ class CtrlOptPred:
 
         # Optimization method of actor    
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powel
+
+        # def constraint(u, y, constraints):
+        #     if constraints is None:
+        #         return None
+        #     res = y
+        #     #print('current state:', res)
+        #     res_constr = []
+        #     for i in range(0, self.Nactor, 1):
+        #         res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], []) #предсказание следующих шагов
+        #         #print(i+1, 'step prediction state:', res)
+        #         cons = []
+        #         for constr in constraints:
+        #             cons.append(-constr(res))
+        #         f1 = np.min(cons)
+        #         res_constr.append(f1)
+        #     return res_constr
+
+        def constraint(u, y, x1, y1, x2, y2):
+            if constraints is None:
+                return None
+            res = y
+            #print('current state:', res)
+            res_constr = []
+            for i in range(0, self.Nactor, 1):
+                res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], []) #предсказание следующих шагов
+                xk = res[0] - (x1+x2)/2
+                yk = res[1] - (y1+y2)/2
+                f1 = (2*xk/abs(x2-x1))**64 + (2*yk/abs(y2-y1))**64 - 1
+                res_constr.append(f1)
+            return res_constr
         
         actor_opt_method = 'SLSQP'
         if actor_opt_method == 'trust-constr':
@@ -1381,11 +1414,23 @@ class CtrlOptPred:
         my_action_sqn_init = np.reshape(self.action_sqn_init, [self.Nactor*self.dim_input,])
         
         bnds = sp.optimize.Bounds(self.action_sqn_min, self.action_sqn_max, keep_feasible=True)
-        
+
+        final_constraints = [] #[{'type': 'ineq', 'fun': lambda x: 1}]
+        if constraints:    
+            for constr in line_constraints:
+                x1, y1 = constr[0]
+                x2, y2 = constr[2]
+                final_constraints.append(
+                    sp.optimize.NonlinearConstraint(partial(constraint, y=y, x1=x1, y1=y1, x2=x2, y2=y2), 0, np.inf)
+                )
+
+        #if constraints:
+        #    final_constraints.append({'type': 'ineq', 'fun': partial(constraint, y=observation, constraints=constraints)})
+        print(observation)
         try:
             if isGlobOpt:
                 minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 
-                'constraints': constraints, 'tol': 1e-7, 'options': actor_opt_options}
+                'constraints': final_constraints, 'tol': 1e-7, 'options': actor_opt_options}
                 action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation),
                                           my_action_sqn_init,
                                           minimizer_kwargs=minimizer_kwargs,
@@ -1396,7 +1441,7 @@ class CtrlOptPred:
                                       method=actor_opt_method,
                                       tol=1e-7,
                                       bounds=bnds,
-                                      constraints=constraints,
+                                      constraints=final_constraints,
                                       options=actor_opt_options).x        
 
         except ValueError:
@@ -1428,7 +1473,7 @@ class CtrlOptPred:
         
         return action_sqn[:self.dim_input]    # Return first action
                     
-    def compute_action(self, t, observation, constraints=None):
+    def compute_action(self, t, observation, constraints=None, line_constrs=None):
         """
         Main method. See class documentation.
         
@@ -1452,10 +1497,10 @@ class CtrlOptPred:
                     return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
                 
                 elif not self.is_prob_noise and self.is_est_model:
-                    action = self._actor_optimizer(observation, constraints)
+                    action = self._actor_optimizer(observation, constraints, line_constrs)
 
                 elif self.mode=='MPC':
-                    action = self._actor_optimizer(observation, constraints)
+                    action = self._actor_optimizer(observation, constraints, line_constrs)
                     
             elif self.mode in ['RQL', 'SQL']:
                 # Critic

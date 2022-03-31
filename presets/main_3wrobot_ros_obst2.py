@@ -298,7 +298,7 @@ class Obstacles_parser:
             
         return new_blocks, LL, CC, x, y
 
-    def get_buffer_area(self, line, buf = 1):
+    def get_buffer_area(self, line, buf = 0.178/2):
         p1, p2 = line
         if (p1[0] > p2[0]):
             p_ = p1
@@ -420,6 +420,7 @@ class ROS_preset:
         self.time_start = 0.0
 
         self.constraints = []
+        self.line_constrs = []
 
         # connection to ROS topics
         self.pub_cmd_vel = rospy.Publisher("/cmd_vel", Twist, queue_size=1, latch=False)
@@ -524,12 +525,15 @@ class ROS_preset:
         self.lock.acquire()
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         try:
+            obstacles = self.obstacles_parser.get_obstacles(np.array(dt.ranges))
+            self.line_constrs = [self.obstacles_parser.get_buffer_area(i) for i in obstacles[0]]
+            self.circle_constrs = obstacles[1]
             self.constraints = self.obstacles_parser(np.array(dt.ranges))
-            self.constraints = list(({'type': 'ineq', 'fun': constr}) for constr in self.constraints)
+            #self.constraints = list(({'type': 'ineq', 'fun': constr}) for constr in self.constraints)
         except ValueError:
             self.constraints = []
         print('RANGES:', np.array(dt.ranges))
-        print('CONSTRAINTS:', self.constraints)
+        #print('CONSTRAINTS:', self.constraints)
         self.lock.release()
 
     def spin(self, is_print_sim_step=False, is_log_data=False):
@@ -537,15 +541,15 @@ class ROS_preset:
         start_time = time_lib.time()
         rate = rospy.Rate(self.RATE)
         self.time_start = rospy.get_time()
-        while not rospy.is_shutdown() and time_lib.time() - start_time < 100:
+        while not rospy.is_shutdown() and time_lib.time() - start_time < 200:
             t = rospy.get_time() - self.time_start
             self.t = t
-            print(t)
+            #print(t)
 
             velocity = Twist()
 
             action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, 
-                                                self.ctrl_benchm, self.ctrl_mode, self.constraints)
+                                                self.ctrl_benchm, self.ctrl_mode, self.constraints, self.line_constrs)
             action = np.clip(action, [-0.22, -2.0], [0.22, 2.0])
             
             self.system.receive_action(action)
@@ -559,11 +563,11 @@ class ROS_preset:
             stage_obj = self.ctrl_benchm.stage_obj(self.new_state, action)
             accum_obj = self.ctrl_benchm.accum_obj_val
 
-            if is_print_sim_step:
-                self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+            #if is_print_sim_step:
+            #    self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
             
-            if is_log_data:
-                self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+            #if is_log_data:
+            #    self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
 
             self.ctrl_benchm.receive_sys_state(self.new_state)
 

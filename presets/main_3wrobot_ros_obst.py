@@ -217,7 +217,7 @@ class obstacles_parser:
         else:
             return Circle(center, ro + self.safe_margin, self.get_convexity(o_l=np.array([0.0, 0.0]), T_io=2., block=block))
 
-    def splitting(self, block, T_n=12, T_min=4, L=L, C=C, prints=False):
+    def splitting(self, block, L, C, T_n=12, T_min=4, prints=False):
         R_mean = np.mean([pnt.R for pnt in block])
         N = int(len(block) * R_mean * 0.5)
         if N < T_min:
