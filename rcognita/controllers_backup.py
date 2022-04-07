@@ -1378,15 +1378,47 @@ class CtrlOptPred:
             if constraints is None:
                 return None
             res = y
+            #print('current state:', res)
             res_constr = []
             my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
             for i in range(1, self.Nactor, 1):
                 res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :]) #предсказание следующих шагов
-
+                #print(i+1, 'step prediction state:', res)
                 cons = []
                 for constr in constraints:
                     cons.append(-constr(res))
                 f1 = np.min(cons)
+                res_constr.append(f1)
+            # if np.sum(np.array(res_constr) < 0) > 0:
+            #     print('predicted entering the prohibited zone', my_action_sqn)
+            return res_constr
+
+        def constraint(action_sqn, y, x1, y1, x2, y2):
+            res = y
+            #print('current state:', res)
+            res_constr = []
+            my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
+            for i in range(1, self.Nactor, 1):
+                res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :]) #предсказание следующих шагов
+                xk = res[0] - (x1+x2)/2
+                yk = res[1] - (y1+y2)/2
+                f1 = (2*xk/abs(x2-x1))**64 + (2*yk/abs(y2-y1))**64 - 1
+                res_constr.append(f1)
+            # if np.sum(np.array(res_constr) < 0) > 0:
+            #     print('predicted entering the prohibited zone', np.array(res_constr))
+            #     raise RuntimeError('predicted entering the prohibited zone')
+            return res_constr
+
+        def constraint_circ(action_sqn, y, x1, y1, r):
+            res = y
+            #print('current state:', res)
+            res_constr = []
+            my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
+            for i in range(1, self.Nactor, 1):
+                res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :])  #предсказание следующих шагов
+                xk = res[0] - x1
+                yk = res[1] - y1
+                f1 = (2*xk/r)**2 + (2*yk/r)**2 - 1
                 res_constr.append(f1)
             return res_constr
         
@@ -1402,13 +1434,32 @@ class CtrlOptPred:
         
         bnds = sp.optimize.Bounds(self.action_sqn_min, self.action_sqn_max, keep_feasible=True)
 
-        final_constraints = []
-
-        if constraints:
-            final_constraints.append(
-                    sp.optimize.NonlinearConstraint(partial(constraint, y=observation, constraints=constraints), 0, np.inf)
+        final_constraints = [] #[{'type': 'ineq', 'fun': lambda x: 1}]
+        # print('CONSTRAINTS:')
+        if constraints: 
+            for constr in line_constraints:
+                x1, y1 = constr[0]
+                x2, y2 = constr[2]
+                # print('\t', x1, y1)
+                # print('\t', x2, y2)
+                # print('\t ----------------------------------------')
+                final_constraints.append(
+                    sp.optimize.NonlinearConstraint(partial(constraint, y=observation, x1=x1, y1=y1, x2=x2, y2=y2), 0, np.inf)
                 )
+            for constr in circ_constraints:
+                x1, y1 = constr.center
+                r = constr.r
+                final_constraints.append(
+                    sp.optimize.NonlinearConstraint(partial(constraint_circ, y=observation, x1=x1, y1=y1, r=r), 0, np.inf)
+                )
+            print(len(final_constraints))
 
+        # if constraints:
+        #     # final_constraints.append({'type': 'ineq', 'fun': partial(constraint, y=observation, constraints=constraints)})
+        #     final_constraints.append(
+        #             sp.optimize.NonlinearConstraint(partial(constraint, y=observation, constraints=constraints), 0, np.inf)
+        #         )
+        #print(observation)
         try:
             start = time.time()
             if isGlobOpt:
