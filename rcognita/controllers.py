@@ -26,6 +26,7 @@ from numpy.linalg import lstsq
 from numpy import reshape
 import warnings
 from functools import partial
+from shapely.geometry import Point
 
 # For debugging purposes
 from tabulate import tabulate
@@ -1331,7 +1332,7 @@ class CtrlOptPred:
 
         return J
     
-    def _actor_optimizer(self, observation, constraints=None, line_constraints=None, circ_constraints=None):
+    def _actor_optimizer(self, observation, constraints=[], line_constraints=None, circ_constraints=None):
         """
         This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._actor_cost`.
         See class documentation.
@@ -1374,21 +1375,68 @@ class CtrlOptPred:
         # Optimization method of actor    
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powel
 
-        def constraint(action_sqn, y, constraints):
+        def constraint(action_sqn, y, constr):
             if constraints is None:
                 return None
             res = y
             res_constr = []
             my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
-            for i in range(1, self.Nactor, 1):
-                res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :]) #предсказание следующих шагов
+            for i in range(0, self.Nactor, 1):
+                res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i, :]) #предсказание следующих шагов
 
                 cons = []
-                for constr in constraints:
-                    cons.append(-constr(res))
-                f1 = np.min(cons)
+                # for constr in constraints:
+                #     #cons.append(-constr(res))
+                #     cons.append(constr.contains(Point(res)))
+                f1 = constr.contains(Point(res)) #np.sum(cons)
+                if f1 > 0:
+                    res_constr.append(-1)
+                else:
+                    res_constr.append(1)
+            return res_constr
+
+        # def constraint(action_sqn, y, x1, y1, x2, y2):
+        #     res = y
+        #     #print('current state:', res)
+        #     res_constr = []
+        #     my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
+        #     for i in range(1, self.Nactor, 1):
+        #         res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :]) #предсказание следующих шагов
+        #         xk = res[0] - (x1+x2)/2
+        #         yk = res[1] - (y1+y2)/2
+        #         f1 = (2*xk/abs(x2-x1))**64 + (2*yk/abs(y2-y1))**64 - 1
+        #         res_constr.append(f1)
+        #     # if np.sum(np.array(res_constr) < 0) > 0:
+        #     #     print('predicted entering the prohibited zone', np.array(res_constr))
+        #     #     raise RuntimeError('predicted entering the prohibited zone')
+        #     return res_constr
+
+        def constraint_circ(action_sqn, y, x1, y1, r):
+            res = y
+            #print('current state:', res)
+            res_constr = []
+            my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
+            for i in range(1, self.Nactor, 1):
+                res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :])  #предсказание следующих шагов
+                xk = res[0] - x1
+                yk = res[1] - y1
+                f1 = (2*xk/r)**2 + (2*yk/r)**2 - 1
                 res_constr.append(f1)
             return res_constr
+        #print('INSIDE CONSTRS', constraints)
+
+        cons = []
+        f = 0
+        for constr in constraints:
+                #cons.append(-constr(res))
+            cons.append(constr.contains(Point(observation[:2])))
+            f1 = np.sum(cons)
+            if f1 > 0:
+                f = -1
+            else:
+                f = 1
+        if f < 0:
+            print('COLLISION IN CONTROLLERS!!!')
         
         actor_opt_method = 'SLSQP'
         if actor_opt_method == 'trust-constr':
@@ -1404,10 +1452,27 @@ class CtrlOptPred:
 
         final_constraints = []
 
-        if constraints:
-            final_constraints.append(
-                    sp.optimize.NonlinearConstraint(partial(constraint, y=observation, constraints=constraints), 0, np.inf)
-                )
+        # if constraints:
+        #     for constr in constraints:
+        #         final_constraints.append({'type': 'ineq', 'fun': partial(constraint, y=observation, constr=constr)})
+
+        def constr_1(u, xc, yc, rc, y):
+            res = y
+            res_constr = []
+            for i in range(0, self.Nactor, 1):
+                res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], [])
+                f1 = (res[0]-xc)**2 + (res[1]-yc)**2 - rc**2
+                res_constr.append(f1)
+            return res_constr
+
+        # # print(constraints)
+        for obstacle in constraints:
+            coords_inter = obstacle.bounds
+            xc = (coords_inter[2] + coords_inter[0])/2
+            yc = (coords_inter[3] + coords_inter[1])/2
+            rc = (coords_inter[2] - coords_inter[0])/2
+
+            final_constraints.append(sp.optimize.NonlinearConstraint(partial(constr_1, xc=xc, yc=yc, rc=rc, y=observation), 0, np.inf))
 
         try:
             start = time.time()
@@ -1513,7 +1578,7 @@ class CtrlOptPred:
                     action = self._actor_optimizer(observation)
                     
                 elif self.mode in ['RQL', 'SQL']:
-                    action = self._actor_optimizer(observation) 
+                    action = self._actor_optimizer(observation, constraints, line_constrs, circ_constrs) 
             
             self.action_curr = action
             

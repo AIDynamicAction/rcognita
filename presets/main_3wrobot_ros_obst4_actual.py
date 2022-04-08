@@ -32,6 +32,8 @@ from rcognita import controllers
 from rcognita import loggers
 from rcognita import visuals
 from rcognita.utilities import on_key_press
+from shapely.geometry.polygon import Polygon
+from shapely.geometry import Point
 
 import argparse
 
@@ -45,7 +47,7 @@ import os
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
 import tf.transformations as tftr
-from geometry_msgs.msg import Point, Twist
+from geometry_msgs.msg import Twist
 from math import atan2, pi
 import math
 from numpy import inf, matrix, cos, arctan2, sqrt, pi, sin, cos
@@ -56,7 +58,7 @@ import time as time_lib
 from sensor_msgs.msg import LaserScan
 
 #------------------------------------define helpful classes
-class Point:
+class myPoint:
     def __init__(self, R, x, y, angle):
         self.R = R
         self.x = x
@@ -72,7 +74,7 @@ class Circle:
 #------------------------------------define obstacles parser class
 class Obstacles_parser:
 
-    def __init__(self, W=0.178, T_d=10, safe_margin_mult=1):
+    def __init__(self, W=0.178, T_d=10, safe_margin_mult=2):
         self.W = W
         self.T_d = T_d
         self.safe_margin = self.W * safe_margin_mult
@@ -153,7 +155,7 @@ class Obstacles_parser:
                     new_angle = p.angle + j * angle_diff
                     new_x = new_R * np.cos(new_angle) + state_x
                     new_y = new_R * np.sin(new_angle) + state_y
-                    new_block.append(Point(new_R, new_x, new_y, new_angle))
+                    new_block.append(myPoint(new_R, new_x, new_y, new_angle))
                 new_block += block2
                 merged = True
                 new_blocks.append(new_block)
@@ -296,7 +298,7 @@ class Obstacles_parser:
         points = []
 
         for R, x_r, y_r, angle in zip(l, x, y, angles):
-            point = Point(R, x_r, y_r, angle)
+            point = myPoint(R, x_r, y_r, angle)
             points.append(point)
         
         blocks = [points]
@@ -356,7 +358,7 @@ class Obstacles_parser:
         sq_2 = [sq_1[0] + unit_v[0] * (2 * buf + v_norm), sq_1[1] + unit_v[1] * (2 * buf + v_norm)]
         sq_4 = [p_intersect[0] + buf * unit_v_par[0], p_intersect[1] + buf * unit_v_par[1]] 
         sq_3 = [sq_4[0] + unit_v[0] * (2 * buf + v_norm), sq_4[1] + unit_v[1] * (2 * buf + v_norm)]
-        buffer = [sq_1, sq_2, sq_3, sq_4]
+        buffer = [sq_1, sq_2, sq_3, sq_4, sq_1]
         return buffer
 
     def get_functions(self):
@@ -411,7 +413,8 @@ class Obstacles_parser:
             for line in self.lines:
                 x1, y1 = line[0].x, line[0].y
                 x2, y2 = line[1].x, line[1].y
-                fig = self.get_buffer_area([[x1, y1], [x2, y2]], self.W / 2)
+                fig = self.get_buffer_area([[x1, y1], [x2, y2]], self.safe_margin)
+                polygon = Polygon(fig)
                 figures.append(np.array(fig))
                 inequations.append(get_figure_inequations(fig))
         
@@ -438,6 +441,9 @@ class ROS_preset:
 
         self.dt = 0.0
         self.time_start = 0.0
+
+        self.action_max = np.array([0.22, 2.0])
+        self.cur_action_max = np.array([0.22, 2.0])
 
         self.constraints = []
         self.line_constrs = []
@@ -535,6 +541,24 @@ class ROS_preset:
         self.new_dstate = inv_R_matrix.dot(np.array([dx, dy, 0]).T)
         new_omega = omega
         self.new_dstate = [self.new_dstate[0], self.new_dstate[1], new_omega]
+        f = 0
+        cons = []
+        for constr in self.constraints:
+                #cons.append(-constr(res))
+            cons.append(constr.contains(Point(self.new_state[:2])))
+            f1 = np.sum(cons)
+            if f1 > 0:
+                f = -1
+            else:
+                f = 1
+
+        #print('STATE:', self.new_state, '\tIS DANGEROUS:', f)
+
+        if f < 0:
+            self.cur_action_max = self.action_max / 2
+            print('COLLISION!!!')
+        else:
+            self.cur_action_max = self.action_max
 
         self.lock.release()
 
@@ -543,8 +567,11 @@ class ROS_preset:
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         try:
             new_blocks, LL, CC, x, y = self.obstacles_parser.get_obstacles(np.array(dt.ranges), fillna='else', state=self.new_state)
+            self.line_constrs = [Polygon(self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178*2)) for i in LL]
 
-            self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_dstate))
+            self.circle_constrs = [Point(i.center[0], i.center[1]).buffer(i.r) for i in CC]
+            # self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_dstate))
+            self.constraints = self.line_constrs + self.circle_constrs
 
         except ValueError as exc:
             print('YA UPAL!', exc)
@@ -561,15 +588,15 @@ class ROS_preset:
         start_time = time_lib.time()
         rate = rospy.Rate(self.RATE)
         self.time_start = rospy.get_time()
-        while not rospy.is_shutdown() and time_lib.time() - start_time < 200:
+        while not rospy.is_shutdown() and time_lib.time() - start_time < 500:
             t = rospy.get_time() - self.time_start
             self.t = t
 
             velocity = Twist()
-
+            #print('OUTSIDE!!', self.constraints)
             action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, 
                                                 self.ctrl_benchm, self.ctrl_mode, self.constraints, self.line_constrs)
-            action = np.clip(action, [-0.22, -2.0], [0.22, 2.0])
+            action = np.clip(action, -self.cur_action_max, self.cur_action_max)
             
             self.system.receive_action(action)
             self.ctrl_benchm.receive_sys_state(self.system._state)
@@ -638,7 +665,7 @@ if __name__ == "__main__":
                         default=150.0,
                         help='Final time of episode.' )
     parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
-                        default=['2', '2', 'pi'],
+                        default=['3', '3', 'pi'],
                         help='Initial state (as sequence of numbers); ' + 
                         'dimension is environment-specific!')
     parser.add_argument('--is_log_data', type=bool,
@@ -683,7 +710,7 @@ if __name__ == "__main__":
                                 'biquadratic'],
                         help='Structure of stage objective function.')
     parser.add_argument('--R1_diag', type=float, nargs='+',
-                        default=[1, 10, 1, 0, 0],
+                        default=[10, 30, 1, 0, 0],
                         help='Parameter of stage objective function. Must have proper dimension. ' +
                         'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
     parser.add_argument('--R2_diag', type=float, nargs='+',
