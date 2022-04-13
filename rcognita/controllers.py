@@ -1045,6 +1045,8 @@ class CtrlOptPred:
         self.w_critic_init = self.w_critic_prev
         
         # self.big_number = 1e4
+        self.counter = 0
+        self.total_time = 0
 
     def reset(self, t0):
         """
@@ -1375,25 +1377,25 @@ class CtrlOptPred:
         # Optimization method of actor    
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powel
 
-        def constraint(action_sqn, y, constr):
-            if constraints is None:
-                return None
-            res = y
-            res_constr = []
-            my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
-            for i in range(0, self.Nactor, 1):
-                res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i, :]) #предсказание следующих шагов
+        # def constraint(action_sqn, y, constr):
+        #     if constraints is None:
+        #         return None
+        #     res = y
+        #     res_constr = []
+        #     my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
+        #     for i in range(0, self.Nactor, 1):
+        #         res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i, :]) #предсказание следующих шагов
 
-                cons = []
-                # for constr in constraints:
-                #     #cons.append(-constr(res))
-                #     cons.append(constr.contains(Point(res)))
-                f1 = constr.contains(Point(res)) #np.sum(cons)
-                if f1 > 0:
-                    res_constr.append(-1)
-                else:
-                    res_constr.append(1)
-            return res_constr
+        #         cons = []
+        #         # for constr in constraints:
+        #         #     #cons.append(-constr(res))
+        #         #     cons.append(constr.contains(Point(res)))
+        #         f1 = constr.contains(Point(res)) #np.sum(cons)
+        #         if f1 > 0:
+        #             res_constr.append(-1)
+        #         else:
+        #             res_constr.append(1)
+        #     return res_constr
 
         # def constraint(action_sqn, y, x1, y1, x2, y2):
         #     res = y
@@ -1411,38 +1413,38 @@ class CtrlOptPred:
         #     #     raise RuntimeError('predicted entering the prohibited zone')
         #     return res_constr
 
-        def constraint_circ(action_sqn, y, x1, y1, r):
-            res = y
-            #print('current state:', res)
-            res_constr = []
-            my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
-            for i in range(1, self.Nactor, 1):
-                res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :])  #предсказание следующих шагов
-                xk = res[0] - x1
-                yk = res[1] - y1
-                f1 = (2*xk/r)**2 + (2*yk/r)**2 - 1
-                res_constr.append(f1)
-            return res_constr
+        # def constraint_circ(action_sqn, y, x1, y1, r):
+        #     res = y
+        #     #print('current state:', res)
+        #     res_constr = []
+        #     my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
+        #     for i in range(1, self.Nactor, 1):
+        #         res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :])  #предсказание следующих шагов
+        #         xk = res[0] - x1
+        #         yk = res[1] - y1
+        #         f1 = (2*xk/r)**2 + (2*yk/r)**2 - 1
+        #         res_constr.append(f1)
+        #     return res_constr
         #print('INSIDE CONSTRS', constraints)
 
-        cons = []
-        f = 0
-        for constr in constraints:
-                #cons.append(-constr(res))
-            cons.append(constr.contains(Point(observation[:2])))
-            f1 = np.sum(cons)
-            if f1 > 0:
-                f = -1
-            else:
-                f = 1
-        if f < 0:
-            print('COLLISION IN CONTROLLERS!!!')
+        # cons = []
+        # f = 0
+        # for constr in constraints:
+        #         #cons.append(-constr(res))
+        #     cons.append(constr.contains(Point(observation[:2])))
+        #     f1 = np.sum(cons)
+        #     if f1 > 0:
+        #         f = -1
+        #     else:
+        #         f = 1
+        # if f < 0:
+        #     print('COLLISION IN CONTROLLERS!!!')
         
         actor_opt_method = 'SLSQP'
         if actor_opt_method == 'trust-constr':
             actor_opt_options = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
         else:
-            actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2} 
+            actor_opt_options = {'maxiter': 70, 'maxfev': 2000, 'disp': False, 'xatol': 1e-4, 'fatol': 1e-4} # 'disp': True, 'verbose': 2} 
        
         isGlobOpt = 0
         
@@ -1461,18 +1463,46 @@ class CtrlOptPred:
             res_constr = []
             for i in range(0, self.Nactor, 1):
                 res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], [])
+                # a = (res[0]-xc)
+                # b = (res[1]-yc)
+                # c = rc
+                # for i in range(5):
+                #     a *= a
+                #     b *= b
+                #     c *= c
                 f1 = (res[0]-xc)**2 + (res[1]-yc)**2 - rc**2
+                #f1 = a + b - c
+                #1 if obstacle.contains(res[:2]) else -1
                 res_constr.append(f1)
             return res_constr
 
-        # # print(constraints)
-        for obstacle in constraints:
-            coords_inter = obstacle.bounds
-            xc = (coords_inter[2] + coords_inter[0])/2
-            yc = (coords_inter[3] + coords_inter[1])/2
-            rc = (coords_inter[2] - coords_inter[0])/2
+        def constrs(u, constraints, y):
+            res = y
+            res_constr = []
+            for i in range(self.Nactor):
+                res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], [])
+                cons = []
+                for constr in constraints:
+                    cons.append(constr(res))
+                f1 = np.max(cons)
+                res_constr.append(f1)
+            return res_constr
 
-            final_constraints.append(sp.optimize.NonlinearConstraint(partial(constr_1, xc=xc, yc=yc, rc=rc, y=observation), 0, np.inf))
+
+
+
+        # print('==========================')
+        # print(len(constraints))
+        # for obstacle in constraints:
+        #     coords_inter = obstacle.bounds
+        #     xc = (coords_inter[2] + coords_inter[0])/2
+        #     yc = (coords_inter[3] + coords_inter[1])/2
+        #     rc = (coords_inter[2] - coords_inter[0])/2
+        #     print(xc, yc, rc)
+        #     final_constraints.append(sp.optimize.NonlinearConstraint(partial(constr_1, xc=xc, yc=yc, rc=rc, y=observation), 0, np.inf))
+        # print('==========================')
+
+        final_constraints.append(sp.optimize.NonlinearConstraint(partial(constrs, constraints=constraints, y=observation), -np.inf, 0))
 
         try:
             start = time.time()
@@ -1487,11 +1517,14 @@ class CtrlOptPred:
                 action_sqn = minimize(lambda action_sqn: self._actor_cost(action_sqn, observation),
                                       my_action_sqn_init,
                                       method=actor_opt_method,
-                                      tol=1e-7,
+                                      tol=1e-5,
                                       bounds=bnds,
                                       constraints=final_constraints,
-                                      options=actor_opt_options).x        
-            print('minimizer working time:', time.time() - start)
+                                      options=actor_opt_options).x   
+            final_time = time.time() - start
+            self.total_time += final_time
+            self.counter += 1  
+            print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
             action_sqn = my_action_sqn_init

@@ -428,7 +428,7 @@ class Obstacles_parser:
 #------------------------------------define ROS-preset class
 class ROS_preset:
 
-    def __init__(self, ctrl_mode, state_goal, state_init, my_ctrl_nominal, my_sys, my_ctrl_benchm, my_logger=None, datafiles=None):
+    def __init__(self, ctrl_mode, state_init, state_goal, my_ctrl_nominal, my_sys, my_ctrl_benchm, my_logger=None, datafiles=None):
         self.RATE = rospy.get_param('/rate', 50)
         self.lock = threading.Lock()
         # initialization
@@ -446,8 +446,10 @@ class ROS_preset:
         self.cur_action_max = np.array([0.22, 2.0])
 
         self.constraints = []
+        self.polygonal_constraints = []
         self.line_constrs = []
         self.circle_constrs = []
+        self.ranges = []
         self.counter = 0
 
         # connection to ROS topics
@@ -476,7 +478,7 @@ class ROS_preset:
             [0, 0, 1]
         ])
 
-        self.obstacles_parser = Obstacles_parser()
+        self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.5)
 
 
     def odometry_callback(self, msg):
@@ -543,7 +545,7 @@ class ROS_preset:
         self.new_dstate = [self.new_dstate[0], self.new_dstate[1], new_omega]
         f = 0
         cons = []
-        for constr in self.constraints:
+        for constr in self.polygonal_constraints:
                 #cons.append(-constr(res))
             cons.append(constr.contains(Point(self.new_state[:2])))
             f1 = np.sum(cons)
@@ -555,10 +557,21 @@ class ROS_preset:
         #print('STATE:', self.new_state, '\tIS DANGEROUS:', f)
 
         if f < 0:
-            self.cur_action_max = self.action_max / 2
+            self.cur_action_max = self.action_max
             print('COLLISION!!!')
+            print('RANGES:', self.ranges)
         else:
             self.cur_action_max = self.action_max
+
+
+        cons = []
+        for constr in self.constraints:
+            cons.append(constr(self.new_state[:2]))
+        f1 = np.max(cons) if len(cons) > 0 else 0
+        print('f1 =', f1)
+        if f1 > 0:
+            print('COLLISION BY NINA!!!')
+            print('RANGES:', self.ranges)
 
         self.lock.release()
 
@@ -566,12 +579,22 @@ class ROS_preset:
         self.lock.acquire()
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         try:
+            print(self.new_state)
+            #print('RANGES: ', dt.ranges)
+            self.ranges = np.array(dt.ranges)
             new_blocks, LL, CC, x, y = self.obstacles_parser.get_obstacles(np.array(dt.ranges), fillna='else', state=self.new_state)
-            self.line_constrs = [Polygon(self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178*2)) for i in LL]
+            self.line_constrs = [Polygon(self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178*0.75)) for i in LL]
 
             self.circle_constrs = [Point(i.center[0], i.center[1]).buffer(i.r) for i in CC]
-            # self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_dstate))
-            self.constraints = self.line_constrs + self.circle_constrs
+            self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_dstate))
+            # LL = [[[1, 1], [1.5, 1]], [[1.5, 1], [1.5, 1.5]], [[1.5, 1.5], [1, 1.5]], [[1, 1.5], [1, 1]]]
+            # buffers = []
+            # for i in LL:
+            #     buff = self.obstacles_parser.get_buffer_area([i[0], i[1]], 0.178*1)
+            #     buffers.append(buff)
+            # self.line_constrs = [Polygon(i) for i in buffers]
+            # self.circle_constrs = []
+            self.polygonal_constraints = self.line_constrs + self.circle_constrs
 
         except ValueError as exc:
             print('YA UPAL!', exc)
@@ -580,7 +603,7 @@ class ROS_preset:
         #if self.counter % 30 == 0:
             # print('RANGES:', np.array(dt.ranges))
             # print('STATE:', self.new_state)
-        self.counter += 1
+        # self.counter += 1
         self.lock.release()
 
     def spin(self, is_print_sim_step=False, is_log_data=False):
@@ -665,7 +688,7 @@ if __name__ == "__main__":
                         default=150.0,
                         help='Final time of episode.' )
     parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
-                        default=['3', '3', 'pi'],
+                        default=['2', '2', 'pi'],
                         help='Initial state (as sequence of numbers); ' + 
                         'dimension is environment-specific!')
     parser.add_argument('--is_log_data', type=bool,
@@ -710,7 +733,7 @@ if __name__ == "__main__":
                                 'biquadratic'],
                         help='Structure of stage objective function.')
     parser.add_argument('--R1_diag', type=float, nargs='+',
-                        default=[10, 30, 1, 0, 0],
+                        default=[0.7, 1.0, 0.1, 0, 0],
                         help='Parameter of stage objective function. Must have proper dimension. ' +
                         'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
     parser.add_argument('--R2_diag', type=float, nargs='+',
