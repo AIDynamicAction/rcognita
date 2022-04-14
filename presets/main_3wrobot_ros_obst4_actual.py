@@ -490,6 +490,10 @@ class ROS_preset:
         current_rpy = tftr.euler_from_quaternion((q.x, q.y, q.z, q.w))
         theta = current_rpy[2]
 
+        theta_sign = np.sign(theta)
+        while theta < -np.pi or theta > np.pi:
+            theta += (-theta_sign) * 2 * np.pi
+
         dx = msg.twist.twist.linear.x
         dy = msg.twist.twist.linear.y
         omega = msg.twist.twist.angular.z
@@ -531,6 +535,10 @@ class ROS_preset:
         self.new_theta = theta
 
         new_theta = theta - theta_goal
+
+        theta_sign = np.sign(new_theta)
+        while new_theta < -np.pi or new_theta > np.pi:
+            new_theta += (-theta_sign) * 2 * np.pi
 
         # POSITION transform
         temp_pos = [x, y, 0, 1]
@@ -574,6 +582,7 @@ class ROS_preset:
             print('RANGES:', self.ranges)
 
         self.lock.release()
+        time_lib.sleep(0.05)
 
     def laser_scan_callback(self, dt):
         self.lock.acquire()
@@ -646,6 +655,11 @@ class ROS_preset:
             self.pub_cmd_vel.publish(velocity)
 
             rate.sleep()
+
+        velocity = Twist()
+        velocity.linear.x = 0.
+        velocity.angular.z = 0.
+        self.pub_cmd_vel.publish(velocity)
 
         rospy.loginfo('ROS-preset has finished working')
 
