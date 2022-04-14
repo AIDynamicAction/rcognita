@@ -147,7 +147,7 @@ class Simulator:
         self.observation = self.sys_out(state_init)
         
         if sys_type == "diff_eqn":
-            self.ODE_solver = sp.integrate.RK45(closed_loop_rhs, t0, state_full_init, t1, max_step = dt/2, first_step=first_step, atol=atol, rtol=rtol) 
+            self.ODE_solver = sp.integrate.RK45(closed_loop_rhs, t0, state_full_init, t1, max_step = max_step, first_step=first_step, atol=atol, rtol=rtol) 
             
         # Store these for reset purposes
         self.state_full_init = state_full_init
