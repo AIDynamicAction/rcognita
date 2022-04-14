@@ -1502,7 +1502,8 @@ class CtrlOptPred:
         #     final_constraints.append(sp.optimize.NonlinearConstraint(partial(constr_1, xc=xc, yc=yc, rc=rc, y=observation), 0, np.inf))
         # print('==========================')
 
-        final_constraints.append(sp.optimize.NonlinearConstraint(partial(constrs, constraints=constraints, y=observation), -np.inf, 0))
+        if len(constraints) > 0:
+            final_constraints.append(sp.optimize.NonlinearConstraint(partial(constrs, constraints=constraints, y=observation), -np.inf, 0))
 
         try:
             start = time.time()

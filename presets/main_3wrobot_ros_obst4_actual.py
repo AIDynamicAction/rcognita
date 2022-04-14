@@ -228,9 +228,9 @@ class Obstacles_parser:
         else:
             return Circle(center, ro + self.safe_margin, self.get_convexity(o_l=np.array([0.0, 0.0]), T_io=2., block=block))
 
-    def splitting(self, block, L, C, T_n=12, T_min=4, prints=False):
+    def splitting(self, block, L, C, T_n=9, T_min=3, prints=False):
         R_mean = np.mean([pnt.R for pnt in block])
-        N = int(len(block) * R_mean * 0.5)
+        N = int(len(block) * R_mean * 0.8)
         if N < T_min:
             return []
         if N < T_n:
@@ -242,7 +242,7 @@ class Obstacles_parser:
         S = np.sqrt((block[0].x - block[-1].x)**2 + (block[0].y - block[-1].y)**2)
         k, D_m = self.get_D_m(block)
         d_p = 0.00614
-        d_split = 0.15
+        d_split = 0.10
         if prints:
             print(D_m, 0.2 * S, d_split + block[k].R * d_p)
         #if D_m > 0.2 * S:
@@ -478,7 +478,7 @@ class ROS_preset:
             [0, 0, 1]
         ])
 
-        self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.5)
+        self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.25)
 
 
     def odometry_callback(self, msg):
@@ -586,7 +586,7 @@ class ROS_preset:
             self.line_constrs = [Polygon(self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178*0.75)) for i in LL]
 
             self.circle_constrs = [Point(i.center[0], i.center[1]).buffer(i.r) for i in CC]
-            self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_dstate))
+            self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_state))
             # LL = [[[1, 1], [1.5, 1]], [[1.5, 1], [1.5, 1.5]], [[1.5, 1.5], [1, 1.5]], [[1, 1.5], [1, 1]]]
             # buffers = []
             # for i in LL:
