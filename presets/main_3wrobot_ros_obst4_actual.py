@@ -228,7 +228,7 @@ class Obstacles_parser:
         else:
             return Circle(center, ro + self.safe_margin, self.get_convexity(o_l=np.array([0.0, 0.0]), T_io=2., block=block))
 
-    def splitting(self, block, L, C, T_n=9, T_min=3, prints=False):
+    def splitting(self, block, L, C, T_n=9, T_min=3):
         R_mean = np.mean([pnt.R for pnt in block])
         N = int(len(block) * R_mean * 0.8)
         if N < T_min:
@@ -243,8 +243,6 @@ class Obstacles_parser:
         k, D_m = self.get_D_m(block)
         d_p = 0.00614
         d_split = 0.10
-        if prints:
-            print(D_m, 0.2 * S, d_split + block[k].R * d_p)
         #if D_m > 0.2 * S:
         if D_m > d_split + block[k].R * d_p:
             B_1 = self.splitting(block[:k+1], L, C)
@@ -414,7 +412,7 @@ class Obstacles_parser:
                 x1, y1 = line[0].x, line[0].y
                 x2, y2 = line[1].x, line[1].y
                 fig = self.get_buffer_area([[x1, y1], [x2, y2]], self.safe_margin)
-                polygon = Polygon(fig)
+                #polygon = Polygon(fig)
                 figures.append(np.array(fig))
                 inequations.append(get_figure_inequations(fig))
         
@@ -478,7 +476,7 @@ class ROS_preset:
             [0, 0, 1]
         ])
 
-        self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.25)
+        self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.5)
 
 
     def odometry_callback(self, msg):
@@ -487,12 +485,11 @@ class ROS_preset:
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
         q = msg.pose.pose.orientation
+        # t3 = +2.0 * (q.w * q.z + q.x * q.y)
+        # t4 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        # yaw_z = math.atan2(t3, t4)
         current_rpy = tftr.euler_from_quaternion((q.x, q.y, q.z, q.w))
         theta = current_rpy[2]
-
-        theta_sign = np.sign(theta)
-        while theta < -np.pi or theta > np.pi:
-            theta += (-theta_sign) * 2 * np.pi
 
         dx = msg.twist.twist.linear.x
         dy = msg.twist.twist.linear.y
@@ -536,10 +533,6 @@ class ROS_preset:
 
         new_theta = theta - theta_goal
 
-        theta_sign = np.sign(new_theta)
-        while new_theta < -np.pi or new_theta > np.pi:
-            new_theta += (-theta_sign) * 2 * np.pi
-
         # POSITION transform
         temp_pos = [x, y, 0, 1]
         self.new_state = np.dot(inv_t_matrix, np.transpose(temp_pos))
@@ -567,28 +560,28 @@ class ROS_preset:
         if f < 0:
             self.cur_action_max = self.action_max
             print('COLLISION!!!')
-            print('RANGES:', self.ranges)
+            #print('RANGES:', self.ranges)
         else:
             self.cur_action_max = self.action_max
 
 
-        cons = []
-        for constr in self.constraints:
-            cons.append(constr(self.new_state[:2]))
-        f1 = np.max(cons) if len(cons) > 0 else 0
-        print('f1 =', f1)
-        if f1 > 0:
-            print('COLLISION BY NINA!!!')
-            print('RANGES:', self.ranges)
+        # cons = []
+        # for constr in self.constraints:
+        #     cons.append(constr(self.new_state[:2]))
+        # f1 = np.max(cons) if len(cons) > 0 else 0
+        #print('f1 =', f1)
+        #if f1 > 0:
+        #    print('COLLISION BY NINA!!!')
+        #    print('RANGES:', self.ranges)
 
         self.lock.release()
-        time_lib.sleep(0.05)
+        #time_lib.sleep(0.05)
 
     def laser_scan_callback(self, dt):
         self.lock.acquire()
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         try:
-            print(self.new_state)
+            #print(self.new_state)
             #print('RANGES: ', dt.ranges)
             self.ranges = np.array(dt.ranges)
             new_blocks, LL, CC, x, y = self.obstacles_parser.get_obstacles(np.array(dt.ranges), fillna='else', state=self.new_state)
@@ -653,6 +646,15 @@ class ROS_preset:
             velocity.linear.x = action[0]
             velocity.angular.z = action[1]
             self.pub_cmd_vel.publish(velocity)
+            #print('STATE', self.new_state, self.state_init, self.state_goal)
+            #print('DIFFS', (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2),
+            #np.abs(np.degrees(alpha - self.state_init[2]))))
+            if (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2) < 0.3 
+                and ((np.abs(np.degrees(alpha - self.state_init[2])) < 5) or
+                     (355 < np.abs(np.degrees(alpha - self.state_init[2])) < 360))) and t > 3.:
+                print('FINAL RESULTS!!!')
+                print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+                break
 
             rate.sleep()
 
