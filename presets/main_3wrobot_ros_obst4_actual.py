@@ -150,12 +150,12 @@ class Obstacles_parser:
                     angle_diff = (q.angle - p.angle) / N
 
                 new_block = block1.copy()
-                for j in range(N):
-                    new_R = p.R + j * R_diff
-                    new_angle = p.angle + j * angle_diff
-                    new_x = new_R * np.cos(new_angle) + state_x
-                    new_y = new_R * np.sin(new_angle) + state_y
-                    new_block.append(myPoint(new_R, new_x, new_y, new_angle))
+                # for j in range(N):
+                #     new_R = p.R + j * R_diff
+                #     new_angle = p.angle + j * angle_diff
+                #     new_x = new_R * np.cos(new_angle) + state_x
+                #     new_y = new_R * np.sin(new_angle) + state_y
+                #     new_block.append(myPoint(new_R, new_x, new_y, new_angle))
                 new_block += block2
                 merged = True
                 new_blocks.append(new_block)
@@ -280,6 +280,14 @@ class Obstacles_parser:
             degrees = degrees[~nans]
             angles = angles[~nans]
             nans = np.isinf(l)
+            l = l[~nans]
+            degrees = degrees[~nans]
+            angles = angles[~nans]
+            nans = np.isclose(l, 0.)
+            l = l[~nans]
+            degrees = degrees[~nans]
+            angles = angles[~nans]
+            nans = l > 2.
             l = l[~nans]
             degrees = degrees[~nans]
             angles = angles[~nans]
@@ -429,6 +437,9 @@ class ROS_preset:
     def __init__(self, ctrl_mode, state_init, state_goal, my_ctrl_nominal, my_sys, my_ctrl_benchm, my_logger=None, datafiles=None):
         self.RATE = rospy.get_param('/rate', 50)
         self.lock = threading.Lock()
+        self.odom_lock = threading.Lock()
+        self.lidar_lock = threading.Lock()
+        self.lidar_lock.acquire()
         # initialization
         self.state_init = state_init
         self.state_goal = state_goal
@@ -476,11 +487,14 @@ class ROS_preset:
             [0, 0, 1]
         ])
 
-        self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.5)
+        self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.35)
 
 
     def odometry_callback(self, msg):
-        self.lock.acquire()
+        #self.lock.acquire()
+        #print('AAA')
+        self.odom_lock.acquire()
+        #print('odom')
         # Read current robot state
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
@@ -521,14 +535,20 @@ class ROS_preset:
 
         inv_t_matrix = np.linalg.inv(t_matrix)
 
-        if math.copysign(1, self.prev_theta) != math.copysign(1, theta) and abs(self.prev_theta) > 3:
-            if math.copysign(1, self.prev_theta) == -1:
+        #if math.copysign(1, self.prev_theta) != math.copysign(1, theta) and abs(self.prev_theta) > 3:
+        #if self.prev_theta * theta < 0 and abs(self.prev_theta) > 2 * np.pi:
+        if abs(self.prev_theta - theta) > np.pi:
+            print('AAA', self.prev_theta, theta)
+            #if math.copysign(1, self.prev_theta) == -1:
+            #if self.prev_theta < 0:
+            if self.prev_theta < theta:
                 self.rotation_counter -= 1
             else:
                 self.rotation_counter += 1
 
         self.prev_theta = theta
         theta = theta + 2 * math.pi * self.rotation_counter
+        #self.prev_theta = theta
         self.new_theta = theta
 
         new_theta = theta - theta_goal
@@ -557,31 +577,35 @@ class ROS_preset:
 
         #print('STATE:', self.new_state, '\tIS DANGEROUS:', f)
 
-        if f < 0:
-            self.cur_action_max = self.action_max
-            print('COLLISION!!!')
-            #print('RANGES:', self.ranges)
-        else:
-            self.cur_action_max = self.action_max
+        # if f < 0:
+        #     self.cur_action_max = self.action_max
+        #     print('COLLISION!!!')
+        #     #print('RANGES:', self.ranges)
+        # else:
+        #     self.cur_action_max = self.action_max
 
 
-        # cons = []
-        # for constr in self.constraints:
-        #     cons.append(constr(self.new_state[:2]))
-        # f1 = np.max(cons) if len(cons) > 0 else 0
+        cons = []
+        for constr in self.constraints:
+            cons.append(constr(self.new_state[:2]))
+        f1 = np.max(cons) if len(cons) > 0 else 0
         #print('f1 =', f1)
-        #if f1 > 0:
-        #    print('COLLISION BY NINA!!!')
-        #    print('RANGES:', self.ranges)
+        if f1 > 0:
+           print('COLLISION BY NINA!!!')
+           #print('RANGES:', self.ranges)
 
-        self.lock.release()
-        #time_lib.sleep(0.05)
+        #self.lock.release()
+        self.lidar_lock.release()
+        #time_lib.sleep(0.001)
 
     def laser_scan_callback(self, dt):
-        self.lock.acquire()
+        #self.lock.acquire()
+        #print('BBB')
+        self.lidar_lock.acquire()
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         try:
-            #print(self.new_state)
+            #print('laser')
+            #print('STATE:', self.new_state)
             #print('RANGES: ', dt.ranges)
             self.ranges = np.array(dt.ranges)
             new_blocks, LL, CC, x, y = self.obstacles_parser.get_obstacles(np.array(dt.ranges), fillna='else', state=self.new_state)
@@ -589,13 +613,7 @@ class ROS_preset:
 
             self.circle_constrs = [Point(i.center[0], i.center[1]).buffer(i.r) for i in CC]
             self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_state))
-            # LL = [[[1, 1], [1.5, 1]], [[1.5, 1], [1.5, 1.5]], [[1.5, 1.5], [1, 1.5]], [[1, 1.5], [1, 1]]]
-            # buffers = []
-            # for i in LL:
-            #     buff = self.obstacles_parser.get_buffer_area([i[0], i[1]], 0.178*1)
-            #     buffers.append(buff)
-            # self.line_constrs = [Polygon(i) for i in buffers]
-            # self.circle_constrs = []
+
             self.polygonal_constraints = self.line_constrs + self.circle_constrs
 
         except ValueError as exc:
@@ -606,7 +624,8 @@ class ROS_preset:
             # print('RANGES:', np.array(dt.ranges))
             # print('STATE:', self.new_state)
         # self.counter += 1
-        self.lock.release()
+        #self.lock.release()
+        self.odom_lock.release()
 
     def spin(self, is_print_sim_step=False, is_log_data=False):
         rospy.loginfo('ROS-preset has been activated!')
@@ -646,12 +665,12 @@ class ROS_preset:
             velocity.linear.x = action[0]
             velocity.angular.z = action[1]
             self.pub_cmd_vel.publish(velocity)
-            #print('STATE', self.new_state, self.state_init, self.state_goal)
+            print('STATE', self.new_state)
             #print('DIFFS', (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2),
             #np.abs(np.degrees(alpha - self.state_init[2]))))
             if (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2) < 0.3 
-                and ((np.abs(np.degrees(alpha - self.state_init[2])) < 5) or
-                     (355 < np.abs(np.degrees(alpha - self.state_init[2])) < 360))) and t > 3.:
+                and ((np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 10) or
+                     (350 < np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 360))) and t > 10.:
                 print('FINAL RESULTS!!!')
                 print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
                 break

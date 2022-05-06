@@ -1454,32 +1454,15 @@ class CtrlOptPred:
 
         final_constraints = []
 
-        # if constraints:
-        #     for constr in constraints:
-        #         final_constraints.append({'type': 'ineq', 'fun': partial(constraint, y=observation, constr=constr)})
-
-        def constr_1(u, xc, yc, rc, y):
-            res = y
-            res_constr = []
-            for i in range(0, self.Nactor, 1):
-                res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], [])
-                # a = (res[0]-xc)
-                # b = (res[1]-yc)
-                # c = rc
-                # for i in range(5):
-                #     a *= a
-                #     b *= b
-                #     c *= c
-                f1 = (res[0]-xc)**2 + (res[1]-yc)**2 - rc**2
-                #f1 = a + b - c
-                #1 if obstacle.contains(res[:2]) else -1
-                res_constr.append(f1)
-            return res_constr
 
         def constrs(u, constraints, y):
             res = y
             res_constr = []
-            for i in range(self.Nactor):
+            f1 = -1
+            for i in range(0, self.Nactor*2, 2):
+                if f1 > 0.:
+                    res_constr.append(f1)
+                    continue
                 res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], [])
                 cons = []
                 for constr in constraints:
@@ -1488,19 +1471,6 @@ class CtrlOptPred:
                 res_constr.append(f1)
             return res_constr
 
-
-
-
-        # print('==========================')
-        # print(len(constraints))
-        # for obstacle in constraints:
-        #     coords_inter = obstacle.bounds
-        #     xc = (coords_inter[2] + coords_inter[0])/2
-        #     yc = (coords_inter[3] + coords_inter[1])/2
-        #     rc = (coords_inter[2] - coords_inter[0])/2
-        #     print(xc, yc, rc)
-        #     final_constraints.append(sp.optimize.NonlinearConstraint(partial(constr_1, xc=xc, yc=yc, rc=rc, y=observation), 0, np.inf))
-        # print('==========================')
 
         if len(constraints) > 0:
             final_constraints.append(sp.optimize.NonlinearConstraint(partial(constrs, constraints=constraints, y=observation), -np.inf, 0))
