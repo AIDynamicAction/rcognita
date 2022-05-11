@@ -24,6 +24,7 @@ from scipy.optimize import basinhopping
 from scipy.optimize import NonlinearConstraint
 from numpy.linalg import lstsq
 from numpy import reshape
+from numpy.random import randn
 import warnings
 from functools import partial
 from shapely.geometry import Point
@@ -31,6 +32,8 @@ from shapely.geometry import Point
 # For debugging purposes
 from tabulate import tabulate
 import time
+
+from casadi import *
 
 try:
     import sippy
@@ -361,6 +364,7 @@ class CtrlRLStab:
 
         if self.stage_obj_struct == 'quadratic':
             R1 = self.stage_obj_pars[0]
+            print(f"Shapes of chi and R1 = {chi.shape}, {R1.sshape}")
             stage_obj = chi @ R1 @ chi
         elif self.stage_obj_struct == 'biquadratic':
             R1 = self.stage_obj_pars[0]
@@ -837,7 +841,10 @@ class CtrlOptPred:
                  critic_struct='quad-nomix',
                  stage_obj_struct='quadratic',
                  stage_obj_pars=[],
-                 observation_target=[]):
+                 observation_target=[],
+                 is_casadi=False,
+                 pars = [],
+                 pars_disturb = []):
         """
         Parameters
         ----------
@@ -980,6 +987,7 @@ class CtrlOptPred:
             self.action_curr = action_init
             self.action_sqn_init = rep_mat( action_init , 1, self.Nactor)
         
+        self.prev_action = self.action_sqn_init
         self.action_buffer = np.zeros( [buffer_size, dim_input] )
         self.observation_buffer = np.zeros( [buffer_size, dim_output] )        
         
@@ -1022,6 +1030,12 @@ class CtrlOptPred:
         self.stage_obj_pars = stage_obj_pars
         self.observation_target = observation_target
         
+        self.is_casadi = is_casadi
+        self.pars = pars
+        self.pars_disturb = pars_disturb 
+        self.J_prev = 10000
+        self.g_max = 0.1
+
         self.accum_obj_val = 0
 
         if self.critic_struct == 'quad-lin':
@@ -1065,28 +1079,40 @@ class CtrlOptPred:
         """
         self.state_sys = state
     
-    def stage_obj(self, observation, action):
+    def stage_obj(self, observation, action, is_actor = False):
         """
         Stage (equivalently, instantaneous or running) objective. Depending on the context, it is also called utility, reward, running cost etc.
         
         See class documentation.
         """
+
         if self.observation_target == []:
-            chi = np.concatenate([observation, action])
+            if self.is_casadi and is_actor:
+                chi = vertcat(observation, action)#.T
+                #chi2 = vertcat(observation, action)
+            else:
+                chi = np.concatenate([observation, action])
         else:
-            chi = np.concatenate([observation - self.observation_target, action])
+            if self.is_casadi and is_actor:
+                chi = vertcat(observation - self.observation_target, action)#.T
+                #chi2 = vertcat(observation - self.observation_target, action)
+            else:
+                chi = np.concatenate([observation - self.observation_target, action])
         
         stage_obj = 0
-        #print('ACTION:', action)
-
         if self.stage_obj_struct == 'quadratic':
             R1 = self.stage_obj_pars[0]
-            #print('SHAPES:', chi.shape, R1.shape)
-            stage_obj = chi @ R1 @ chi
+            if self.is_casadi and is_actor:
+                stage_obj = mtimes(mtimes(chi.T, R1), chi)
+            else:
+                stage_obj = chi @ R1 @ chi
         elif self.stage_obj_struct == 'biquadratic':
             R1 = self.stage_obj_pars[0]
             R2 = self.stage_obj_pars[1]
-            stage_obj = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
+            if self.is_casadi and is_actor:
+                stage_obj = mtimes(mtimes(chi.T**2, R2), chi**2) + mtimes(mtimes(chi.T, R1), chi)
+            else:
+                stage_obj = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
         
         return stage_obj
         
@@ -1098,6 +1124,7 @@ class CtrlOptPred:
         
         """
         self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
+        print(f"Cost =  {self.accum_obj_val}")
     
     def _estimate_model(self, t, observation):
         """
@@ -1203,22 +1230,38 @@ class CtrlOptPred:
         Currently, this implementation is for linearly parametrized models.
 
         """
+        if self.is_casadi:
+            if self.observation_target == []:
+                chi = vertcat(observation, action)
+            else:
+                chi = vertcat(observation - self.observation_target, action)
+            
+            if self.critic_struct == 'quad-lin':
+                regressor_critic = vertcat(uptria2vec(np.outer(chi, chi)), chi)
+            elif self.critic_struct == 'quadratic':
+                regressor_critic = vertcat(uptria2vec(np.outer(chi, chi)))   
+            elif self.critic_struct == 'quad-nomix':
+                regressor_critic = chi * chi
+            elif self.critic_struct == 'quad-mix':
+                regressor_critic = vertcat(observation**2, np.kron(observation, action), action**2) 
+            #regressor_critic = regressor_critic[:, 0]
+            return dot(w_critic, regressor_critic)
 
-        if self.observation_target == []:
-            chi = np.concatenate([observation, action])
         else:
-            chi = np.concatenate([observation - self.observation_target, action])
-        
-        if self.critic_struct == 'quad-lin':
-            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
-        elif self.critic_struct == 'quadratic':
-            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
-        elif self.critic_struct == 'quad-nomix':
-            regressor_critic = chi * chi
-        elif self.critic_struct == 'quad-mix':
-            regressor_critic = np.concatenate([ observation**2, np.kron(observation, action), action**2 ]) 
-
-        return w_critic @ regressor_critic
+            if self.observation_target == []:
+                chi = np.concatenate([observation, action])
+            else:
+                chi = np.concatenate([observation - self.observation_target, action])
+            
+            if self.critic_struct == 'quad-lin':
+                regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
+            elif self.critic_struct == 'quadratic':
+                regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
+            elif self.critic_struct == 'quad-nomix':
+                regressor_critic = chi * chi
+            elif self.critic_struct == 'quad-mix':
+                regressor_critic = np.concatenate([ observation**2, np.kron(observation, action), action**2 ]) 
+            return w_critic @ regressor_critic
     
     def _critic_cost(self, w_critic):
         """
@@ -1333,6 +1376,159 @@ class CtrlOptPred:
                 J += Q 
 
         return J
+
+    def casadi_optimize(self, observation, 
+                        initial_val = None, constraints = None, 
+                        bounds = None, max_iter = 100):
+        N = len(initial_val)
+        is_collision = False
+        my_action_sqn = SX.sym('x', N)
+        observation_sqn = SX.zeros(self.Nactor, self.dim_output)
+        if not self.is_est_model:    # Via exogenously passed model
+            observation_sqn[0, :] = observation
+            state = SX(self.state_sys)
+            for k in range(1, self.Nactor):
+                action_cur = my_action_sqn[(k-1) * self.dim_input : k * self.dim_input]
+                m, I = self.pars[0], self.pars[1]
+                Dstate = SX.zeros(state.shape[0]) #self.dim_state
+                if state.shape[0] == 3:
+                    if self.pars_disturb == []:
+                        self.pars_disturb = [0, 0]
+                    else:
+                        sigma_disturb = self.pars_disturb[0]
+                        mu_disturb = self.pars_disturb[1]
+                        tau_disturb = self.pars_disturb[2]
+                        disturb = np.zeros(2)
+                        for it in range(0, 2):
+                            disturb[it] = - tau_disturb[it] * (disturb[it] + sigma_disturb[it] * (randn() + mu_disturb[it]) )
+                    Dstate[0] = action_cur[0] * cos(state[2]) + disturb[0]
+                    Dstate[1] = action_cur[0] * sin(state[2]) + disturb[0]
+                    Dstate[2] = action_cur[1] + disturb[1]
+                elif state.shape[0] == 5:    
+                    Dstate[0] = state[3] * cos(state[2])
+                    Dstate[1] = state[3] * sin(state[2])
+                    Dstate[2] = state[4]
+                    if self.pars_disturb != []:
+                        sigma_disturb = self.pars_disturb[0]
+                        mu_disturb = self.pars_disturb[1]
+                        tau_disturb = self.pars_disturb[2]
+                        disturb = np.zeros(2)
+                        for it in range(0, 2):
+                            disturb[it] = - tau_disturb[it] * (disturb[it] + sigma_disturb[it] * (randn() + mu_disturb[it]) )
+                        Dstate[3] = 1/m * (action_cur[0] + disturb[0])
+                        Dstate[4] = 1/I * (action_cur[1] + disturb[1])
+                    else:
+                        Dstate[3] = 1/m * action_cur[0]
+                        Dstate[4] = 1/I * action_cur[1]
+                
+                state = state + self.pred_step_size * Dstate #sys_rhs(action_cur) # Euler scheme
+                observation_sqn[k, :] = state #self.sys_out(state)
+
+        elif self.is_est_model:    # Via estimated model
+            my_action_sqn_upsampled = my_action_sqn.repeat(int(self.pred_step_size/self.sampling_time), axis=0)
+            observation_sqn_upsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, my_action_sqn_upsampled, self.my_model.x0est, observation)
+            observation_sqn = observation_sqn_upsampled[::int(self.pred_step_size/self.sampling_time)]
+
+        J = 0
+        if self.mode=='MPC':
+            for k in range(self.Nactor):
+                action_cur = my_action_sqn[k * self.dim_input : (k+1) * self.dim_input]
+                J += self.gamma**k * self.stage_obj(observation_sqn[k, :].T, action_cur, is_actor = True)
+        elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of stage objectives
+            for k in range(self.Nactor-1):
+                action_cur = my_action_sqn[k*self.dim_input:(k+1)*self.dim_input]
+                J += self.gamma**k * self.stage_obj(observation_sqn[k, :].T, action_cur, is_actor = True)
+            J += self._critic(observation_sqn[-1, :].T, 
+                                my_action_sqn[(k+1) * self.dim_input : (k+2) * self.dim_input], 
+                                self.w_critic)
+        elif self.mode=='SQL':     # RL: stacked Q-learning
+            for k in range(self.Nactor): 
+                action_cur = my_action_sqn[k * self.dim_input : (k+1) * self.dim_input]
+                Q = self._critic(observation_sqn[k, :].T, action_cur, self.w_critic)          
+                J += Q 
+
+        g = []
+        max_g = 0
+        ubg = []
+        if (constraints is not None) and (len(constraints) > 0):
+            res = observation_sqn[0, :]
+            for k in range(self.Nactor):
+                action_cur = my_action_sqn[k * self.dim_input : (k+1) * self.dim_input]
+                rhs = SX.zeros(res.shape[0]) #self.dim_state
+                if res.shape[0] == 3:
+                    if self.pars_disturb == []:
+                        self.pars_disturb = [0, 0]
+                        rhs[0] = action_cur[0] * cos(res[2]) + self.pars_disturb[0]
+                        rhs[1] = action_cur[0] * sin(res[2]) + self.pars_disturb[0]
+                        rhs[2] = action_cur[1] + self.pars_disturb[1]
+                elif res.shape[0] == 5:    
+                    rhs[0] = res[3] * cos(res[2])
+                    rhs[1] = res[3] * sin(res[2])
+                    rhs[2] = res[4]
+                    if self.pars_disturb != []:
+                        sigma_disturb = self.pars_disturb[0]
+                        mu_disturb = self.pars_disturb[1]
+                        tau_disturb = self.pars_disturb[2]
+                        disturb = np.zeros(self.dim_input)
+                        for it in range(0, self.dim_input):
+                            disturb[it] = - tau_disturb[it] * (disturb[it] + sigma_disturb[it] * (randn() + mu_disturb[it]) )
+                        rhs[3] = 1/m * (action_cur[0] + disturb[0])
+                        rhs[4] = 1/I * (action_cur[1] + disturb[1])
+                    else:
+                        rhs[3] = 1/m * action_cur[0]
+                        rhs[4] = 1/I * action_cur[1]
+
+                res = res + self.pred_step_size * rhs
+                # print(f"Res: {res}")
+                for ineq_set in constraints[0]:
+                    lines = []
+                    for ineq in ineq_set:
+                        line = ineq[0] * res[0] + ineq[1] * res[1] + ineq[2]
+                        lines.append(line)
+                    casadi_min = fmin(lines[0], lines[1])
+                    for it in range(2, len(lines)):
+                        casadi_min = fmin(casadi_min, lines[it]) 
+                    g.append(casadi_min)
+                    if casadi_min > 0:
+                        print("COLLISION IN CASADI")
+                        is_collision = True
+                    ubg.append(0) 
+                    # opti.subject_to(casadi_min <= 0)
+                for circle_constr in constraints[1]:
+                    g.append(circle_constr[2] - ((res[0] - circle_constr[0]) ** 2 
+                            + (res[1] - circle_constr[1]) ** 2))
+                    if g[-1] > 0:
+                        print("COLLISION IN CASADI")
+                        is_collision = True
+                    ubg.append(0)
+            if len(g) > 0:
+                max_g = max(g)
+        lbx, ubx = [], []        
+        if bounds is not None:
+            lbx = bounds[0] 
+            ubx = bounds[1] 
+
+        if is_collision == False:
+            qp_prob = {'f': J, 'x': vertcat(my_action_sqn), 'g': vertcat(*g)} #vcat(g) or vertcat(*g)
+            opts_setting = {'print_time':0, 'ipopt.max_iter':max_iter, 'ipopt.print_level':0, 
+                            'ipopt.acceptable_tol':1e-8, 'ipopt.acceptable_obj_change_tol':1e-6}
+                            # 'ipopt.acceptable_tol':1e-4, 'ipopt.acceptable_obj_change_tol':1e-2}
+
+            start = time.time()
+            solver = nlpsol('solver', 'ipopt', qp_prob, opts_setting)
+            try:
+                res = solver(x0=initial_val, lbx=lbx, ubx=ubx, ubg=ubg)
+                final_time = time.time() - start
+                self.total_time += final_time
+                self.counter += 1  
+                print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
+                return max_g, res["x"] 
+            except RuntimeError:
+                print(f"FAILED TO OPTIMIZE")
+                res = initial_val
+                return max_g, res
+        else:
+            return 0, -self.prev_action
     
     def _actor_optimizer(self, observation, constraints=[], line_constraints=None, circ_constraints=None):
         """
@@ -1368,137 +1564,86 @@ class CtrlOptPred:
             
         #     return observation_sqn[-1, 1] - 1
 
-        # my_constraints=[]
-        # for my_idx in range(1, self.Nactor+1):
-        #     my_constraints.append({'type': 'eq', 'fun': lambda action_sqn: state_constraint(action_sqn, idx=my_idx)})
-
-        # my_constraints = {'type': 'ineq', 'fun': state_constraint}
-
         # Optimization method of actor    
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powel
 
-        # def constraint(action_sqn, y, constr):
-        #     if constraints is None:
-        #         return None
-        #     res = y
-        #     res_constr = []
-        #     my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
-        #     for i in range(0, self.Nactor, 1):
-        #         res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i, :]) #предсказание следующих шагов
+        if self.is_casadi:
+            my_action_sqn_init = np.reshape(self.action_sqn_init, [self.Nactor*self.dim_input,])
+            
+            max_g, sol = self.casadi_optimize(
+                observation=observation,
+                initial_val = my_action_sqn_init,
+                bounds = [self.action_sqn_min, self.action_sqn_max],
+                constraints=constraints,
+                max_iter = 120)
+            action_sqn = np.reshape(np.array(sol), (-1,))
+            J = self.stage_obj(observation, action_sqn[:self.dim_input])*self.sampling_time
+            if J < self.J_prev and max_g < self.g_max:
+                print("Renovating, J = {J}")
+                self.J_prev = J
+                self.g_max = max_g
+                self.prev_action = action_sqn[:self.dim_input]
 
-        #         cons = []
-        #         # for constr in constraints:
-        #         #     #cons.append(-constr(res))
-        #         #     cons.append(constr.contains(Point(res)))
-        #         f1 = constr.contains(Point(res)) #np.sum(cons)
-        #         if f1 > 0:
-        #             res_constr.append(-1)
-        #         else:
-        #             res_constr.append(1)
-        #     return res_constr
-
-        # def constraint(action_sqn, y, x1, y1, x2, y2):
-        #     res = y
-        #     #print('current state:', res)
-        #     res_constr = []
-        #     my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
-        #     for i in range(1, self.Nactor, 1):
-        #         res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :]) #предсказание следующих шагов
-        #         xk = res[0] - (x1+x2)/2
-        #         yk = res[1] - (y1+y2)/2
-        #         f1 = (2*xk/abs(x2-x1))**64 + (2*yk/abs(y2-y1))**64 - 1
-        #         res_constr.append(f1)
-        #     # if np.sum(np.array(res_constr) < 0) > 0:
-        #     #     print('predicted entering the prohibited zone', np.array(res_constr))
-        #     #     raise RuntimeError('predicted entering the prohibited zone')
-        #     return res_constr
-
-        # def constraint_circ(action_sqn, y, x1, y1, r):
-        #     res = y
-        #     #print('current state:', res)
-        #     res_constr = []
-        #     my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
-        #     for i in range(1, self.Nactor, 1):
-        #         res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :])  #предсказание следующих шагов
-        #         xk = res[0] - x1
-        #         yk = res[1] - y1
-        #         f1 = (2*xk/r)**2 + (2*yk/r)**2 - 1
-        #         res_constr.append(f1)
-        #     return res_constr
-        #print('INSIDE CONSTRS', constraints)
-
-        # cons = []
-        # f = 0
-        # for constr in constraints:
-        #         #cons.append(-constr(res))
-        #     cons.append(constr.contains(Point(observation[:2])))
-        #     f1 = np.sum(cons)
-        #     if f1 > 0:
-        #         f = -1
-        #     else:
-        #         f = 1
-        # if f < 0:
-        #     print('COLLISION IN CONTROLLERS!!!')
-        
-        actor_opt_method = 'SLSQP'
-        if actor_opt_method == 'trust-constr':
-            actor_opt_options = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
         else:
-            actor_opt_options = {'maxiter': 70, 'maxfev': 2000, 'disp': False, 'xatol': 1e-4, 'fatol': 1e-4} # 'disp': True, 'verbose': 2} 
-       
-        isGlobOpt = 0
-        
-        my_action_sqn_init = np.reshape(self.action_sqn_init, [self.Nactor*self.dim_input,])
-        
-        bnds = sp.optimize.Bounds(self.action_sqn_min, self.action_sqn_max, keep_feasible=True)
-
-        final_constraints = []
-
-
-        def constrs(u, constraints, y):
-            res = y
-            res_constr = []
-            f1 = -1
-            for i in range(0, self.Nactor*2, 2):
-                if f1 > 0.:
-                    res_constr.append(f1)
-                    continue
-                res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], [])
-                cons = []
-                for constr in constraints:
-                    cons.append(constr(res))
-                f1 = np.max(cons)
-                res_constr.append(f1)
-            return res_constr
-
-
-        if len(constraints) > 0:
-            final_constraints.append(sp.optimize.NonlinearConstraint(partial(constrs, constraints=constraints, y=observation), -np.inf, 0))
-
-        try:
-            start = time.time()
-            if isGlobOpt:
-                minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 
-                'constraints': final_constraints, 'tol': 1e-7, 'options': actor_opt_options}
-                action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation),
-                                          my_action_sqn_init,
-                                          minimizer_kwargs=minimizer_kwargs,
-                                          niter = 10).x
+            actor_opt_method = 'SLSQP'
+            if actor_opt_method == 'trust-constr':
+                actor_opt_options = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
             else:
-                action_sqn = minimize(lambda action_sqn: self._actor_cost(action_sqn, observation),
-                                      my_action_sqn_init,
-                                      method=actor_opt_method,
-                                      tol=1e-5,
-                                      bounds=bnds,
-                                      constraints=final_constraints,
-                                      options=actor_opt_options).x   
-            final_time = time.time() - start
-            self.total_time += final_time
-            self.counter += 1  
-            print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
-        except ValueError:
-            print('Actor''s optimizer failed. Returning default action')
-            action_sqn = my_action_sqn_init
+                actor_opt_options = {'maxiter': 70, 'maxfev': 2000, 'disp': False, 'xatol': 1e-4, 'fatol': 1e-4} # 'disp': True, 'verbose': 2} 
+        
+            isGlobOpt = 0
+            
+            my_action_sqn_init = np.reshape(self.action_sqn_init, [self.Nactor*self.dim_input,])
+            
+            bnds = sp.optimize.Bounds(self.action_sqn_min, self.action_sqn_max, keep_feasible=True)
+
+            final_constraints = []
+
+
+            def constrs(u, constraints, y):
+                res = y
+                res_constr = []
+                f1 = -1
+                for i in range(0, self.Nactor*2, 2):
+                    if f1 > 0.:
+                        res_constr.append(f1)
+                        continue
+                    res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], [])
+                    cons = []
+                    for constr in constraints:
+                        cons.append(constr(res))
+                    f1 = np.max(cons)
+                    res_constr.append(f1)
+                return res_constr
+
+
+            if len(constraints) > 0:
+                final_constraints.append(sp.optimize.NonlinearConstraint(partial(constrs, constraints=constraints, y=observation), -np.inf, 0))
+
+            try:
+                start = time.time()
+                if isGlobOpt:
+                    minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 
+                    'constraints': final_constraints, 'tol': 1e-7, 'options': actor_opt_options}
+                    action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation),
+                                            my_action_sqn_init,
+                                            minimizer_kwargs=minimizer_kwargs,
+                                            niter = 10).x
+                else:
+                    action_sqn = minimize(lambda action_sqn: self._actor_cost(action_sqn, observation),
+                                        my_action_sqn_init,
+                                        method=actor_opt_method,
+                                        tol=1e-5,
+                                        bounds=bnds,
+                                        constraints=final_constraints,
+                                        options=actor_opt_options).x   
+                final_time = time.time() - start
+                self.total_time += final_time
+                self.counter += 1  
+                print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
+            except ValueError:
+                print('Actor''s optimizer failed. Returning default action')
+                action_sqn = my_action_sqn_init
         
         # DEBUG ===================================================================
         # ================================Interm output of model prediction quality
