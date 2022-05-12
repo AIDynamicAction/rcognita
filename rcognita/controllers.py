@@ -1227,7 +1227,7 @@ class CtrlOptPred:
         """
         Jc = 0
         
-        for k in range(self.Ncritic-1, 0, -1):
+        for k in range(self.buffer_size-1, self.buffer_size - self.Ncritic, -1):
             observation_prev = self.observation_buffer[k-1, :]
             observation_next = self.observation_buffer[k, :]
             action_prev = self.action_buffer[k-1, :]
