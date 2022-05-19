@@ -1038,7 +1038,7 @@ class CtrlOptPred:
             self.Wmin = -1e3*np.ones(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)
             
-        self.w_critic_prev = np.ones(self.dim_critic)  
+        self.w_critic_prev = np.zeros(self.dim_critic)  
         self.w_critic_init = self.w_critic_prev
         
         # self.big_number = 1e4
