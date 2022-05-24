@@ -1,0 +1,17 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "presets/main_3wrobot_ros_obst4_actual.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": ["--ctrl_mode", "SQL", "--dt", "0.1", "--Nactor", "5", "--pred_step_size_multiplier", "9", "--is_log_data", "True", "--buffer_size", "20", "--critic_period_multiplier", "5", "--Ncritic", "15"]
+        }
+    ]
+}

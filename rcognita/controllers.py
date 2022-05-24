@@ -1041,12 +1041,14 @@ class CtrlOptPred:
             self.Wmin = -1e3*np.ones(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)
             
-        self.w_critic_prev = np.ones(self.dim_critic)  
+        self.w_critic_prev = np.zeros(self.dim_critic)  
         self.w_critic_init = self.w_critic_prev
         
         # self.big_number = 1e4
         self.counter = 0
         self.total_time = 0
+        self.max_time = 0
+        self.start_iter_time = time.time()
 
     def reset(self, t0):
         """
@@ -1097,7 +1099,10 @@ class CtrlOptPred:
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead).
         
         """
-        self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
+        self.iter_time = time.time()
+        iter_time = self.iter_time - self.start_iter_time
+        self.accum_obj_val += self.stage_obj(observation, action) * iter_time
+        self.start_iter_time = time.time()
     
     def _estimate_model(self, t, observation):
         """
@@ -1234,21 +1239,19 @@ class CtrlOptPred:
         """
         Jc = 0
         
-        for k in range(self.Ncritic-1, 0, -1):
+        for k in range(self.buffer_size-1, self.buffer_size - self.Ncritic, -1):
             observation_prev = self.observation_buffer[k-1, :]
             observation_next = self.observation_buffer[k, :]
             action_prev = self.action_buffer[k-1, :]
             action_next = self.action_buffer[k, :]
-            
             # Temporal difference
             
             critic_prev = self._critic(observation_prev, action_prev, w_critic)
-            critic_next = self._critic(observation_next, action_next, self.w_critic_prev)            
+            critic_next = self._critic(observation_next, action_next, self.w_critic_prev)      
+            st_obj = self.stage_obj(observation_prev, action_prev)      
 
-            e = critic_prev - self.gamma * critic_next - self.stage_obj(observation_prev, action_prev)
-            
+            e = critic_prev - self.gamma * critic_next - st_obj
             Jc += 1/2 * e**2
-            
         return Jc
         
         
@@ -1268,8 +1271,8 @@ class CtrlOptPred:
         
         bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
     
-        w_critic = minimize(lambda w_critic: self._critic_cost(w_critic), self.w_critic_init, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
-        
+        w_critic = minimize(self._critic_cost, self.w_critic_init, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
+        print('w_critic after optimization', w_critic)
         # DEBUG ===================================================================
         # print('-----------------------Critic parameters--------------------------')
         # print( w_critic )
@@ -1289,7 +1292,7 @@ class CtrlOptPred:
         """
         
         my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
-        
+        #print(my_action_sqn)
         observation_sqn = np.zeros([self.Nactor, self.dim_output])
         
         # System output prediction
@@ -1444,7 +1447,7 @@ class CtrlOptPred:
         if actor_opt_method == 'trust-constr':
             actor_opt_options = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
         else:
-            actor_opt_options = {'maxiter': 70, 'maxfev': 2000, 'disp': False, 'xatol': 1e-4, 'fatol': 1e-4} # 'disp': True, 'verbose': 2} 
+            actor_opt_options = {'maxiter': 70, 'maxfev': 1000, 'disp': False, 'xatol': 1e-4, 'fatol': 1e-4} # 'disp': True, 'verbose': 2} 
        
         isGlobOpt = 0
         
@@ -1457,18 +1460,31 @@ class CtrlOptPred:
 
         def constrs(u, constraints, y):
             res = y
+            cons = []
+            for constr in constraints:
+                cons.append(constr(res))
+            f1 = np.max(cons)
+            start_in_danger = f1 > 0.
+
             res_constr = []
             f1 = -1
-            for i in range(0, self.Nactor*2, 2):
-                if f1 > 0.:
+            # print('!!!!!!!!!!!!!!!!!!!!!!!!!!!', len(u), len(y))
+            # print('u = ', u)
+            # print('y = ', y)
+            my_action_sqn = np.reshape(u, [self.Nactor, self.dim_input])
+            for i in range(1, self.Nactor, 1):
+                if f1 > 0. and not start_in_danger:
                     res_constr.append(f1)
                     continue
-                res = res + self.pred_step_size * self.sys_rhs([], res, u[i:i+2], [])
+                res = res + self.pred_step_size * self.sys_rhs([], res, my_action_sqn[i-1, :])
                 cons = []
                 for constr in constraints:
                     cons.append(constr(res))
                 f1 = np.max(cons)
                 res_constr.append(f1)
+            #print('lens', len(my_action_sqn), len(res_constr))
+            # print('res_constr = ', res_constr)
+            # print('==================================')
             return res_constr
 
 
@@ -1494,8 +1510,10 @@ class CtrlOptPred:
                                       options=actor_opt_options).x   
             final_time = time.time() - start
             self.total_time += final_time
-            self.counter += 1  
-            print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
+            self.counter += 1
+            if final_time > self.max_time:
+                self.max_time = final_time
+            print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter, '||| max time:', self.max_time)
         except ValueError:
             print('Actor''s optimizer failed. Returning default action')
             action_sqn = my_action_sqn_init
@@ -1561,7 +1579,7 @@ class CtrlOptPred:
                 # Update data buffers
                 self.action_buffer = push_vec(self.action_buffer, self.action_curr)
                 self.observation_buffer = push_vec(self.observation_buffer, observation)
-                
+
                 if timeInCriticPeriod >= self.critic_period:
                     # Update critic's internal clock
                     self.critic_clock = t
@@ -1582,6 +1600,7 @@ class CtrlOptPred:
                     action = self._actor_optimizer(observation)
                     
                 elif self.mode in ['RQL', 'SQL']:
+                    #print('WEIGHTS', self.w_critic)
                     action = self._actor_optimizer(observation, constraints, line_constrs, circ_constrs) 
             
             self.action_curr = action

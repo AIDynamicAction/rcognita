@@ -56,6 +56,7 @@ from scipy.optimize import minimize, Bounds, LinearConstraint, NonlinearConstrai
 from scipy.spatial import ConvexHull, convex_hull_plot_2d
 import time as time_lib
 from sensor_msgs.msg import LaserScan
+from scipy.signal import medfilt
 
 #------------------------------------define helpful classes
 class myPoint:
@@ -287,10 +288,10 @@ class Obstacles_parser:
             l = l[~nans]
             degrees = degrees[~nans]
             angles = angles[~nans]
-            nans = l > 2.
-            l = l[~nans]
-            degrees = degrees[~nans]
-            angles = angles[~nans]
+            mask = (l < 2.)
+            l = l[mask]
+            degrees = degrees[mask]
+            angles = angles[mask]
 
         if len(l) == 0:
             return None, [], [], None, None
@@ -300,6 +301,8 @@ class Obstacles_parser:
 
         all_coords = np.column_stack([x, y]).T + state_coord
         x, y = all_coords[0, :], all_coords[1, :]
+        self.x = x
+        self.y = y
         
         points = []
 
@@ -365,7 +368,7 @@ class Obstacles_parser:
         sq_4 = [p_intersect[0] + buf * unit_v_par[0], p_intersect[1] + buf * unit_v_par[1]] 
         sq_3 = [sq_4[0] + unit_v[0] * (2 * buf + v_norm), sq_4[1] + unit_v[1] * (2 * buf + v_norm)]
         buffer = [sq_1, sq_2, sq_3, sq_4, sq_1]
-        return buffer
+        return np.array(buffer)
 
     def get_functions(self):
         inequations = []
@@ -459,6 +462,9 @@ class ROS_preset:
         self.line_constrs = []
         self.circle_constrs = []
         self.ranges = []
+        self.ranges_t0 = None
+        self.ranges_t1 = None
+        self.ranges_t2 = None
         self.counter = 0
 
         # connection to ROS topics
@@ -537,11 +543,11 @@ class ROS_preset:
 
         #if math.copysign(1, self.prev_theta) != math.copysign(1, theta) and abs(self.prev_theta) > 3:
         #if self.prev_theta * theta < 0 and abs(self.prev_theta) > 2 * np.pi:
-        if abs(self.prev_theta - theta) > np.pi:
-            print('AAA', self.prev_theta, theta)
+        if self.prev_theta * theta < 0 and abs(self.prev_theta - theta) > np.pi:
+            #print('AAA', self.prev_theta, theta)
             #if math.copysign(1, self.prev_theta) == -1:
-            #if self.prev_theta < 0:
-            if self.prev_theta < theta:
+            if self.prev_theta < 0:
+            #if self.prev_theta < theta:
                 self.rotation_counter -= 1
             else:
                 self.rotation_counter += 1
@@ -549,31 +555,31 @@ class ROS_preset:
         self.prev_theta = theta
         theta = theta + 2 * math.pi * self.rotation_counter
         #self.prev_theta = theta
-        self.new_theta = theta
+        #self.new_theta = theta
 
         new_theta = theta - theta_goal
 
         # POSITION transform
         temp_pos = [x, y, 0, 1]
-        self.new_state = np.dot(inv_t_matrix, np.transpose(temp_pos))
-        self.new_state = np.array([self.new_state[0], self.new_state[1], new_theta])
+        new_state = np.dot(inv_t_matrix, np.transpose(temp_pos))
+        self.new_state = np.array([new_state[0], new_state[1], new_theta])
 
         inv_R_matrix = inv_t_matrix[:3, :3]
         zeros_like_R = np.zeros(inv_R_matrix.shape)
         inv_R_matrix = np.linalg.inv(rotation_matrix)
-        self.new_dstate = inv_R_matrix.dot(np.array([dx, dy, 0]).T)
+        new_dstate = inv_R_matrix.dot(np.array([dx, dy, 0]).T)
         new_omega = omega
-        self.new_dstate = [self.new_dstate[0], self.new_dstate[1], new_omega]
-        f = 0
-        cons = []
-        for constr in self.polygonal_constraints:
-                #cons.append(-constr(res))
-            cons.append(constr.contains(Point(self.new_state[:2])))
-            f1 = np.sum(cons)
-            if f1 > 0:
-                f = -1
-            else:
-                f = 1
+        self.new_dstate = [new_dstate[0], new_dstate[1], new_omega]
+        # f = 0
+        # cons = []
+        # for constr in self.polygonal_constraints:
+        #         #cons.append(-constr(res))
+        #     cons.append(constr.contains(Point(self.new_state[:2])))
+        #     f1 = np.sum(cons)
+        #     if f1 > 0:
+        #         f = -1
+        #     else:
+        #         f = 1
 
         #print('STATE:', self.new_state, '\tIS DANGEROUS:', f)
 
@@ -605,16 +611,27 @@ class ROS_preset:
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         try:
             #print('laser')
-            #print('STATE:', self.new_state)
+            print('STATE:', self.new_state)
             #print('RANGES: ', dt.ranges)
-            self.ranges = np.array(dt.ranges)
+            self.ranges_t0 = np.array(dt.ranges)
+            if self.ranges_t1 is None and self.ranges_t2 is None:
+                self.ranges_t1 = self.ranges_t0
+                self.ranges_t2 = self.ranges_t0
+                self.ranges = medfilt(np.array([self.ranges_t0, self.ranges_t1, self.ranges_t2]), [3, 3])[2, :]
+            else:
+                self.ranges = medfilt(np.array([self.ranges_t0, self.ranges_t1, self.ranges_t2]), [3, 3])[2, :]
+                self.ranges_t2 = self.ranges_t1
+                self.ranges_t1 = self.ranges_t0
             new_blocks, LL, CC, x, y = self.obstacles_parser.get_obstacles(np.array(dt.ranges), fillna='else', state=self.new_state)
-            self.line_constrs = [Polygon(self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178*0.75)) for i in LL]
+            self.lines = LL
+            self.circles = CC
+            self.line_constrs = [self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178 * 1.75) for i in LL]
 
             self.circle_constrs = [Point(i.center[0], i.center[1]).buffer(i.r) for i in CC]
             self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_state))
 
             self.polygonal_constraints = self.line_constrs + self.circle_constrs
+            #self.constraints = []
 
         except ValueError as exc:
             print('YA UPAL!', exc)
@@ -627,11 +644,13 @@ class ROS_preset:
         #self.lock.release()
         self.odom_lock.release()
 
-    def spin(self, is_print_sim_step=False, is_log_data=False):
+    def spin(self, is_print_sim_step=False, is_log_data=True):
         rospy.loginfo('ROS-preset has been activated!')
         start_time = time_lib.time()
         rate = rospy.Rate(self.RATE)
         self.time_start = rospy.get_time()
+        #plt.ion()
+        #fig, ax = plt.subplots(figsize=(16, 16))
         while not rospy.is_shutdown() and time_lib.time() - start_time < 500:
             t = rospy.get_time() - self.time_start
             self.t = t
@@ -656,21 +675,58 @@ class ROS_preset:
             # if is_print_sim_step:
             #     self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
             
-            #if is_log_data:
-            #    self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+            if is_log_data:
+               self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
 
             self.ctrl_benchm.receive_sys_state(self.new_state)
 
 
+            # for ii, circle in enumerate(self.circles):
+            #     circle1 = plt.Circle(circle.center, circle.r, color='green', linewidth=3, fill=False, linestyle='--', 
+            #                         label='circle-style obstacle safe buffer border' if ii == 0 else None)
+            #     ax.add_patch(circle1)
+
+
+            # for ii, line in enumerate(self.lines):
+            #     line_x = np.array([line[0].x, line[1].x])
+            #     line_y = np.array([line[0].y, line[1].y])
+            #     ax.plot(line_x, line_y, color='red', linewidth=3, label='line-style obstacle' if ii==0 else None)
+            #     rect_points = self.line_constrs[ii]
+
+            #     ax.plot(rect_points[:, 0], rect_points[:, 1], linestyle='--', color='green', linewidth=2,
+            #         label='line-style obstacle safe buffer border' if ii==0 else None)
+                
+                
+            # ax.scatter(self.obstacles_parser.x, self.obstacles_parser.y, s=5, label='LIDAR data')
+
+            # # t1 = plt.Polygon(X_robot, color=Y_robot[0])
+            # # plt.gca().add_patch(t1)
+
+            # marker = visuals.RobotMarker(angle=self.new_state[-1])
+
+            # ax.scatter([self.new_state[0]], [self.new_state[1]], marker=marker.marker, s=0.178*10000, c='b')
+            # ax.scatter([], [], marker=marker.marker, s=0.178*1000, c='b', label='robot pose')
+
+            # ax.grid()
+            # ax.legend()
+
+            # fig.canvas.draw()
+            # fig.canvas.flush_events()
+
+            # #plt.pause(0.01)
+            # time_lib.sleep(0.01)
+            # fig.clear()
+            
+
             velocity.linear.x = action[0]
             velocity.angular.z = action[1]
             self.pub_cmd_vel.publish(velocity)
-            print('STATE', self.new_state)
+            #print('STATE', self.new_state)
             #print('DIFFS', (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2),
             #np.abs(np.degrees(alpha - self.state_init[2]))))
             if (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2) < 0.3 
-                and ((np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 10) or
-                     (350 < np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 360))) and t > 10.:
+                and ((np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 15) or
+                     (345 < np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 360))) and t > 10.:
                 print('FINAL RESULTS!!!')
                 print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
                 break
@@ -727,7 +783,7 @@ if __name__ == "__main__":
                         help='Initial state (as sequence of numbers); ' + 
                         'dimension is environment-specific!')
     parser.add_argument('--is_log_data', type=bool,
-                        default=False,
+                        default=True,
                         help='Flag to log data into a data file. Data are stored in simdata folder.')
     parser.add_argument('--is_visualization', type=bool,
                         default=True,
@@ -768,7 +824,7 @@ if __name__ == "__main__":
                                 'biquadratic'],
                         help='Structure of stage objective function.')
     parser.add_argument('--R1_diag', type=float, nargs='+',
-                        default=[0.7, 1.0, 0.1, 0, 0],
+                        default=[2, 10, 1, 0, 0],
                         help='Parameter of stage objective function. Must have proper dimension. ' +
                         'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
     parser.add_argument('--R2_diag', type=float, nargs='+',
@@ -917,7 +973,7 @@ if __name__ == "__main__":
                                             critic_struct = critic_struct,
                                             stage_obj_struct = stage_obj_struct,
                                             stage_obj_pars = [R1],
-                                            observation_target = [])
+                                            observation_target = [0,0,0])
 
     # Stabilizing RL agent
     my_ctrl_RL_stab = controllers.CtrlRLStab(dim_input,
@@ -946,7 +1002,7 @@ if __name__ == "__main__":
                                             actor_struct = actor_struct,
                                             stage_obj_struct = stage_obj_struct,
                                             stage_obj_pars = [R1],
-                                            observation_target = [],
+                                            observation_target = [0,0,0],
                                             safe_ctrl = my_ctrl_nominal,
                                             safe_decay_rate = 1e-4)
 
