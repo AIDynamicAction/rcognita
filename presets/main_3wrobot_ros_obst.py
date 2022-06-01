@@ -432,7 +432,7 @@ class Obstacles_parser:
 class ROS_preset:
 
     def __init__(self, ctrl_mode, state_init, state_goal, my_ctrl_nominal, my_sys, my_ctrl_benchm, my_logger=None, datafiles=None):
-        self.RATE = rospy.get_param('/rate', 50)
+        self.RATE = rospy.get_param('/rate', 10)
         self.lock = threading.Lock()
         self.odom_lock = threading.Lock()
         self.lidar_lock = threading.Lock()
@@ -571,7 +571,7 @@ class ROS_preset:
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         try:
             #print('laser')
-            print('STATE:', self.new_state)
+            #0print('STATE:', self.new_state)
             #print('RANGES: ', dt.ranges)
             self.ranges_t0 = np.array(dt.ranges)
             if self.ranges_t1 is None and self.ranges_t2 is None:
@@ -605,7 +605,7 @@ class ROS_preset:
         rate = rospy.Rate(self.RATE)
         self.time_start = rospy.get_time()
 
-        while not rospy.is_shutdown() and time_lib.time() - start_time < 500:
+        while not rospy.is_shutdown(): #and time_lib.time() - start_time < 180:
             t = rospy.get_time() - self.time_start
             self.t = t
 
@@ -626,8 +626,8 @@ class ROS_preset:
             stage_obj = self.ctrl_benchm.stage_obj(self.new_state, action)
             accum_obj = self.ctrl_benchm.accum_obj_val
 
-            # if is_print_sim_step:
-            #     self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+            if is_print_sim_step:
+                self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
             
             if is_log_data:
                self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
@@ -697,7 +697,7 @@ if __name__ == "__main__":
                         default=150.0,
                         help='Final time of episode.' )
     parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
-                        default=['-2', '2', '-pi/2'],
+                        default=['2', '2', 'pi'],
                         help='Initial state (as sequence of numbers); ' + 
                         'dimension is environment-specific!')
     parser.add_argument('--is_log_data', type=bool,
@@ -713,7 +713,7 @@ if __name__ == "__main__":
                         default=False,
                         help='Flag to estimate environment model.')
     parser.add_argument('--model_est_stage', type=float,
-                        default=1.0,
+                        default=2.0,
                         help='Seconds to learn model until benchmarking controller kicks in.')
     parser.add_argument('--model_est_period_multiplier', type=float,
                         default=1,

@@ -10,7 +10,7 @@ Remarks:
 - Buffers are updated from bottom to top
 
 """
-
+import rospy
 from .utilities import dss_sim
 from .utilities import rep_mat
 from .utilities import uptria2vec
@@ -1048,7 +1048,7 @@ class CtrlOptPred:
         self.counter = 0
         self.total_time = 0
         self.max_time = 0
-        self.start_iter_time = time.time()
+        self.start_iter_time = rospy.get_time()
 
     def reset(self, t0):
         """
@@ -1099,10 +1099,11 @@ class CtrlOptPred:
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead).
         
         """
-        self.iter_time = time.time()
-        iter_time = self.iter_time - self.start_iter_time
-        self.accum_obj_val += self.stage_obj(observation, action) * iter_time
-        self.start_iter_time = time.time()
+        # self.iter_time = time.time()
+        # iter_time = self.iter_time - self.start_iter_time
+        # self.accum_obj_val += self.stage_obj(observation, action) * iter_time
+        # self.start_iter_time = time.time()
+        self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
     
     def _estimate_model(self, t, observation):
         """
@@ -1492,7 +1493,7 @@ class CtrlOptPred:
             final_constraints.append(sp.optimize.NonlinearConstraint(partial(constrs, constraints=constraints, y=observation), -np.inf, 0))
 
         try:
-            start = time.time()
+            start = rospy.get_time()
             if isGlobOpt:
                 minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 
                 'constraints': final_constraints, 'tol': 1e-7, 'options': actor_opt_options}
@@ -1508,7 +1509,7 @@ class CtrlOptPred:
                                       bounds=bnds,
                                       constraints=final_constraints,
                                       options=actor_opt_options).x   
-            final_time = time.time() - start
+            final_time = rospy.get_time() - start
             self.total_time += final_time
             self.counter += 1
             if final_time > self.max_time:
