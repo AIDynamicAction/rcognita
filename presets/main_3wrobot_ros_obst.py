@@ -32,6 +32,8 @@ from rcognita import controllers
 from rcognita import loggers
 from rcognita import visuals
 from rcognita.utilities import on_key_press
+from shapely.geometry.polygon import Polygon
+from shapely.geometry import Point
 
 import argparse
 
@@ -45,16 +47,19 @@ import os
 from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
 import tf.transformations as tftr
-from geometry_msgs.msg import Point, Twist
+from geometry_msgs.msg import Twist
 from math import atan2, pi
 import math
-from numpy import matrix, cos, arctan2, sqrt, pi, sin, cos
+from numpy import inf, matrix, cos, arctan2, sqrt, pi, sin, cos
 from numpy.random import randn
+from scipy.optimize import minimize, Bounds, LinearConstraint, NonlinearConstraint, BFGS, basinhopping
+from scipy.spatial import ConvexHull, convex_hull_plot_2d
 import time as time_lib
 from sensor_msgs.msg import LaserScan
+from scipy.signal import medfilt
 
 #------------------------------------define helpful classes
-class Point:
+class myPoint:
     def __init__(self, R, x, y, angle):
         self.R = R
         self.x = x
@@ -68,12 +73,17 @@ class Circle:
         self.convex = convex
 
 #------------------------------------define obstacles parser class
-class obstacles_parser:
+class Obstacles_parser:
 
-    def __init__(self, W=0.178, T_d=10, safe_margin_mult=0.5):
+    def __init__(self, W=0.178, T_d=10, safe_margin_mult=2):
         self.W = W
         self.T_d = T_d
         self.safe_margin = self.W * safe_margin_mult
+
+    def __call__(self, l, state):
+        self.new_blocks, self.lines, self.circles, self.x, self.y = self.get_obstacles(l, fillna='else', state=state)
+        self.constraints = self.get_functions()
+        return self.constraints
 
     def d(self, R_i, R_i1, delta_alpha=np.radians(1)):
         answ = np.sqrt(R_i**2 + R_i1**2 - 2*R_i*R_i1*np.cos(delta_alpha))
@@ -107,7 +117,7 @@ class obstacles_parser:
             segmented = False
             for i, point in enumerate(block[:-1]):
                 dd = self.d(block[i].R, block[i+1].R)
-                kk = k(block[i].R, block[i+1].R)
+                kk = self.k(block[i].R, block[i+1].R)
                 if dd > kk * self.W:
                     new_blocks.append(block[:i+1])
                     new_blocks.append(block[i+1:])
@@ -119,9 +129,11 @@ class obstacles_parser:
         
         return changed, new_blocks
 
-    def merging(self, blocks):
+    def merging(self, blocks, state):
         new_blocks = []
         merged = False
+        state_x = state[0]
+        state_y = state[1]
         for i in range(len(blocks)):
             block1 = blocks[i]
             next_i = (i + 1) % len(blocks)
@@ -139,12 +151,6 @@ class obstacles_parser:
                     angle_diff = (q.angle - p.angle) / N
 
                 new_block = block1.copy()
-                for j in range(N):
-                    new_R = p.R + j * R_diff
-                    new_angle = p.angle + j * angle_diff
-                    new_x = new_R * np.cos(new_angle)
-                    new_y = new_R * np.sin(new_angle)
-                    new_block.append(Point(new_R, new_x, new_y, new_angle))
                 new_block += block2
                 merged = True
                 new_blocks.append(new_block)
@@ -200,7 +206,7 @@ class obstacles_parser:
         x_center = (block[0].x + block[-1].x) / 2
         y_center = (block[0].y + block[-1].y) / 2
         center = np.array([x_center, y_center])
-        k, D_m = self.get_D_m(block)
+        k_, D_m = self.get_D_m(block)
         S = np.sqrt((block[0].x - block[-1].x)**2 + (block[0].y - block[-1].y)**2)
         
         ro = 0
@@ -217,9 +223,9 @@ class obstacles_parser:
         else:
             return Circle(center, ro + self.safe_margin, self.get_convexity(o_l=np.array([0.0, 0.0]), T_io=2., block=block))
 
-    def splitting(self, block, L, C, T_n=12, T_min=4, prints=False):
+    def splitting(self, block, L, C, T_n=9, T_min=3):
         R_mean = np.mean([pnt.R for pnt in block])
-        N = int(len(block) * R_mean * 0.5)
+        N = int(len(block) * R_mean * 0.8)
         if N < T_min:
             return []
         if N < T_n:
@@ -231,39 +237,72 @@ class obstacles_parser:
         S = np.sqrt((block[0].x - block[-1].x)**2 + (block[0].y - block[-1].y)**2)
         k, D_m = self.get_D_m(block)
         d_p = 0.00614
-        d_split = 0.15
-        if prints:
-            print(D_m, 0.2 * S, d_split + block[k].R * d_p)
+        d_split = 0.10
         #if D_m > 0.2 * S:
         if D_m > d_split + block[k].R * d_p:
-            B_1 = self.splitting(block[:k+1], L=L, C=C)
-            B_2 = self.splitting(block[k:], L=L, C=C)
+            B_1 = self.splitting(block[:k+1], L, C)
+            B_2 = self.splitting(block[k:], L, C)
             return B_1 + B_2
         else:
             L.append((block[0], block[-1]))
             return [block]
 
-    def get_obstacles(self, l, rng=360, fillna=True):
-    
-        if fillna:
+    def get_obstacles(self, l, rng=360, fillna='else', state=np.array([2, 2, np.pi])):
+        state_coord = state[:2].reshape(-1, 1)
+        state_angle = state[2]
+        rot_mat = np.array([[np.cos(state_angle), -np.sin(state_angle)], 
+                            [np.sin(state_angle), np.cos(state_angle)]])
+
+        degrees = np.arange(rng) + np.degrees(state_angle)
+        angles = np.radians(degrees)
+
+
+        if fillna == 'const':
+            fill_const = 1000
+            nans = np.isnan(l)
+            l[nans] = fill_const
+            nans = np.isinf(l)
+            l[nans] = fill_const
+        elif fillna == 'interp':
             nans, idx_fun = self.nan_helper(l, mode=1)
             l[nans]= np.interp(idx_fun(nans), idx_fun(~nans), l[~nans]) + np.random.rand(nans.sum()) * 0.01
 
             nans, idx_fun = self.nan_helper(l, mode=2)
             l[nans]= np.interp(idx_fun(nans), idx_fun(~nans), l[~nans]) + np.random.rand(nans.sum()) * 0.01
-            
-        degrees = np.arange(rng)
-        angles = np.radians(degrees)
+        else: 
+            nans = np.isnan(l)
+            l = l[~nans]
+            degrees = degrees[~nans]
+            angles = angles[~nans]
+            nans = np.isinf(l)
+            l = l[~nans]
+            degrees = degrees[~nans]
+            angles = angles[~nans]
+            nans = np.isclose(l, 0.)
+            l = l[~nans]
+            degrees = degrees[~nans]
+            angles = angles[~nans]
+            mask = (l < 2.)
+            l = l[mask]
+            degrees = degrees[mask]
+            angles = angles[mask]
+
+        if len(l) == 0:
+            return None, [], [], None, None
+
         x = l * np.cos(angles)
         y = l * np.sin(angles)
+
+        all_coords = np.column_stack([x, y]).T + state_coord
+        x, y = all_coords[0, :], all_coords[1, :]
+        self.x = x
+        self.y = y
         
         points = []
 
         for R, x_r, y_r, angle in zip(l, x, y, angles):
-            point = Point(R, x_r, y_r, angle)
+            point = myPoint(R, x_r, y_r, angle)
             points.append(point)
-            
-        p = [(l[i], np.radians(i)) for i in range(rng)]
         
         blocks = [points]
         
@@ -273,25 +312,131 @@ class obstacles_parser:
             
         flag = True
         while flag:
-            flag, blocks = self.merging(blocks)
+            flag, blocks = self.merging(blocks, state)
             
         LL = []
         CC = []
         
         new_blocks = []
         for block in blocks:
-            new_blocks += self.splitting(block, L=LL, C=CC)
-            
+            if len(block) > 5:
+                new_blocks += self.splitting(block, LL, CC)
+
         return new_blocks, LL, CC, x, y
 
-        ### НИНА, ДОПИСЫВАЙ ФУНКЦИИ СЮДА!
+    def get_buffer_area(self, line, buf = 0.178):
+        p1, p2 = line
+        if (p1[0] > p2[0]):
+            p_ = p1
+            p1 = p2
+            p2 = p_
+        else:
+            if (p1[1] > p2[1]):
+                p_ = p1
+                p1 = p2
+                p2 = p_
+            
+        v_norm = np.linalg.norm([p2[0] - p1[0], p2[1] - p1[1]])
+        unit_v = [(p2[0] - p1[0]) / v_norm, (p2[1] - p1[1]) / v_norm]
+        if p2[0] - p1[0] != 0:
+            coefs = [(p2[1] - p1[1]) / (p2[0] - p1[0]), p1[1] - (p2[1] - p1[1]) / (p2[0] - p1[0]) * p1[0]]
+        else:
+            coefs = [0, 0]
+        
+        p_intersect = [p1[0] - buf * unit_v[0], p1[1] - buf * unit_v[1]] 
+        if coefs[0] != 0:
+            coefs_ortho = [-1 / coefs[0], p_intersect[1] + 1 / coefs[0] * p_intersect[0]]
+            p_another = [p_intersect[0] - buf, coefs_ortho[0] * (p_intersect[0] - buf) + coefs_ortho[1]]
+        else:
+            if p2[0] - p1[0] == 0:
+                p_another = [p_intersect[0] - buf, p_intersect[1]]
+            else:
+                p_another = [p_intersect[0], p_intersect[0] - buf]
+        
+        v_ortho_norm = np.linalg.norm([p_intersect[0] - p_another[0], p_intersect[1] - p_another[1]])
+        unit_v_par = [(p_intersect[0] - p_another[0]) / v_ortho_norm,
+                    (p_intersect[1] - p_another[1]) / v_ortho_norm]
+        
+        sq_1 = [p_intersect[0] - buf * unit_v_par[0], p_intersect[1] - buf * unit_v_par[1]]   
+        sq_2 = [sq_1[0] + unit_v[0] * (2 * buf + v_norm), sq_1[1] + unit_v[1] * (2 * buf + v_norm)]
+        sq_4 = [p_intersect[0] + buf * unit_v_par[0], p_intersect[1] + buf * unit_v_par[1]] 
+        sq_3 = [sq_4[0] + unit_v[0] * (2 * buf + v_norm), sq_4[1] + unit_v[1] * (2 * buf + v_norm)]
+        buffer = [sq_1, sq_2, sq_3, sq_4, sq_1]
+        return np.array(buffer)
+
+    def get_functions(self):
+        inequations = []
+        figures = []
+        
+        def get_constraints(x):
+            return np.max([np.min([coef[0] * x[0] + coef[1] * x[1] + coef[2] for coef in ineq_set]) 
+                                        for ineq_set in inequations])
+    
+        def get_circle_constraints(x):
+            centers = []
+            radiuses = []
+            for circle in self.circles:
+                centers.append(circle.center)
+                radiuses.append(circle.r)
+            return np.max([(r**2 - (a - x[0])**2 - (b - x[1])**2) for [a, b], r in zip(centers, radiuses)])
+        
+    
+        def get_straight_line(p1, p2):
+            """
+            return: array [a, b, c] for a* x + b * y + c
+            """
+            return [-(p2[1] - p1[1]), (p2[0] - p1[0]), - p2[0]* p1[1] + p1[0] * p2[1]]
+        
+        
+        def check_ineq_sign(line, ctrl_point):
+            straight_line = lambda x, y: line[0] * x + line[1] * y + line[2]
+            if straight_line(ctrl_point[0], ctrl_point[1]) >= 0:
+                return line
+            else:
+                for i in range(len(line)):
+                    line[i] = -line[i]
+                return line
+            
+
+        def get_figure_inequations(figure):
+            hull = ConvexHull(figure)
+            ans = []
+            for simplex in hull.simplices:
+                coefs = get_straight_line(figure[simplex[0]], figure[simplex[1]])
+                for i in range(len(figure)):
+                    if i not in simplex:
+                        coefs = check_ineq_sign(coefs, figure[i])
+                        break
+                ans.append(coefs)
+            return ans
+        
+        constraints = []
+
+        if len(self.lines) > 0:
+            for line in self.lines:
+                x1, y1 = line[0].x, line[0].y
+                x2, y2 = line[1].x, line[1].y
+                fig = self.get_buffer_area([[x1, y1], [x2, y2]], self.safe_margin)
+                #polygon = Polygon(fig)
+                figures.append(np.array(fig))
+                inequations.append(get_figure_inequations(fig))
+        
+            constraints.append(get_constraints)
+        
+        if len(self.circles) > 0:
+            constraints.append(get_circle_constraints)
+
+        return constraints
 
 #------------------------------------define ROS-preset class
 class ROS_preset:
 
-    def __init__(self, ctrl_mode, state_goal, state_init, my_ctrl_nominal, my_sys, my_ctrl_benchm, my_logger=None, datafiles=None):
-        self.RATE = rospy.get_param('/rate', 50)
+    def __init__(self, ctrl_mode, state_init, state_goal, my_ctrl_nominal, my_sys, my_ctrl_benchm, my_logger=None, datafiles=None):
+        self.RATE = rospy.get_param('/rate', 10)
         self.lock = threading.Lock()
+        self.odom_lock = threading.Lock()
+        self.lidar_lock = threading.Lock()
+        self.lidar_lock.acquire()
         # initialization
         self.state_init = state_init
         self.state_goal = state_goal
@@ -303,10 +448,23 @@ class ROS_preset:
         self.dt = 0.0
         self.time_start = 0.0
 
+        self.action_max = np.array([0.22, 2.0])
+        self.cur_action_max = np.array([0.22, 2.0])
+
+        self.constraints = []
+        self.polygonal_constraints = []
+        self.line_constrs = []
+        self.circle_constrs = []
+        self.ranges = []
+        self.ranges_t0 = None
+        self.ranges_t1 = None
+        self.ranges_t2 = None
+        self.counter = 0
+
         # connection to ROS topics
         self.pub_cmd_vel = rospy.Publisher("/cmd_vel", Twist, queue_size=1, latch=False)
-        self.sub_odom = rospy.Subscriber("/odom", Odometry, self.odometry_callback)
-        self.sub_laser_scan = rospy.Subscriber("/scan", LaserScan, self.laser_scan_callback)
+        self.sub_odom = rospy.Subscriber("/odom", Odometry, self.odometry_callback, queue_size=1)
+        self.sub_laser_scan = rospy.Subscriber("/scan", LaserScan, self.laser_scan_callback, queue_size=1)
 
         self.state = np.zeros((3))
         self.dstate = np.zeros((3))
@@ -329,16 +487,18 @@ class ROS_preset:
             [0, 0, 1]
         ])
 
-        self.obstacles_parser = obstacles_parser()
+        self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.35)
 
 
     def odometry_callback(self, msg):
-        self.lock.acquire()
+
+        self.odom_lock.acquire()
 
         # Read current robot state
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
         q = msg.pose.pose.orientation
+
         current_rpy = tftr.euler_from_quaternion((q.x, q.y, q.z, q.w))
         theta = current_rpy[2]
 
@@ -372,50 +532,89 @@ class ROS_preset:
 
         inv_t_matrix = np.linalg.inv(t_matrix)
 
-        if math.copysign(1, self.prev_theta) != math.copysign(1, theta) and abs(self.prev_theta) > 3:
-            if math.copysign(1, self.prev_theta) == -1:
+        if self.prev_theta * theta < 0 and abs(self.prev_theta - theta) > np.pi:
+            if self.prev_theta < 0:
                 self.rotation_counter -= 1
             else:
                 self.rotation_counter += 1
 
         self.prev_theta = theta
         theta = theta + 2 * math.pi * self.rotation_counter
-        self.new_theta = theta
 
         new_theta = theta - theta_goal
 
         # POSITION transform
         temp_pos = [x, y, 0, 1]
-        self.new_state = np.dot(inv_t_matrix, np.transpose(temp_pos))
-        self.new_state = np.array([self.new_state[0], self.new_state[1], new_theta])
+        new_state = np.dot(inv_t_matrix, np.transpose(temp_pos))
+        self.new_state = np.array([new_state[0], new_state[1], new_theta])
 
         inv_R_matrix = inv_t_matrix[:3, :3]
         zeros_like_R = np.zeros(inv_R_matrix.shape)
         inv_R_matrix = np.linalg.inv(rotation_matrix)
-        self.new_dstate = inv_R_matrix.dot(np.array([dx, dy, 0]).T)
+        new_dstate = inv_R_matrix.dot(np.array([dx, dy, 0]).T)
         new_omega = omega
-        self.new_dstate = [self.new_dstate[0], self.new_dstate[1], new_omega]
+        self.new_dstate = [new_dstate[0], new_dstate[1], new_omega]
 
-        self.lock.release()
+        cons = []
+        for constr in self.constraints:
+            cons.append(constr(self.new_state[:2]))
+        f1 = np.max(cons) if len(cons) > 0 else 0
+
+        if f1 > 0:
+           print('COLLISION!!!')
+
+
+        self.lidar_lock.release()
 
     def laser_scan_callback(self, dt):
+        self.lidar_lock.acquire()
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
-        pass
+        try:
+            #print('laser')
+            #0print('STATE:', self.new_state)
+            #print('RANGES: ', dt.ranges)
+            self.ranges_t0 = np.array(dt.ranges)
+            if self.ranges_t1 is None and self.ranges_t2 is None:
+                self.ranges_t1 = self.ranges_t0
+                self.ranges_t2 = self.ranges_t0
+                self.ranges = medfilt(np.array([self.ranges_t0, self.ranges_t1, self.ranges_t2]), [3, 3])[2, :]
+            else:
+                self.ranges = medfilt(np.array([self.ranges_t0, self.ranges_t1, self.ranges_t2]), [3, 3])[2, :]
+                self.ranges_t2 = self.ranges_t1
+                self.ranges_t1 = self.ranges_t0
+            new_blocks, LL, CC, x, y = self.obstacles_parser.get_obstacles(np.array(dt.ranges), fillna='else', state=self.new_state)
+            self.lines = LL
+            self.circles = CC
+            self.line_constrs = [self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178 * 1.75) for i in LL]
 
-    def spin(self, is_print_sim_step=False, is_log_data=False):
+            self.circle_constrs = [Point(i.center[0], i.center[1]).buffer(i.r) for i in CC]
+            self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_state))
+
+            self.polygonal_constraints = self.line_constrs + self.circle_constrs
+            #self.constraints = []
+
+        except ValueError as exc:
+            print('Exception!', exc)
+            self.constraints = []
+
+        self.odom_lock.release()
+
+    def spin(self, is_print_sim_step=False, is_log_data=True):
         rospy.loginfo('ROS-preset has been activated!')
         start_time = time_lib.time()
         rate = rospy.Rate(self.RATE)
         self.time_start = rospy.get_time()
-        while not rospy.is_shutdown() and time_lib.time() - start_time < 100:
+
+        while not rospy.is_shutdown(): #and time_lib.time() - start_time < 180:
             t = rospy.get_time() - self.time_start
             self.t = t
 
             velocity = Twist()
+            action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, 
+                                                self.ctrl_benchm, self.ctrl_mode, self.constraints, self.line_constrs)
+            action = np.clip(action, -self.action_max, self.action_max)
 
-            action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, self.ctrl_benchm, self.ctrl_mode)
-            action = np.clip(action, [-0.22, -2.0], [0.22, 2.0])
-            
+
             self.system.receive_action(action)
             self.ctrl_benchm.receive_sys_state(self.system._state)
             self.ctrl_benchm.upd_accum_obj(self.new_state, action)
@@ -431,16 +630,31 @@ class ROS_preset:
                 self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
             
             if is_log_data:
-                self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+               self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
 
             self.ctrl_benchm.receive_sys_state(self.new_state)
-
+            
 
             velocity.linear.x = action[0]
             velocity.angular.z = action[1]
-            self.pub_cmd_vel.publish(velocity)
 
+            if (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2) < 0.3 
+                and ((np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 15) or
+                     (345 < np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 360))) and t > 10.:
+                print('FINAL RESULTS!!!')
+                print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+                velocity.linear.x = 0
+                velocity.angular.z = 0
+                break
+            
+
+            self.pub_cmd_vel.publish(velocity)
             rate.sleep()
+
+        velocity = Twist()
+        velocity.linear.x = 0.
+        velocity.angular.z = 0.
+        self.pub_cmd_vel.publish(velocity)
 
         rospy.loginfo('ROS-preset has finished working')
 
@@ -483,11 +697,11 @@ if __name__ == "__main__":
                         default=150.0,
                         help='Final time of episode.' )
     parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
-                        default=['2', '2', 'pi'],
+                        default=['3', '3', 'pi'],
                         help='Initial state (as sequence of numbers); ' + 
                         'dimension is environment-specific!')
     parser.add_argument('--is_log_data', type=bool,
-                        default=False,
+                        default=True,
                         help='Flag to log data into a data file. Data are stored in simdata folder.')
     parser.add_argument('--is_visualization', type=bool,
                         default=True,
@@ -499,7 +713,7 @@ if __name__ == "__main__":
                         default=False,
                         help='Flag to estimate environment model.')
     parser.add_argument('--model_est_stage', type=float,
-                        default=1.0,
+                        default=2.0,
                         help='Seconds to learn model until benchmarking controller kicks in.')
     parser.add_argument('--model_est_period_multiplier', type=float,
                         default=1,
@@ -528,7 +742,7 @@ if __name__ == "__main__":
                                 'biquadratic'],
                         help='Structure of stage objective function.')
     parser.add_argument('--R1_diag', type=float, nargs='+',
-                        default=[1, 10, 1, 0, 0],
+                        default=[2, 10, 1, 0, 0],
                         help='Parameter of stage objective function. Must have proper dimension. ' +
                         'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
     parser.add_argument('--R2_diag', type=float, nargs='+',
@@ -640,11 +854,6 @@ if __name__ == "__main__":
                                         pars_disturb=[sigma_q, mu_q, tau_q])
 
     observation_init = my_sys.out(state_init)
-
-    xCoord0 = state_init[0]
-    yCoord0 = state_init[1]
-    alpha0 = state_init[2]
-    alpha_deg_0 = np.degrees(alpha0)
 
     #----------------------------------------Initialization : : model
 

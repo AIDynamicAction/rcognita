@@ -56,6 +56,7 @@ from scipy.optimize import minimize, Bounds, LinearConstraint, NonlinearConstrai
 from scipy.spatial import ConvexHull, convex_hull_plot_2d
 import time as time_lib
 from sensor_msgs.msg import LaserScan
+from scipy.signal import medfilt
 
 #------------------------------------define helpful classes
 class myPoint:
@@ -150,12 +151,6 @@ class Obstacles_parser:
                     angle_diff = (q.angle - p.angle) / N
 
                 new_block = block1.copy()
-                # for j in range(N):
-                #     new_R = p.R + j * R_diff
-                #     new_angle = p.angle + j * angle_diff
-                #     new_x = new_R * np.cos(new_angle) + state_x
-                #     new_y = new_R * np.sin(new_angle) + state_y
-                #     new_block.append(myPoint(new_R, new_x, new_y, new_angle))
                 new_block += block2
                 merged = True
                 new_blocks.append(new_block)
@@ -287,10 +282,10 @@ class Obstacles_parser:
             l = l[~nans]
             degrees = degrees[~nans]
             angles = angles[~nans]
-            nans = l > 2.
-            l = l[~nans]
-            degrees = degrees[~nans]
-            angles = angles[~nans]
+            mask = (l < 2.)
+            l = l[mask]
+            degrees = degrees[mask]
+            angles = angles[mask]
 
         if len(l) == 0:
             return None, [], [], None, None
@@ -300,6 +295,8 @@ class Obstacles_parser:
 
         all_coords = np.column_stack([x, y]).T + state_coord
         x, y = all_coords[0, :], all_coords[1, :]
+        self.x = x
+        self.y = y
         
         points = []
 
@@ -327,7 +324,7 @@ class Obstacles_parser:
 
         return new_blocks, LL, CC, x, y
 
-    def get_buffer_area(self, line, buf = 1.75 * 0.178):
+    def get_buffer_area(self, line, buf = 0.178):
         p1, p2 = line
         if (p1[0] > p2[0]):
             p_ = p1
@@ -365,18 +362,15 @@ class Obstacles_parser:
         sq_4 = [p_intersect[0] + buf * unit_v_par[0], p_intersect[1] + buf * unit_v_par[1]] 
         sq_3 = [sq_4[0] + unit_v[0] * (2 * buf + v_norm), sq_4[1] + unit_v[1] * (2 * buf + v_norm)]
         buffer = [sq_1, sq_2, sq_3, sq_4, sq_1]
-        return buffer
+        return np.array(buffer)
 
-    def get_functions(self, is_casadi):
+    def get_functions(self, is_casadi = False)):
         inequations = []
         figures = []
         
         def get_constraints(x):
             return np.max([np.min([coef[0] * x[0] + coef[1] * x[1] + coef[2] for coef in ineq_set]) 
                                         for ineq_set in inequations])
-
-        # def get_constraint(ineq_set):
-        #     return lambda x: np.min([coef[0] * x[0] + coef[1] * x[1] + coef[2] for coef in ineq_set])
     
         def get_circle_constraints(x):
             centers = []
@@ -385,16 +379,6 @@ class Obstacles_parser:
                 centers.append(circle.center)
                 radiuses.append(circle.r)
             return np.max([(r**2 - (a - x[0])**2 - (b - x[1])**2) for [a, b], r in zip(centers, radiuses)])
-
-        def get_circle_casasi():
-            """
-            return: array of inequality coefficients in the form of
-            [a, b, c] for (x - a)**2 + (y - b)**2 >= c
-            """
-            coefs_array = []
-            for circle in self.circles:
-                coefs_array.append([circle.center[0], circle.center[1], circle.r**2])
-            return coefs_array
         
     
         def get_straight_line(p1, p2):
@@ -436,7 +420,7 @@ class Obstacles_parser:
                 #polygon = Polygon(fig)
                 figures.append(np.array(fig))
                 inequations.append(get_figure_inequations(fig))
-
+        
         if is_casadi == False:
             if len(self.lines) > 0:
                 constraints.append(get_constraints)
@@ -465,7 +449,7 @@ class Obstacles_parser:
 class ROS_preset:
 
     def __init__(self, ctrl_mode, state_init, state_goal, my_ctrl_nominal, my_sys, my_ctrl_benchm, my_logger=None, datafiles=None, is_casadi = False):
-        self.RATE = rospy.get_param('/rate', 50)
+        self.RATE = rospy.get_param('/rate', 10)
         self.lock = threading.Lock()
         self.odom_lock = threading.Lock()
         self.lidar_lock = threading.Lock()
@@ -489,6 +473,9 @@ class ROS_preset:
         self.line_constrs = []
         self.circle_constrs = []
         self.ranges = []
+        self.ranges_t0 = None
+        self.ranges_t1 = None
+        self.ranges_t2 = None
         self.counter = 0
 
         # connection to ROS topics
@@ -523,15 +510,14 @@ class ROS_preset:
 
 
     def odometry_callback(self, msg):
-        #self.lock.acquire()
+
         self.odom_lock.acquire()
+
         # Read current robot state
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
         q = msg.pose.pose.orientation
-        # t3 = +2.0 * (q.w * q.z + q.x * q.y)
-        # t4 = +1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-        # yaw_z = math.atan2(t3, t4)
+
         current_rpy = tftr.euler_from_quaternion((q.x, q.y, q.z, q.w))
         theta = current_rpy[2]
 
@@ -565,131 +551,125 @@ class ROS_preset:
 
         inv_t_matrix = np.linalg.inv(t_matrix)
 
-        #if math.copysign(1, self.prev_theta) != math.copysign(1, theta) and abs(self.prev_theta) > 3:
-        #if self.prev_theta * theta < 0 and abs(self.prev_theta) > 2 * np.pi:
-        if abs(self.prev_theta - theta) > np.pi:
-            #if math.copysign(1, self.prev_theta) == -1:
-            #if self.prev_theta < 0:
-            if self.prev_theta < theta:
+        if self.prev_theta * theta < 0 and abs(self.prev_theta - theta) > np.pi:
+            if self.prev_theta < 0:
                 self.rotation_counter -= 1
             else:
                 self.rotation_counter += 1
 
         self.prev_theta = theta
         theta = theta + 2 * math.pi * self.rotation_counter
-        #self.prev_theta = theta
-        self.new_theta = theta
 
         new_theta = theta - theta_goal
 
         # POSITION transform
         temp_pos = [x, y, 0, 1]
-        self.new_state = np.dot(inv_t_matrix, np.transpose(temp_pos))
-        self.new_state = np.array([self.new_state[0], self.new_state[1], new_theta])
+        new_state = np.dot(inv_t_matrix, np.transpose(temp_pos))
+        self.new_state = np.array([new_state[0], new_state[1], new_theta])
 
         inv_R_matrix = inv_t_matrix[:3, :3]
         zeros_like_R = np.zeros(inv_R_matrix.shape)
         inv_R_matrix = np.linalg.inv(rotation_matrix)
-        self.new_dstate = inv_R_matrix.dot(np.array([dx, dy, 0]).T)
+        new_dstate = inv_R_matrix.dot(np.array([dx, dy, 0]).T)
         new_omega = omega
-        self.new_dstate = [self.new_dstate[0], self.new_dstate[1], new_omega]
-        f = 0
-        cons = []
-        for constr in self.polygonal_constraints:
-                #cons.append(-constr(res))
-            cons.append(constr.contains(Point(self.new_state[:2])))
-            f1 = np.sum(cons)
-            if f1 > 0:
-                f = -1
-            else:
-                f = 1
-
+        self.new_dstate = [new_dstate[0], new_dstate[1], new_omega]
+        
         if not self.is_casadi:
             cons = []
             for constr in self.constraints:
                 cons.append(constr(self.new_state[:2]))
             f1 = np.max(cons) if len(cons) > 0 else 0
             #print('f1 =', f1)
+            if f1 > 0:
+                print('COLLISION!!!')
+
+
         self.lidar_lock.release()
 
     def laser_scan_callback(self, dt):
-        #self.lock.acquire()
         self.lidar_lock.acquire()
         # dt.ranges -> parser.get_obstacles(dt.ranges) -> get_functions(obstacles) -> self.constraints_functions
         try:
-            self.ranges = np.array(dt.ranges)
+            #print('laser')
+            #0print('STATE:', self.new_state)
+            #print('RANGES: ', dt.ranges)
+            self.ranges_t0 = np.array(dt.ranges)
+            if self.ranges_t1 is None and self.ranges_t2 is None:
+                self.ranges_t1 = self.ranges_t0
+                self.ranges_t2 = self.ranges_t0
+                self.ranges = medfilt(np.array([self.ranges_t0, self.ranges_t1, self.ranges_t2]), [3, 3])[2, :]
+            else:
+                self.ranges = medfilt(np.array([self.ranges_t0, self.ranges_t1, self.ranges_t2]), [3, 3])[2, :]
+                self.ranges_t2 = self.ranges_t1
+                self.ranges_t1 = self.ranges_t0
             new_blocks, LL, CC, x, y = self.obstacles_parser.get_obstacles(np.array(dt.ranges), fillna='else', state=self.new_state)
-            self.line_constrs = [Polygon(self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178*0.75)) for i in LL]
+            self.lines = LL
+            self.circles = CC
+            self.line_constrs = [self.obstacles_parser.get_buffer_area([[i[0].x, i[0].y], [i[1].x, i[1].y]], 0.178 * 1.75) for i in LL]
 
             self.circle_constrs = [Point(i.center[0], i.center[1]).buffer(i.r) for i in CC]
             self.constraints = self.obstacles_parser(np.array(dt.ranges), np.array(self.new_state), self.is_casadi)
 
             self.polygonal_constraints = self.line_constrs + self.circle_constrs
+            #self.constraints = []
 
         except ValueError as exc:
-            print('YA UPAL!', exc)
+            print('Exception!', exc)
             self.constraints = []
 
         self.odom_lock.release()
 
-    def spin(self, is_print_sim_step=False, is_log_data=False):
+    def spin(self, is_print_sim_step=False, is_log_data=True):
         rospy.loginfo('ROS-preset has been activated!')
         start_time = time_lib.time()
         rate = rospy.Rate(self.RATE)
         self.time_start = rospy.get_time()
-        while not rospy.is_shutdown() and time_lib.time() - start_time < 400:
-            try:
-                t = rospy.get_time() - self.time_start
-                self.t = t
 
-                velocity = Twist()
-                #print('OUTSIDE!!', self.constraints)
-                action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, 
-                                                    self.ctrl_benchm, self.ctrl_mode, self.constraints, self.line_constrs)
-                action = np.clip(action, -self.cur_action_max, self.cur_action_max)
-                
-                self.system.receive_action(action)
-                self.ctrl_benchm.receive_sys_state(self.system._state)
-                self.ctrl_benchm.upd_accum_obj(self.new_state, action)
+        while not rospy.is_shutdown(): #and time_lib.time() - start_time < 180:
+            t = rospy.get_time() - self.time_start
+            self.t = t
 
-                xCoord = self.new_state[0]
-                yCoord = self.new_state[1]
-                alpha = self.new_state[2]
-
-                stage_obj = self.ctrl_benchm.stage_obj(self.new_state, action)
-                accum_obj = self.ctrl_benchm.accum_obj_val
-
-                # if is_print_sim_step:
-                #     self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
-                
-                #if is_log_data:
-                #    self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
-
-                self.ctrl_benchm.receive_sys_state(self.new_state)
+            velocity = Twist()
+            action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, 
+                                                self.ctrl_benchm, self.ctrl_mode, self.constraints, self.line_constrs)
+            action = np.clip(action, -self.action_max, self.action_max)
 
 
-                velocity.linear.x = action[0]
-                velocity.angular.z = action[1]
-                self.pub_cmd_vel.publish(velocity)
-                # print('STATE', self.new_state)
-                #print('DIFFS', (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2),
-                #np.abs(np.degrees(alpha - self.state_init[2]))))   
-                if (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2) < 0.3 
-                    and ((np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 10) or
-                        (350 < np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 360))) and t > 10.:
-                    print('FINAL RESULTS!!!')
-                    print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
-                    break
+            self.system.receive_action(action)
+            self.ctrl_benchm.receive_sys_state(self.system._state)
+            self.ctrl_benchm.upd_accum_obj(self.new_state, action)
 
-                rate.sleep()
+            xCoord = self.new_state[0]
+            yCoord = self.new_state[1]
+            alpha = self.new_state[2]
 
-            except KeyboardInterrupt:
-                velocity = Twist()
-                velocity.linear.x = 0.
-                velocity.angular.z = 0.
-                self.pub_cmd_vel.publish(velocity)
-                rospy.loginfo('ROS-preset has finished working')
+            stage_obj = self.ctrl_benchm.stage_obj(self.new_state, action)
+            accum_obj = self.ctrl_benchm.accum_obj_val
+
+            if is_print_sim_step:
+                self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+            
+            if is_log_data:
+               self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+
+            self.ctrl_benchm.receive_sys_state(self.new_state)
+            
+
+            velocity.linear.x = action[0]
+            velocity.angular.z = action[1]
+
+            if (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2) < 0.3 
+                and ((np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 15) or
+                     (345 < np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 360))) and t > 10.:
+                print('FINAL RESULTS!!!')
+                print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+                velocity.linear.x = 0
+                velocity.angular.z = 0
                 break
+            
+
+            self.pub_cmd_vel.publish(velocity)
+            rate.sleep()
 
         velocity = Twist()
         velocity.linear.x = 0.
@@ -741,7 +721,7 @@ if __name__ == "__main__":
                         help='Initial state (as sequence of numbers); ' + 
                         'dimension is environment-specific!')
     parser.add_argument('--is_log_data', type=bool,
-                        default=False,
+                        default=True,
                         help='Flag to log data into a data file. Data are stored in simdata folder.')
     parser.add_argument('--is_visualization', type=bool,
                         default=True,
@@ -753,7 +733,7 @@ if __name__ == "__main__":
                         default=False,
                         help='Flag to estimate environment model.')
     parser.add_argument('--model_est_stage', type=float,
-                        default=1.0,
+                        default=2.0,
                         help='Seconds to learn model until benchmarking controller kicks in.')
     parser.add_argument('--model_est_period_multiplier', type=float,
                         default=1,
@@ -782,7 +762,7 @@ if __name__ == "__main__":
                                 'biquadratic'],
                         help='Structure of stage objective function.')
     parser.add_argument('--R1_diag', type=float, nargs='+',
-                        default=[0.7, 1.0, 0.1, 0, 0],
+                        default=[2, 10, 1, 0, 0],
                         help='Parameter of stage objective function. Must have proper dimension. ' +
                         'Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.')
     parser.add_argument('--R2_diag', type=float, nargs='+',
@@ -897,11 +877,6 @@ if __name__ == "__main__":
                                         pars_disturb=[sigma_q, mu_q, tau_q])
 
     observation_init = my_sys.out(state_init)
-
-    xCoord0 = state_init[0]
-    yCoord0 = state_init[1]
-    alpha0 = state_init[2]
-    alpha_deg_0 = np.degrees(alpha0)
 
     #----------------------------------------Initialization : : model
 
