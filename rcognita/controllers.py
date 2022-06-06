@@ -33,6 +33,7 @@ from shapely.geometry import Point
 from tabulate import tabulate
 import time
 
+import rospy
 from casadi import *
 
 try:
@@ -1061,6 +1062,9 @@ class CtrlOptPred:
         # self.big_number = 1e4
         self.counter = 0
         self.total_time = 0
+        self.max_time = 0
+        self.start_iter_time = rospy.get_time()
+
 
     def reset(self, t0):
         """
@@ -1620,7 +1624,7 @@ class CtrlOptPred:
                 final_constraints.append(sp.optimize.NonlinearConstraint(partial(constrs, constraints=constraints, y=observation), -np.inf, 0))
 
             try:
-                start = time.time()
+                start = rospy.get_time()
                 if isGlobOpt:
                     minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 
                     'constraints': final_constraints, 'tol': 1e-7, 'options': actor_opt_options}
@@ -1639,7 +1643,7 @@ class CtrlOptPred:
 
                 J = self.stage_obj(observation, action_sqn[:self.dim_input])*self.sampling_time
                 self.J_mean += J  
-                final_time = time.time() - start
+                final_time = rospy.get_time() - start
                 self.total_time += final_time
                 self.counter += 1  
                 if self.counter % 10 == 0:
