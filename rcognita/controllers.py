@@ -364,7 +364,6 @@ class CtrlRLStab:
 
         if self.stage_obj_struct == 'quadratic':
             R1 = self.stage_obj_pars[0]
-            print(f"Shapes of chi and R1 = {chi.shape}, {R1.sshape}")
             stage_obj = chi @ R1 @ chi
         elif self.stage_obj_struct == 'biquadratic':
             R1 = self.stage_obj_pars[0]
@@ -1034,6 +1033,7 @@ class CtrlOptPred:
         self.pars = pars
         self.pars_disturb = pars_disturb 
         self.J_prev = 10000
+        self.J_mean = 0
         self.g_max = 0.1
 
         self.accum_obj_val = 0
@@ -1055,7 +1055,7 @@ class CtrlOptPred:
             self.Wmin = -1e3*np.ones(self.dim_critic) 
             self.Wmax = 1e3*np.ones(self.dim_critic)
             
-        self.w_critic_prev = np.ones(self.dim_critic)  
+        self.w_critic_prev = np.zeros(self.dim_critic) 
         self.w_critic_init = self.w_critic_prev
         
         # self.big_number = 1e4
@@ -1124,7 +1124,7 @@ class CtrlOptPred:
         
         """
         self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
-        print(f"Cost =  {self.accum_obj_val}")
+        #print(f"Cost =  {self.accum_obj_val}")
     
     def _estimate_model(self, t, observation):
         """
@@ -1291,7 +1291,7 @@ class CtrlOptPred:
             e = critic_prev - self.gamma * critic_next - self.stage_obj(observation_prev, action_prev)
             
             Jc += 1/2 * e**2
-            
+        #print(f"Critic cost = {Jc}")    
         return Jc
         
         
@@ -1312,7 +1312,7 @@ class CtrlOptPred:
         bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
     
         w_critic = minimize(lambda w_critic: self._critic_cost(w_critic), self.w_critic_init, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
-        
+        #print(f"w_critic minimized  {w_critic}")
         # DEBUG ===================================================================
         # print('-----------------------Critic parameters--------------------------')
         # print( w_critic )
@@ -1374,6 +1374,7 @@ class CtrlOptPred:
                 # /DEBUG ==================================================================                 
                 
                 J += Q 
+        self.J_mean += J
 
         return J
 
@@ -1479,7 +1480,6 @@ class CtrlOptPred:
                         rhs[4] = 1/I * action_cur[1]
 
                 res = res + self.pred_step_size * rhs
-                # print(f"Res: {res}")
                 for ineq_set in constraints[0]:
                     lines = []
                     for ineq in ineq_set:
@@ -1490,15 +1490,14 @@ class CtrlOptPred:
                         casadi_min = fmin(casadi_min, lines[it]) 
                     g.append(casadi_min)
                     if casadi_min > 0:
-                        print("COLLISION IN CASADI")
+                        #print("COLLISION IN CASADI")
                         is_collision = True
                     ubg.append(0) 
-                    # opti.subject_to(casadi_min <= 0)
                 for circle_constr in constraints[1]:
                     g.append(circle_constr[2] - ((res[0] - circle_constr[0]) ** 2 
                             + (res[1] - circle_constr[1]) ** 2))
                     if g[-1] > 0:
-                        print("COLLISION IN CASADI")
+                        #print("COLLISION IN CASADI")
                         is_collision = True
                     ubg.append(0)
             if len(g) > 0:
@@ -1511,17 +1510,17 @@ class CtrlOptPred:
         if is_collision == False:
             qp_prob = {'f': J, 'x': vertcat(my_action_sqn), 'g': vertcat(*g)} #vcat(g) or vertcat(*g)
             opts_setting = {'print_time':0, 'ipopt.max_iter':max_iter, 'ipopt.print_level':0, 
-                            'ipopt.acceptable_tol':1e-8, 'ipopt.acceptable_obj_change_tol':1e-6}
-                            # 'ipopt.acceptable_tol':1e-4, 'ipopt.acceptable_obj_change_tol':1e-2}
+                            'ipopt.acceptable_tol':1e-7, 'ipopt.acceptable_obj_change_tol':1e-4}
 
-            start = time.time()
             solver = nlpsol('solver', 'ipopt', qp_prob, opts_setting)
             try:
+                start = time.time()
                 res = solver(x0=initial_val, lbx=lbx, ubx=ubx, ubg=ubg)
                 final_time = time.time() - start
                 self.total_time += final_time
-                self.counter += 1  
-                print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
+                self.counter += 1 
+                if self.counter % 10 == 0: 
+                    print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
                 return max_g, res["x"] 
             except RuntimeError:
                 print(f"FAILED TO OPTIMIZE")
@@ -1548,9 +1547,7 @@ class CtrlOptPred:
         # def state_constraint(action_sqn, idx):
             
         #     my_action_sqn = np.reshape(action_sqn, [N, self.dim_input])
-            
         #     observation_sqn = np.zeros([idx, self.dim_output])    
-            
         #     # System output prediction
         #     if (mode==1) or (mode==3) or (mode==5):    # Via exogenously passed model
         #         observation_sqn[0, :] = observation
@@ -1561,7 +1558,6 @@ class CtrlOptPred:
         #             # state = get_next_state(state, my_action_sqn[k-1, :], delta)
         #             state = state + delta * self.sys_rhs([], state, my_action_sqn[k-1, :], [])  # Euler scheme
         #             observation_sqn[k, :] = self.sys_out(state)            
-            
         #     return observation_sqn[-1, 1] - 1
 
         # Optimization method of actor    
@@ -1578,11 +1574,14 @@ class CtrlOptPred:
                 max_iter = 120)
             action_sqn = np.reshape(np.array(sol), (-1,))
             J = self.stage_obj(observation, action_sqn[:self.dim_input])*self.sampling_time
+            self.J_mean += J
             if J < self.J_prev and max_g < self.g_max:
-                print("Renovating, J = {J}")
                 self.J_prev = J
                 self.g_max = max_g
                 self.prev_action = action_sqn[:self.dim_input]
+
+            if self.counter % 20 == 0:
+                    print(f"Mean cost = {self.J_mean / self.counter}")
 
         else:
             actor_opt_method = 'SLSQP'
@@ -1636,11 +1635,16 @@ class CtrlOptPred:
                                         tol=1e-5,
                                         bounds=bnds,
                                         constraints=final_constraints,
-                                        options=actor_opt_options).x   
+                                        options=actor_opt_options).x 
+
+                J = self.stage_obj(observation, action_sqn[:self.dim_input])*self.sampling_time
+                self.J_mean += J  
                 final_time = time.time() - start
                 self.total_time += final_time
                 self.counter += 1  
-                print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
+                if self.counter % 10 == 0:
+                    print('minimizer working time:', final_time, '||| avg time:', self.total_time / self.counter)
+                    print(f"Mean cost = {self.J_mean / self.counter}")
             except ValueError:
                 print('Actor''s optimizer failed. Returning default action')
                 action_sqn = my_action_sqn_init

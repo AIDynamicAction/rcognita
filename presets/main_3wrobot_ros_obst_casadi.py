@@ -568,7 +568,6 @@ class ROS_preset:
         #if math.copysign(1, self.prev_theta) != math.copysign(1, theta) and abs(self.prev_theta) > 3:
         #if self.prev_theta * theta < 0 and abs(self.prev_theta) > 2 * np.pi:
         if abs(self.prev_theta - theta) > np.pi:
-            # print('AAA', self.prev_theta, theta)
             #if math.copysign(1, self.prev_theta) == -1:
             #if self.prev_theta < 0:
             if self.prev_theta < theta:
@@ -605,26 +604,12 @@ class ROS_preset:
             else:
                 f = 1
 
-        #print('STATE:', self.new_state, '\tIS DANGEROUS:', f)
-
-        # if f < 0:
-        #     self.cur_action_max = self.action_max
-        #     print('COLLISION!!!')
-        #     #print('RANGES:', self.ranges)
-        # else:
-        #     self.cur_action_max = self.action_max
-
         if not self.is_casadi:
             cons = []
             for constr in self.constraints:
                 cons.append(constr(self.new_state[:2]))
             f1 = np.max(cons) if len(cons) > 0 else 0
             #print('f1 =', f1)
-            if f1 > 0:
-                print('COLLISION BY NINA!!!')
-                #print('RANGES:', self.ranges)
-
-        #self.lock.release()
         self.lidar_lock.release()
 
     def laser_scan_callback(self, dt):
@@ -645,11 +630,6 @@ class ROS_preset:
             print('YA UPAL!', exc)
             self.constraints = []
 
-        #if self.counter % 30 == 0:
-            # print('RANGES:', np.array(dt.ranges))
-            # print('STATE:', self.new_state)
-        # self.counter += 1
-        #self.lock.release()
         self.odom_lock.release()
 
     def spin(self, is_print_sim_step=False, is_log_data=False):
@@ -657,50 +637,59 @@ class ROS_preset:
         start_time = time_lib.time()
         rate = rospy.Rate(self.RATE)
         self.time_start = rospy.get_time()
-        while not rospy.is_shutdown() and time_lib.time() - start_time < 500:
-            t = rospy.get_time() - self.time_start
-            self.t = t
+        while not rospy.is_shutdown() and time_lib.time() - start_time < 400:
+            try:
+                t = rospy.get_time() - self.time_start
+                self.t = t
 
-            velocity = Twist()
-            #print('OUTSIDE!!', self.constraints)
-            action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, 
-                                                self.ctrl_benchm, self.ctrl_mode, self.constraints, self.line_constrs)
-            action = np.clip(action, -self.cur_action_max, self.cur_action_max)
-            
-            self.system.receive_action(action)
-            self.ctrl_benchm.receive_sys_state(self.system._state)
-            self.ctrl_benchm.upd_accum_obj(self.new_state, action)
+                velocity = Twist()
+                #print('OUTSIDE!!', self.constraints)
+                action = controllers.ctrl_selector(self.t, self.new_state, action_manual, self.ctrl_nominal, 
+                                                    self.ctrl_benchm, self.ctrl_mode, self.constraints, self.line_constrs)
+                action = np.clip(action, -self.cur_action_max, self.cur_action_max)
+                
+                self.system.receive_action(action)
+                self.ctrl_benchm.receive_sys_state(self.system._state)
+                self.ctrl_benchm.upd_accum_obj(self.new_state, action)
 
-            xCoord = self.new_state[0]
-            yCoord = self.new_state[1]
-            alpha = self.new_state[2]
+                xCoord = self.new_state[0]
+                yCoord = self.new_state[1]
+                alpha = self.new_state[2]
 
-            stage_obj = self.ctrl_benchm.stage_obj(self.new_state, action)
-            accum_obj = self.ctrl_benchm.accum_obj_val
+                stage_obj = self.ctrl_benchm.stage_obj(self.new_state, action)
+                accum_obj = self.ctrl_benchm.accum_obj_val
 
-            # if is_print_sim_step:
-            #     self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
-            
-            #if is_log_data:
-            #    self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+                # if is_print_sim_step:
+                #     self.logger.print_sim_step(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+                
+                #if is_log_data:
+                #    self.logger.log_data_row(self.datafiles[0], t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
 
-            self.ctrl_benchm.receive_sys_state(self.new_state)
+                self.ctrl_benchm.receive_sys_state(self.new_state)
 
 
-            velocity.linear.x = action[0]
-            velocity.angular.z = action[1]
-            self.pub_cmd_vel.publish(velocity)
-            # print('STATE', self.new_state)
-            #print('DIFFS', (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2),
-            #np.abs(np.degrees(alpha - self.state_init[2]))))
-            if (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2) < 0.2 
-                and ((np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 5) or
-                     (355 < np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 360))) and t > 7.:
-                print('FINAL RESULTS!!!')
-                print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+                velocity.linear.x = action[0]
+                velocity.angular.z = action[1]
+                self.pub_cmd_vel.publish(velocity)
+                # print('STATE', self.new_state)
+                #print('DIFFS', (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2),
+                #np.abs(np.degrees(alpha - self.state_init[2]))))   
+                if (np.sqrt((xCoord - self.state_init[0])**2 + (yCoord - self.state_init[1])**2) < 0.3 
+                    and ((np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 10) or
+                        (350 < np.abs(np.degrees(alpha - self.state_init[2])) % 360 < 360))) and t > 10.:
+                    print('FINAL RESULTS!!!')
+                    print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+                    break
+
+                rate.sleep()
+
+            except KeyboardInterrupt:
+                velocity = Twist()
+                velocity.linear.x = 0.
+                velocity.angular.z = 0.
+                self.pub_cmd_vel.publish(velocity)
+                rospy.loginfo('ROS-preset has finished working')
                 break
-
-            rate.sleep()
 
         velocity = Twist()
         velocity.linear.x = 0.
@@ -748,7 +737,7 @@ if __name__ == "__main__":
                         default=150.0,
                         help='Final time of episode.' )
     parser.add_argument('--state_init', type=str, nargs="+", metavar='state_init',
-                        default=['2', '2', 'pi'],
+                        default=['3', '3', 'pi'],
                         help='Initial state (as sequence of numbers); ' + 
                         'dimension is environment-specific!')
     parser.add_argument('--is_log_data', type=bool,
