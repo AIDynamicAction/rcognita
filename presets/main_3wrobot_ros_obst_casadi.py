@@ -364,7 +364,7 @@ class Obstacles_parser:
         buffer = [sq_1, sq_2, sq_3, sq_4, sq_1]
         return np.array(buffer)
 
-    def get_functions(self, is_casadi = False)):
+    def get_functions(self, is_casadi = False):
         inequations = []
         figures = []
         
@@ -380,7 +380,16 @@ class Obstacles_parser:
                 radiuses.append(circle.r)
             return np.max([(r**2 - (a - x[0])**2 - (b - x[1])**2) for [a, b], r in zip(centers, radiuses)])
         
-    
+        def get_circle_casasi():
+            """
+            return: array of inequality coefficients in the form of
+            [a, b, c] for (x - a)**2 + (y - b)**2 >= c
+            """
+            coefs_array = []
+            for circle in self.circles:
+                coefs_array.append([circle.center[0], circle.center[1], circle.r**2])
+            return coefs_array
+            
         def get_straight_line(p1, p2):
             """
             return: array [a, b, c] for a* x + b * y + c
@@ -639,6 +648,8 @@ class ROS_preset:
             self.ctrl_benchm.receive_sys_state(self.system._state)
             self.ctrl_benchm.upd_accum_obj(self.new_state, action)
 
+            # self.new_new_state = self.new_state
+            # self.new_state[2] = self.new_state[2] % 360
             xCoord = self.new_state[0]
             yCoord = self.new_state[1]
             alpha = self.new_state[2]
