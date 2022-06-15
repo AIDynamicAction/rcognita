@@ -847,6 +847,7 @@ class CtrlOptPred:
                  t0=0,
                  sampling_time=0.1,
                  Nactor=1,
+                 actor_opt_method='SLSQP',
                  pred_step_size=0.1,
                  sys_rhs=[],
                  sys_out=[],
@@ -994,6 +995,7 @@ class CtrlOptPred:
         
         # Controller: common
         self.Nactor = Nactor 
+        self.actor_opt_method = actor_opt_method
         self.pred_step_size = pred_step_size
         
         self.action_min = np.array( ctrl_bnds[:,0] )
@@ -1394,8 +1396,7 @@ class CtrlOptPred:
         # Optimization method of actor    
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
         # actor_opt_method = 'SLSQP' # Standard
-        actor_opt_method = 'SLSQP'
-        if actor_opt_method == 'trust-constr':
+        if self.actor_opt_method == 'trust-constr':
             actor_opt_options = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
         else:
             actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2} 
@@ -1408,7 +1409,7 @@ class CtrlOptPred:
         
         try:
             if isGlobOpt:
-                minimizer_kwargs = {'method': actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
+                minimizer_kwargs = {'method': self.actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
                 action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation),
                                           my_action_sqn_init,
                                           minimizer_kwargs=minimizer_kwargs,
@@ -1416,7 +1417,7 @@ class CtrlOptPred:
             else:
                 action_sqn = minimize(lambda action_sqn: self._actor_cost(action_sqn, observation),
                                       my_action_sqn_init,
-                                      method=actor_opt_method,
+                                      method=self.actor_opt_method,
                                       tol=1e-7,
                                       bounds=bnds,
                                       options=actor_opt_options).x        
