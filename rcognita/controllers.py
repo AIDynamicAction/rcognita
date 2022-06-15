@@ -259,7 +259,7 @@ class CtrlRLStab:
         self.sampling_time = sampling_time
         
         # Controller: common
-        self.Nactor = Nactor 
+        self.Nactor = Nactor
         self.pred_step_size = pred_step_size
         
         self.action_min = np.array( ctrl_bnds[:,0] )
@@ -862,6 +862,7 @@ class CtrlOptPred:
                  model_est_checks=0,
                  gamma=1,
                  Ncritic=4,
+                 critic_opt_method='SLSQP',
                  critic_period=0.1,
                  critic_struct='quad-nomix',
                  stage_obj_struct='quadratic',
@@ -1046,6 +1047,7 @@ class CtrlOptPred:
         self.critic_clock = t0
         self.gamma = gamma
         self.Ncritic = Ncritic
+        self.critic_opt_method = critic_opt_method
         self.Ncritic = np.min([self.Ncritic, self.buffer_size-1]) # Clip critic buffer size
         self.critic_period = critic_period
         self.critic_struct = critic_struct
@@ -1287,15 +1289,14 @@ class CtrlOptPred:
         
         # Optimization method of critic    
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-        critic_opt_method = 'SLSQP'
-        if critic_opt_method == 'trust-constr':
+        if self.critic_opt_method == 'trust-constr':
             critic_opt_options = {'maxiter': 200, 'disp': False} #'disp': True, 'verbose': 2}
         else:
             critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2} 
         
         bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
     
-        w_critic = minimize(lambda w_critic: self._critic_cost(w_critic), self.w_critic_init, method=critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
+        w_critic = minimize(lambda w_critic: self._critic_cost(w_critic), self.w_critic_init, method=self.critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
         
         # DEBUG ===================================================================
         # print('-----------------------Critic parameters--------------------------')
