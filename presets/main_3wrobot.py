@@ -61,7 +61,7 @@ parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
                              'RQL',
                              'SQL',
                              'JACS'],
-                    default='nominal',
+                    default='MPC',
                     help='Control mode. Currently available: ' +
                     '----manual: manual constant control specified by action_manual; ' +
                     '----nominal: nominal controller, usually used to benchmark optimal controllers;' +                    
@@ -238,6 +238,14 @@ alpha_deg_0 = alpha0/2/np.pi
 #----------------------------------------Initialization : : controller
 my_ctrl_nominal = controllers.CtrlNominal3WRobot(m, I, ctrl_gain=5, ctrl_bnds=ctrl_bnds, t0=t0, sampling_time=dt)
 
+state_predictor = controllers.EulerStatePredictor(
+    pred_step_size, 
+    my_sys._state_dyn,
+    my_sys.out,
+    dim_output,
+    Nactor
+)
+
 # Predictive optimal controller
 my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            dim_output,
@@ -251,6 +259,7 @@ my_ctrl_opt_pred = controllers.CtrlOptPred(dim_input,
                                            sys_rhs = my_sys._state_dyn,
                                            sys_out = my_sys.out,
                                            state_sys = state_init,
+                                           state_predictor = state_predictor,
                                            prob_noise_pow = prob_noise_pow,
                                            is_est_model = is_est_model,
                                            model_est_stage = model_est_stage,

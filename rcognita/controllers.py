@@ -24,6 +24,7 @@ from scipy.optimize import basinhopping
 from scipy.optimize import NonlinearConstraint
 from numpy.linalg import lstsq
 from numpy import reshape
+from abc import ABCMeta, abstractmethod
 import warnings
 
 # For debugging purposes
@@ -61,6 +62,35 @@ def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking
         action = ctrl_benchmarking.compute_action(t, observation)
         
     return action
+class BaseStatePredictor(metaclass=ABCMeta):
+    @abstractmethod
+    def predict_state(self):
+        pass
+    
+    @abstractmethod
+    def predict_state_sqn(self):
+        pass
+
+class EulerStatePredictor(BaseStatePredictor):
+    def __init__(self, pred_step_size, sys_rhs, sys_out, dim_output, Nsteps):
+        self.pred_step_size = pred_step_size
+        self.sys_rhs = sys_rhs
+        self.sys_out = sys_out
+        self.dim_output = dim_output
+        self.Nsteps = Nsteps
+
+    def predict_state(self, cur_state, action_sqn, k):
+        next_state = cur_state + self.pred_step_size * self.sys_rhs([], cur_state, action_sqn[k-1, :])
+        return next_state
+
+    def predict_state_sqn(self, state_start, observation, action_sqn):
+        observation_sqn = np.zeros([self.Nsteps, self.dim_output])
+        observation_sqn[0,:] = observation
+        state = state_start
+        for k in range(1, self.Nsteps):
+            state = self.predict_state(state, action_sqn, k)
+            observation_sqn[k, :] = self.sys_out(state)
+        return observation_sqn
 
 class CtrlRLStab:
     """
@@ -821,6 +851,7 @@ class CtrlOptPred:
                  sys_rhs=[],
                  sys_out=[],
                  state_sys=[],
+                 state_predictor=[],
                  prob_noise_pow = 1,
                  is_est_model=0,
                  model_est_stage=1,
@@ -984,6 +1015,7 @@ class CtrlOptPred:
         self.sys_rhs = sys_rhs
         self.sys_out = sys_out
         self.state_sys = state_sys
+        self.state_predictor=state_predictor
         
         # Model estimator's things
         self.is_est_model = is_est_model
@@ -1282,25 +1314,17 @@ class CtrlOptPred:
         """
         
         my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
-        
-        observation_sqn = np.zeros([self.Nactor, self.dim_output])
-        
         # System output prediction
         if not self.is_est_model:    # Via exogenously passed model
-            observation_sqn[0, :] = observation
             state = self.state_sys
-            for k in range(1, self.Nactor):
-                # state = get_next_state(state, my_action_sqn[k-1, :], delta)         TODO
-                state = state + self.pred_step_size * self.sys_rhs([], state, my_action_sqn[k-1, :])  # Euler scheme
-                
-                observation_sqn[k, :] = self.sys_out(state)
+            observation_sqn = self.state_predictor.predict_state_sqn(state, observation, my_action_sqn)
 
         elif self.is_est_model:    # Via estimated model
             my_action_sqn_upsampled = my_action_sqn.repeat(int(self.pred_step_size/self.sampling_time), axis=0)
             observation_sqn_upsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, my_action_sqn_upsampled, self.my_model.x0est, observation)
             observation_sqn = observation_sqn_upsampled[::int(self.pred_step_size/self.sampling_time)]
         
-        J = 0         
+        J = 0   
         if self.mode=='MPC':
             for k in range(self.Nactor):
                 J += self.gamma**k * self.stage_obj(observation_sqn[k, :], my_action_sqn[k, :])
