@@ -7,6 +7,7 @@ Updates to come.
 
 """
 
+
 class ModelSS:
     """
     State-space model
@@ -25,24 +26,26 @@ class ModelSS:
         Initial state estimate.
             
     """
-    
+
     def __init__(self, A, B, C, D, x0est):
         self.A = A
         self.B = B
         self.C = C
         self.D = D
         self.x0est = x0est
-        
+
     def upd_pars(self, Anew, Bnew, Cnew, Dnew):
         self.A = Anew
         self.B = Bnew
         self.C = Cnew
         self.D = Dnew
-        
+
     def updateIC(self, x0setNew):
         self.x0set = x0setNew
-         
+
+
 class ModelNN:
     def __init__(self, *args, **kwargs):
         raise NotImplementedError(f"Class {self.__class__} is not yet implemented.")
+
     # if self.dt != dt -> error
