@@ -1,0 +1,231 @@
+import numpy as np
+import argparse
+
+def config_3wrobot():
+    description = "Agent-environment preset: 3-wheel robot with dynamical actuators."
+
+    parser = argparse.ArgumentParser(description=description)
+
+    parser.add_argument(
+        "--ctrl_mode",
+        metavar="ctrl_mode",
+        type=str,
+        choices=["manual", "nominal", "MPC", "RQL", "SQL", "JACS"],
+        default="MPC",
+        help="Control mode. Currently available: "
+        + "----manual: manual constant control specified by action_manual; "
+        + "----nominal: nominal controller, usually used to benchmark optimal controllers;"
+        + "----MPC:model-predictive control; "
+        + "----RQL: Q-learning actor-critic with Nactor-1 roll-outs of stage objective; "
+        + "----SQL: stacked Q-learning; "
+        + "----JACS: joint actor-critic (stabilizing), system-specific, needs proper setup.",
+    )
+    parser.add_argument(
+        "--dt", type=float, metavar="dt", default=0.01, help="Controller sampling time."
+    )
+    parser.add_argument(
+        "--t1", type=float, metavar="t1", default=10.0, help="Final time of episode."
+    )
+    parser.add_argument(
+        "--Nruns",
+        type=int,
+        default=1,
+        help="Number of episodes. Learned parameters are not reset after an episode.",
+    )
+    parser.add_argument(
+        "--state_init",
+        type=str,
+        nargs="+",
+        metavar="state_init",
+        default=["5", "5", "-3*pi/4", "0", "0"],
+        help="Initial state (as sequence of numbers); "
+        + "dimension is environment-specific!",
+    )
+    parser.add_argument(
+        "--is_log_data",
+        type=bool,
+        default=False,
+        help="Flag to log data into a data file. Data are stored in simdata folder.",
+    )
+    parser.add_argument(
+        "--is_visualization",
+        type=bool,
+        default=True,
+        help="Flag to produce graphical output.",
+    )
+    parser.add_argument(
+        "--is_print_sim_step",
+        type=bool,
+        default=True,
+        help="Flag to print simulation data into terminal.",
+    )
+    parser.add_argument(
+        "--is_est_model",
+        type=bool,
+        default=False,
+        help="Flag to estimate environment model.",
+    )
+    parser.add_argument(
+        "--model_est_stage",
+        type=float,
+        default=1.0,
+        help="Seconds to learn model until benchmarking controller kicks in.",
+    )
+    parser.add_argument(
+        "--model_est_period_multiplier",
+        type=float,
+        default=1,
+        help="Model is updated every model_est_period_multiplier times dt seconds.",
+    )
+    parser.add_argument(
+        "--model_order",
+        type=int,
+        default=5,
+        help="Order of state-space estimation model.",
+    )
+    parser.add_argument(
+        "--prob_noise_pow",
+        type=float,
+        default=False,
+        help="Power of probing (exploration) noise.",
+    )
+    parser.add_argument(
+        "--action_manual",
+        type=float,
+        default=[-5, -3],
+        nargs="+",
+        help="Manual control action to be fed constant, system-specific!",
+    )
+    parser.add_argument(
+        "--Nactor",
+        type=int,
+        default=5,
+        help="Horizon length (in steps) for predictive controllers.",
+    )
+    parser.add_argument(
+        "--pred_step_size_multiplier",
+        type=float,
+        default=2.0,
+        help="Size of each prediction step in seconds is a pred_step_size_multiplier multiple of controller sampling time dt.",
+    )
+    parser.add_argument(
+        "--buffer_size",
+        type=int,
+        default=10,
+        help="Size of the buffer (experience replay) for model estimation, agent learning etc.",
+    )
+    parser.add_argument(
+        "--stage_obj_struct",
+        type=str,
+        default="quadratic",
+        choices=["quadratic", "biquadratic"],
+        help="Structure of stage objective function.",
+    )
+    parser.add_argument(
+        "--R1_diag",
+        type=float,
+        nargs="+",
+        default=[1, 10, 1, 0, 0, 0, 0],
+        help="Parameter of stage objective function. Must have proper dimension. "
+        + "Say, if chi = [observation, action], then a quadratic stage objective reads chi.T diag(R1) chi, where diag() is transformation of a vector to a diagonal matrix.",
+    )
+    parser.add_argument(
+        "--R2_diag",
+        type=float,
+        nargs="+",
+        default=[1, 10, 1, 0, 0, 0, 0],
+        help="Parameter of stage objective function . Must have proper dimension. "
+        + "Say, if chi = [observation, action], then a bi-quadratic stage objective reads chi**2.T diag(R2) chi**2 + chi.T diag(R1) chi, "
+        + "where diag() is transformation of a vector to a diagonal matrix.",
+    )
+    parser.add_argument(
+        "--Ncritic",
+        type=int,
+        default=4,
+        help="Critic stack size (number of temporal difference terms in critic cost).",
+    )
+    parser.add_argument("--gamma", type=float, default=1.0, help="Discount factor.")
+    parser.add_argument(
+        "--critic_period_multiplier",
+        type=float,
+        default=1.0,
+        help="Critic is updated every critic_period_multiplier times dt seconds.",
+    )
+    parser.add_argument(
+        "--critic_struct",
+        type=str,
+        default="quad-nomix",
+        choices=["quad-lin", "quadratic", "quad-nomix", "quad-mix"],
+        help="Feature structure (critic). Currently available: "
+        + "----quad-lin: quadratic-linear; "
+        + "----quadratic: quadratic; "
+        + "----quad-nomix: quadratic, no mixed terms; "
+        + "----quad-mix: quadratic, mixed observation-action terms (for, say, Q or advantage function approximations).",
+    )
+    parser.add_argument(
+        "--actor_struct",
+        type=str,
+        default="quad-nomix",
+        choices=["quad-lin", "quadratic", "quad-nomix"],
+        help="Feature structure (actor). Currently available: "
+        + "----quad-lin: quadratic-linear; "
+        + "----quadratic: quadratic; "
+        + "----quad-nomix: quadratic, no mixed terms.",
+    )
+
+    args = parser.parse_args()
+    args.dim_state = 5
+    args.dim_input = 2
+    args.dim_output = args.dim_state
+    args.dim_disturb = 0
+
+    args.dim_R1 = args.dim_output + args.dim_input
+    args.dim_R2 = args.dim_R1
+
+    # ----------------------------------------Post-processing of arguments
+    # Convert `pi` to a number pi
+    for k in range(len(args.state_init)):
+        args.state_init[k] = eval(args.state_init[k].replace("pi", str(np.pi)))
+
+    args.state_init = np.array(args.state_init)
+    args.action_manual = np.array(args.action_manual)
+
+    args.pred_step_size = args.dt * args.pred_step_size_multiplier
+    args.model_est_period = args.dt * args.model_est_period_multiplier
+    args.critic_period = args.dt * args.critic_period_multiplier
+
+    args.R1 = np.diag(np.array(args.R1_diag))
+    args.R2 = np.diag(np.array(args.R2_diag))
+    args.is_disturb = 0
+
+    args.is_dyn_ctrl = 0
+
+    args.t0 = 0
+
+    args.action_init = 0 * np.ones(args.dim_input)
+
+    # Solver
+    args.atol = 1e-5
+    args.rtol = 1e-3
+
+    # xy-plane
+    args.xMin = -10
+    args.xMax = 10
+    args.yMin = -10
+    args.yMax = 10
+
+    # Model estimator stores models in a stack and recall the best of model_est_checks
+    args.model_est_checks = 0
+
+    # Control constraints
+    args.Fmin = -300
+    args.Fmax = 300
+    args.Mmin = -100
+    args.Mmax = 100
+    args.ctrl_bnds = np.array([[args.Fmin, args.Fmax], [args.Mmin, args.Mmax]])
+
+    # System parameters
+    args.m = 10  # [kg]
+    args.I = 1  # [kg m^
+
+    return args
