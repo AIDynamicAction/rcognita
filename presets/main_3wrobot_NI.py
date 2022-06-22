@@ -287,8 +287,6 @@ my_sys = systems.Sys3WRobotNI(
     pars_disturb=np.array([[200 * dt, 200 * dt], [0, 0], [0.3, 0.3]]),
 )
 
-observation_init = my_sys.out(state_init)
-
 xCoord0 = state_init[0]
 yCoord0 = state_init[1]
 alpha0 = state_init[2]
