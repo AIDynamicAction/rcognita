@@ -3,15 +3,16 @@ import pathlib
 import warnings
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
+import numpy as np
+from configs import Config3WRobotNI
+from abc import ABCMeta, abstractmethod
+import csv
+from pipelines import AbstractPresetPipeline
 
 PARENT_DIR = os.path.abspath(__file__ + "/../..")
 sys.path.insert(0, PARENT_DIR)
-import csv
-
 
 import rcognita
-from configs import Config3WRobot
-from pipelines import AbstractPresetPipeline
 
 if os.path.abspath(rcognita.__file__ + "/../..") == PARENT_DIR:
     info = (
@@ -35,19 +36,19 @@ from datetime import datetime
 from rcognita.utilities import on_key_press
 
 
-class PresetPipeline3WRobot(AbstractPresetPipeline):
+class PresetPipeline3WRobotNI(AbstractPresetPipeline):
     def system_initialization(self):
-        self.my_sys = systems.Sys3WRobot(
+        self.my_sys = systems.Sys3WRobotNI(
             sys_type="diff_eqn",
             dim_state=self.dim_state,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
             dim_disturb=self.dim_disturb,
-            pars=[self.m, self.I],
+            pars=[],
             ctrl_bnds=self.ctrl_bnds,
             is_dyn_ctrl=self.is_dyn_ctrl,
             is_disturb=self.is_disturb,
-            pars_disturb=[],
+            pars_disturb=np.array([[200 * self.dt, 200 * self.dt], [0, 0], [0.3, 0.3]]),
         )
 
     def state_predictor_initialization(self):
@@ -60,15 +61,11 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
         )
 
     def controller_initialization(self):
-        self.my_ctrl_nominal = controllers.CtrlNominal3WRobot(
-            self.m,
-            self.I,
-            ctrl_gain=5,
-            ctrl_bnds=self.ctrl_bnds,
-            t0=self.t0,
-            sampling_time=self.dt,
+        self.my_ctrl_nominal = controllers.CtrlNominal3WRobotNI(
+            ctrl_gain=0.5, ctrl_bnds=self.ctrl_bnds, t0=self.t0, sampling_time=self.dt
         )
 
+        # Predictive optimal controller
         self.my_ctrl_opt_pred = controllers.CtrlOptPred(
             self.dim_input,
             self.dim_output,
@@ -78,7 +75,6 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
             t0=self.t0,
             sampling_time=self.dt,
             Nactor=self.Nactor,
-            actor_opt_method="SLSQP",
             pred_step_size=self.pred_step_size,
             sys_rhs=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
@@ -100,7 +96,8 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
             observation_target=[],
         )
 
-        self.my_ctrl_RL_stab = controllers.CtrlRLStab(
+        # Stabilizing RL agent
+        my_ctrl_RL_stab = controllers.CtrlRLStab(
             self.dim_input,
             self.dim_output,
             self.ctrl_mode,
@@ -143,7 +140,7 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
             closed_loop_rhs=self.my_sys.closed_loop_rhs,
             sys_out=self.my_sys.out,
             state_init=self.state_init,
-            disturb_init=[],
+            disturb_init=np.array([0, 0]),
             action_init=self.action_init,
             t0=self.t0,
             t1=self.t1,
@@ -228,12 +225,10 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
                             "x [m]",
                             "y [m]",
                             "alpha [rad]",
-                            "v [m/s]",
-                            "omega [rad/s]",
                             "stage_obj",
                             "accum_obj",
-                            "F [N]",
-                            "M [N m]",
+                            "v [m/s]",
+                            "omega [rad/s]",
                         ]
                     )
 
@@ -241,12 +236,12 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
         if not self.no_print:
             warnings.filterwarnings("ignore")
 
-        self.my_logger = loggers.Logger3WRobot()
+        self.my_logger = loggers.Logger3WRobotNI()
 
     def main_loop_visual(self):
-        self.state_full_init = self.my_simulator.state_full
+        state_full_init = self.my_simulator.state_full
 
-        my_animator = visuals.Animator3WRobot(
+        my_animator = visuals.Animator3WRobotNI(
             objects=(
                 self.my_simulator,
                 self.my_sys,
@@ -261,17 +256,17 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
                 self.action_init,
                 self.t0,
                 self.t1,
-                self.state_full_init,
+                state_full_init,
                 self.xMin,
                 self.xMax,
                 self.yMin,
                 self.yMax,
                 self.ctrl_mode,
                 self.action_manual,
-                self.Fmin,
-                self.Mmin,
-                self.Fmax,
-                self.Mmax,
+                self.v_min,
+                self.omega_min,
+                self.v_max,
+                self.omega_max,
                 self.Nruns,
                 self.no_print,
                 self.is_log,
@@ -296,6 +291,7 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
         )
 
         anm.running = True
+
         my_animator.fig_sim.tight_layout()
 
         plt.show()
@@ -329,29 +325,18 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
             xCoord = state_full[0]
             yCoord = state_full[1]
             alpha = state_full[2]
-            v = state_full[3]
-            omega = state_full[4]
 
             stage_obj = self.my_ctrl_benchm.stage_obj(observation, action)
             accum_obj = self.my_ctrl_benchm.accum_obj_val
 
             if not self.no_print:
                 self.my_logger.print_sim_step(
-                    t, xCoord, yCoord, alpha, v, omega, stage_obj, accum_obj, action
+                    t, xCoord, yCoord, alpha, stage_obj, accum_obj, action
                 )
 
             if self.is_log:
                 self.my_logger.log_data_row(
-                    datafile,
-                    t,
-                    xCoord,
-                    yCoord,
-                    alpha,
-                    v,
-                    omega,
-                    stage_obj,
-                    accum_obj,
-                    action,
+                    datafile, t, xCoord, yCoord, alpha, stage_obj, accum_obj, action,
                 )
 
             if t >= self.t1:
@@ -383,7 +368,7 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
                 accum_obj = 0
 
     def pipeline_execution(self):
-        self.load_config(Config3WRobot)
+        self.load_config(Config3WRobotNI)
         self.setup_env()
         self.system_initialization()
         self.state_predictor_initialization()
@@ -398,4 +383,4 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
 
 if __name__ == "__main__":
 
-    PresetPipeline3WRobot().pipeline_execution()
+    PresetPipeline3WRobotNI().pipeline_execution()

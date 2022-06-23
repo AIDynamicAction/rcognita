@@ -142,8 +142,8 @@ class Animator3WRobot(Animator):
             Fmax,
             Mmax,
             Nruns,
-            is_print_sim_step,
-            is_log_data,
+            no_print,
+            is_log,
             is_playback,
             stage_obj_init,
         ) = self.pars
@@ -155,8 +155,8 @@ class Animator3WRobot(Animator):
         self.ctrl_mode = ctrl_mode
         self.action_manual = action_manual
         self.Nruns = Nruns
-        self.is_print_sim_step = is_print_sim_step
-        self.is_log_data = is_log_data
+        self.no_print = no_print
+        self.is_log = is_log
         self.is_playback = is_playback
 
         xCoord0 = state_init[0]
@@ -387,12 +387,12 @@ class Animator3WRobot(Animator):
         v = state_full[3]
         omega = state_full[4]
 
-        if self.is_print_sim_step:
+        if not self.no_print:
             self.logger.print_sim_step(
                 t, xCoord, yCoord, alpha, v, omega, stage_obj, accum_obj, action
             )
 
-        if self.is_log_data:
+        if self.is_log:
             self.logger.log_data_row(
                 self.datafile_curr,
                 t,
@@ -441,7 +441,7 @@ class Animator3WRobot(Animator):
 
         # Run done
         if t >= self.t1:
-            if self.is_print_sim_step:
+            if not self.no_print:
                 print(
                     ".....................................Run {run:2d} done.....................................".format(
                         run=self.run_curr
@@ -455,7 +455,7 @@ class Animator3WRobot(Animator):
                 self.stop_anm()
                 return
 
-            if self.is_log_data:
+            if self.is_log:
                 self.datafile_curr = self.datafiles[self.run_curr - 1]
 
             # Reset simulator
@@ -526,8 +526,8 @@ class Animator3WRobotNI(Animator):
             v_max,
             omega_max,
             Nruns,
-            is_print_sim_step,
-            is_log_data,
+            no_print,
+            is_log,
             is_playback,
             stage_obj_init,
         ) = self.pars
@@ -539,8 +539,8 @@ class Animator3WRobotNI(Animator):
         self.ctrl_mode = ctrl_mode
         self.action_manual = action_manual
         self.Nruns = Nruns
-        self.is_print_sim_step = is_print_sim_step
-        self.is_log_data = is_log_data
+        self.no_print = no_print
+        self.is_log = is_log
         self.is_playback = is_playback
 
         xCoord0 = state_init[0]
@@ -760,12 +760,12 @@ class Animator3WRobotNI(Animator):
         alpha = state_full[2]
         alpha_deg = alpha / np.pi * 180
 
-        if self.is_print_sim_step:
+        if not self.no_print:
             self.logger.print_sim_step(
                 t, xCoord, yCoord, alpha, stage_obj, accum_obj, action
             )
 
-        if self.is_log_data:
+        if self.is_log:
             self.logger.log_data_row(
                 self.datafile_curr,
                 t,
@@ -812,7 +812,7 @@ class Animator3WRobotNI(Animator):
 
         # Run done
         if t >= self.t1:
-            if self.is_print_sim_step:
+            if not self.no_print:
                 print(
                     ".....................................Run {run:2d} done.....................................".format(
                         run=self.run_curr
@@ -826,7 +826,7 @@ class Animator3WRobotNI(Animator):
                 self.stop_anm()
                 return
 
-            if self.is_log_data:
+            if self.is_log:
                 self.datafile_curr = self.datafiles[self.run_curr - 1]
 
             # Reset simulator
@@ -891,8 +891,8 @@ class Animator2Tank(Animator):
             action_min,
             action_max,
             Nruns,
-            is_print_sim_step,
-            is_log_data,
+            no_print,
+            is_log,
             is_playback,
             stage_obj_init,
             level_target,
@@ -905,8 +905,8 @@ class Animator2Tank(Animator):
         self.ctrl_mode = ctrl_mode
         self.action_manual = action_manual
         self.Nruns = Nruns
-        self.is_print_sim_step = is_print_sim_step
-        self.is_log_data = is_log_data
+        self.no_print = no_print
+        self.is_log = is_log
         self.is_playback = is_playback
 
         self.level_target = level_target
@@ -1071,10 +1071,10 @@ class Animator2Tank(Animator):
         h2 = state_full[1]
         p = action
 
-        if self.is_print_sim_step:
+        if not self.no_print:
             self.logger.print_sim_step(t, h1, h2, p, stage_obj, accum_obj)
 
-        if self.is_log_data:
+        if self.is_log:
             self.logger.log_data_row(
                 self.datafile_curr, t, h1, h2, p, stage_obj, accum_obj
             )
@@ -1096,7 +1096,7 @@ class Animator2Tank(Animator):
 
         # Run done
         if t >= self.t1:
-            if self.is_print_sim_step:
+            if not self.no_print:
                 print(
                     ".....................................Run {run:2d} done.....................................".format(
                         run=self.run_curr
@@ -1110,7 +1110,7 @@ class Animator2Tank(Animator):
                 self.stop_anm()
                 return
 
-            if self.is_log_data:
+            if self.is_log:
                 self.datafile_curr = self.datafiles[self.run_curr - 1]
 
             # Reset simulator
