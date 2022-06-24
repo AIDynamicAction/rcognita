@@ -6,6 +6,73 @@ import pickle5 as pickle
 import sys
 
 
+class LoadFromFile(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        with values as f:
+            # parse arguments in the file and store them in the target namespace
+            parser.parse_args(f.read().split(), namespace)
+
+
+class RcognitaArgParser(argparse.ArgumentParser):
+    def __init__(self, description):
+
+        super().__init__(description=description)
+        self.add_argument(
+            "--ctrl_mode",
+            metavar="ctrl_mode",
+            type=str,
+            choices=["manual", "nominal", "MPC", "RQL", "SQL", "JACS"],
+            default="MPC",
+            help="Control mode. Currently available: "
+            + "----manual: manual constant control specified by action_manual; "
+            + "----nominal: nominal controller, usually used to benchmark optimal controllers;"
+            + "----MPC:model-predictive control; "
+            + "----RQL: Q-learning actor-critic with Nactor-1 roll-outs of stage objective; "
+            + "----SQL: stacked Q-learning; "
+            + "----JACS: joint actor-critic (stabilizing), system-specific, needs proper setup.",
+        )
+        self.add_argument(
+            "--is_log",
+            action="store_true",
+            help="Flag to log data into a data file. Data are stored in simdata folder.",
+        )
+        self.add_argument(
+            "--no_visual",
+            action="store_true",
+            help="Flag to produce graphical output.",
+        )
+        self.add_argument(
+            "--no_print",
+            action="store_true",
+            help="Flag to print simulation data into terminal.",
+        )
+        self.add_argument(
+            "--is_est_model",
+            action="store_true",
+            help="Flag to estimate environment model.",
+        )
+        self.add_argument(
+            "--save_trajectory",
+            action="store_true",
+            help="Flag to store trajectory inside the pipeline during execution.",
+        )
+        self.add_argument(
+            "--dt",
+            type=float,
+            metavar="dt",
+            default=0.01,
+            help="Controller sampling time.",
+        )
+        self.add_argument(
+            "--t1",
+            type=float,
+            metavar="t1",
+            default=10.0,
+            help="Final time of episode.",
+        )
+        self.add_argument("--config", type=open, action=LoadFromFile)
+
+
 class MetaConf(type):
     def __init__(cls, name, bases, clsdict):
         if "argument_parser" in clsdict:
@@ -51,36 +118,8 @@ class Config3WRobot(AbstractConfig):
             "Agent-environment preset: 3-wheel robot with dynamical actuators."
         )
 
-        parser = argparse.ArgumentParser(description=description)
+        parser = RcognitaArgParser(description=description)
 
-        parser.add_argument(
-            "--ctrl_mode",
-            metavar="ctrl_mode",
-            type=str,
-            choices=["manual", "nominal", "MPC", "RQL", "SQL", "JACS"],
-            default="MPC",
-            help="Control mode. Currently available: "
-            + "----manual: manual constant control specified by action_manual; "
-            + "----nominal: nominal controller, usually used to benchmark optimal controllers;"
-            + "----MPC:model-predictive control; "
-            + "----RQL: Q-learning actor-critic with Nactor-1 roll-outs of stage objective; "
-            + "----SQL: stacked Q-learning; "
-            + "----JACS: joint actor-critic (stabilizing), system-specific, needs proper setup.",
-        )
-        parser.add_argument(
-            "--dt",
-            type=float,
-            metavar="dt",
-            default=0.01,
-            help="Controller sampling time.",
-        )
-        parser.add_argument(
-            "--t1",
-            type=float,
-            metavar="t1",
-            default=10.0,
-            help="Final time of episode.",
-        )
         parser.add_argument(
             "--Nruns",
             type=int,
@@ -96,27 +135,7 @@ class Config3WRobot(AbstractConfig):
             help="Initial state (as sequence of numbers); "
             + "dimension is environment-specific!",
         )
-        parser.add_argument(
-            "--is_log",
-            action="store_true",
-            help="Flag to log data into a data file. Data are stored in simdata folder.",
-        )
-        parser.add_argument(
-            "--no_visual",
-            action="store_true",
-            help="Flag to produce graphical output.",
-        )
-        parser.add_argument(
-            "--no_print",
-            action="store_true",
-            help="Flag to print simulation data into terminal.",
-        )
-        parser.add_argument(
-            "--is_est_model",
-            default=False,
-            action=argparse.BooleanOptionalAction,
-            help="Flag to estimate environment model.",
-        )
+
         parser.add_argument(
             "--model_est_stage",
             type=float,
@@ -224,11 +243,7 @@ class Config3WRobot(AbstractConfig):
             + "----quadratic: quadratic; "
             + "----quad-nomix: quadratic, no mixed terms.",
         )
-        parser.add_argument(
-            "--save_trajectory",
-            action="store_true",
-            help="Flag to store trajectory inside the pipeline during execution.",
-        )
+
         args = parser.parse_args()
         return args
 
@@ -297,36 +312,8 @@ class Config3WRobotNI(AbstractConfig):
     def argument_parser(self):
         description = "Agent-environment preset: a 3-wheel robot (kinematic model a. k. a. non-holonomic integrator)."
 
-        parser = argparse.ArgumentParser(description=description)
+        parser = RcognitaArgParser(description=description)
 
-        parser.add_argument(
-            "--ctrl_mode",
-            metavar="ctrl_mode",
-            type=str,
-            choices=["manual", "nominal", "MPC", "RQL", "SQL", "JACS"],
-            default="MPC",
-            help="Control mode. Currently available: "
-            + "----manual: manual constant control specified by action_manual; "
-            + "----nominal: nominal controller, usually used to benchmark optimal controllers;"
-            + "----MPC:model-predictive control; "
-            + "----RQL: Q-learning actor-critic with Nactor-1 roll-outs of stage objective; "
-            + "----SQL: stacked Q-learning; "
-            + "----JACS: joint actor-critic (stabilizing), system-specific, needs proper setup.",
-        )
-        parser.add_argument(
-            "--dt",
-            type=float,
-            metavar="dt",
-            default=0.01,
-            help="Controller sampling time.",
-        )
-        parser.add_argument(
-            "--t1",
-            type=float,
-            metavar="t1",
-            default=10.0,
-            help="Final time of episode.",
-        )
         parser.add_argument(
             "--Nruns",
             type=int,
@@ -341,27 +328,6 @@ class Config3WRobotNI(AbstractConfig):
             default=["5", "5", "-3*pi/4"],
             help="Initial state (as sequence of numbers); "
             + "dimension is environment-specific!",
-        )
-        parser.add_argument(
-            "--is_log",
-            action="store_true",
-            help="Flag to log data into a data file. Data are stored in simdata folder.",
-        )
-        parser.add_argument(
-            "--no_visual",
-            action="store_true",
-            help="Flag to produce graphical output.",
-        )
-        parser.add_argument(
-            "--no_print",
-            action="store_true",
-            help="Flag to print simulation data into terminal.",
-        )
-        parser.add_argument(
-            "--is_est_model",
-            default=False,
-            action=argparse.BooleanOptionalAction,
-            help="Flag to estimate environment model.",
         )
         parser.add_argument(
             "--model_est_stage",
@@ -470,11 +436,6 @@ class Config3WRobotNI(AbstractConfig):
             + "----quadratic: quadratic; "
             + "----quad-nomix: quadratic, no mixed terms.",
         )
-        parser.add_argument(
-            "--save_trajectory",
-            action="store_true",
-            help="Flag to store trajectory inside the pipeline during execution.",
-        )
 
         args = parser.parse_args()
         return args
@@ -550,34 +511,8 @@ class Config2Tank(AbstractConfig):
     def argument_parser(self):
         description = "Agent-environment preset: nonlinear double-tank system."
 
-        parser = argparse.ArgumentParser(description=description)
+        parser = RcognitaArgParser(description=description)
 
-        parser.add_argument(
-            "--ctrl_mode",
-            metavar="ctrl_mode",
-            type=str,
-            choices=["manual", "MPC", "RQL", "SQL"],
-            default="MPC",
-            help="Control mode. Currently available: "
-            + "----manual: manual constant control specified by action_manual; "
-            + "----MPC:model-predictive control; "
-            + "----RQL: Q-learning actor-critic with Nactor-1 roll-outs of stage objective; "
-            + "----SQL: stacked Q-learning.",
-        )
-        parser.add_argument(
-            "--dt",
-            type=float,
-            metavar="dt",
-            default=0.1,
-            help="Controller sampling time.",
-        )
-        parser.add_argument(
-            "--t1",
-            type=float,
-            metavar="t1",
-            default=100.0,
-            help="Final time of episode.",
-        )
         parser.add_argument(
             "--Nruns",
             type=int,
@@ -593,27 +528,7 @@ class Config2Tank(AbstractConfig):
             help="Initial state (as sequence of numbers); "
             + "dimension is environment-specific!",
         )
-        parser.add_argument(
-            "--is_log",
-            action="store_true",
-            help="Flag to log data into a data file. Data are stored in simdata folder.",
-        )
-        parser.add_argument(
-            "--no_visual",
-            action="store_true",
-            help="Flag to produce graphical output.",
-        )
-        parser.add_argument(
-            "--no_print",
-            action="store_true",
-            help="Flag to print simulation data into terminal.",
-        )
-        parser.add_argument(
-            "--is_est_model",
-            type=bool,
-            default=False,
-            help="Flag to estimate environment model.",
-        )
+
         parser.add_argument(
             "--model_est_stage",
             type=float,
@@ -720,11 +635,6 @@ class Config2Tank(AbstractConfig):
             + "----quad-lin: quadratic-linear; "
             + "----quadratic: quadratic; "
             + "----quad-nomix: quadratic, no mixed terms.",
-        )
-        parser.add_argument(
-            "--save_trajectory",
-            action="store_true",
-            help="Flag to store trajectory inside the pipeline during execution.",
         )
 
         args = parser.parse_args()

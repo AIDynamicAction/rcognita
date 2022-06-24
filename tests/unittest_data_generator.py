@@ -3,11 +3,10 @@ import pickle5 as pickle
 
 PARENT_DIR = os.path.abspath(__file__ + "/../..")
 sys.path.insert(0, PARENT_DIR)
-from presets import (
+from pipelines import (
     pipeline_3wrobot,
     pipeline_3wrobot_NI,
     pipeline_2tank,
-    configs,
 )
 
 
