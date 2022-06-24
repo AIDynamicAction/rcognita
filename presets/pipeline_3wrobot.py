@@ -1,17 +1,19 @@
 import os, sys
+
+PARENT_DIR = os.path.abspath(__file__ + "/../../")
+sys.path.insert(0, PARENT_DIR)
+CUR_DIR = os.path.abspath(__file__ + "/..")
+sys.path.insert(0, CUR_DIR)
+
 import pathlib
 import warnings
 import matplotlib.animation as animation
 import matplotlib.pyplot as plt
-
-PARENT_DIR = os.path.abspath(__file__ + "/../..")
-sys.path.insert(0, PARENT_DIR)
 import csv
-
-
 import rcognita
+
 from configs import Config3WRobot
-from pipelines import AbstractPresetPipeline
+from pipelines import AbstractPipeline
 
 if os.path.abspath(rcognita.__file__ + "/../..") == PARENT_DIR:
     info = (
@@ -35,7 +37,7 @@ from datetime import datetime
 from rcognita.utilities import on_key_press
 
 
-class PresetPipeline3WRobot(AbstractPresetPipeline):
+class Pipeline3WRobot(AbstractPipeline):
     def system_initialization(self):
         self.my_sys = systems.Sys3WRobot(
             sys_type="diff_eqn",
@@ -382,9 +384,10 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
 
                 accum_obj = 0
 
-    def pipeline_execution(self):
+    def pipeline_execution(self, args={}):
         self.load_config(Config3WRobot)
         self.setup_env()
+        self.__dict__.update(args)
         self.system_initialization()
         self.state_predictor_initialization()
         self.controller_initialization()
@@ -398,4 +401,4 @@ class PresetPipeline3WRobot(AbstractPresetPipeline):
 
 if __name__ == "__main__":
 
-    PresetPipeline3WRobot().pipeline_execution()
+    Pipeline3WRobot().pipeline_execution()

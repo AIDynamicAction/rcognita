@@ -1,15 +1,16 @@
 from abc import ABCMeta, abstractmethod
 
 
-class AbstractPresetPipeline(metaclass=ABCMeta):
+class AbstractPipeline(metaclass=ABCMeta):
     def load_config(self, env_config):
         self.env_config = env_config()
 
-    def setup_env(self, args={}):
+    def setup_env(self):
         self.__dict__.update(self.env_config.get_env())
-        self.__dict__.update(args)
         self.trajectory = []
-        return args
+
+    def config_to_pickle(self):
+        self.env_config.config_to_pickle()
 
     @abstractmethod
     def system_initialization(self):

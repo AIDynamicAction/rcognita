@@ -1,7 +1,9 @@
 import numpy as np
 import argparse
-from abc import abstractmethod, abstractproperty
+from abc import abstractmethod
+import sys
 import pickle5 as pickle
+import sys
 
 
 class MetaConf(type):
@@ -37,12 +39,12 @@ class AbstractConfig(object, metaclass=MetaConf):
         with open(
             f"../tests/refs/env_{self.config_name}.pickle", "wb"
         ) as env_description_out:
-            pickle.dump(eval(f"config_{self.config_name}()"), env_description_out)
+            pickle.dump(self.__dict__, env_description_out)
 
 
 class Config3WRobot(AbstractConfig):
     def __init__(self):
-        self.preset_name = "3wrobot"
+        self.config_name = "3wrobot"
 
     def argument_parser(self):
         description = (
@@ -227,7 +229,6 @@ class Config3WRobot(AbstractConfig):
             action="store_true",
             help="Flag to store trajectory inside the pipeline during execution.",
         )
-
         args = parser.parse_args()
         return args
 
@@ -291,7 +292,7 @@ class Config3WRobot(AbstractConfig):
 
 class Config3WRobotNI(AbstractConfig):
     def __init__(self):
-        self.preset_name = "3wrobot_NI"
+        self.config_name = "3wrobot_NI"
 
     def argument_parser(self):
         description = "Agent-environment preset: a 3-wheel robot (kinematic model a. k. a. non-holonomic integrator)."
@@ -544,7 +545,7 @@ class Config3WRobotNI(AbstractConfig):
 
 class Config2Tank(AbstractConfig):
     def __init__(self):
-        self.preset_name = "2tank"
+        self.config_name = "2tank"
 
     def argument_parser(self):
         description = "Agent-environment preset: nonlinear double-tank system."
