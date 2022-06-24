@@ -8,3 +8,4 @@ from . import loggers
 from . import visuals
 from . import utilities
 from . import models
+from . import state_predictors

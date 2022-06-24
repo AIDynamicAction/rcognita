@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 import csv
 import rcognita
 
-from configs import Config2Tank
-from pipelines import AbstractPipeline
+from config_blueprints import Config2Tank
+from pipeline_blueprints import AbstractPipeline
 
 PARENT_DIR = os.path.abspath(__file__ + "/../..")
 sys.path.insert(0, PARENT_DIR)
@@ -37,7 +37,7 @@ else:
     )
 print("INFO:", info)
 
-from rcognita import controllers, visuals, simulator, systems, loggers
+from rcognita import controllers, visuals, simulator, systems, loggers, state_predictors
 from datetime import datetime
 from rcognita.utilities import on_key_press
 
@@ -55,7 +55,7 @@ class Pipeline2Tank(AbstractPipeline):
         )
 
     def state_predictor_initialization(self):
-        self.state_predictor = controllers.EulerStatePredictor(
+        self.state_predictor = state_predictors.EulerStatePredictor(
             self.pred_step_size,
             self.my_sys._state_dyn,
             self.my_sys.out,
