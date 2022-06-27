@@ -11,6 +11,7 @@ Remarks:
 
 """
 
+from sympy import EX
 from .utilities import dss_sim
 from .utilities import rep_mat
 from .utilities import uptria2vec
@@ -24,7 +25,6 @@ from scipy.optimize import basinhopping
 from scipy.optimize import NonlinearConstraint
 from numpy.linalg import lstsq
 from numpy import reshape
-from abc import ABCMeta, abstractmethod
 import warnings
 
 # For debugging purposes
@@ -882,7 +882,7 @@ class CtrlOptPred:
         t0=0,
         sampling_time=0.1,
         Nactor=1,
-        actor_opt_method="SLSQP",
+        actor_optimizer=[],
         pred_step_size=0.1,
         sys_rhs=[],
         sys_out=[],
@@ -897,7 +897,7 @@ class CtrlOptPred:
         model_est_checks=0,
         gamma=1,
         Ncritic=4,
-        critic_opt_method="SLSQP",
+        critic_optimizer=[],
         critic_period=0.1,
         critic_struct="quad-nomix",
         stage_obj_struct="quadratic",
@@ -1032,7 +1032,6 @@ class CtrlOptPred:
 
         # Controller: common
         self.Nactor = Nactor
-        self.actor_opt_method = actor_opt_method
         self.pred_step_size = pred_step_size
 
         self.action_min = np.array(ctrl_bnds[:, 0])
@@ -1083,7 +1082,6 @@ class CtrlOptPred:
         self.critic_clock = t0
         self.gamma = gamma
         self.Ncritic = Ncritic
-        self.critic_opt_method = critic_opt_method
         self.Ncritic = np.min(
             [self.Ncritic, self.buffer_size - 1]
         )  # Clip critic buffer size
@@ -1125,6 +1123,8 @@ class CtrlOptPred:
 
         self.w_critic_prev = np.zeros(self.dim_critic)
         self.w_critic_init = self.w_critic_prev
+        self.actor_optimizer = actor_optimizer
+        self.critic_optimizer = critic_optimizer
 
         # self.big_number = 1e4
 
@@ -1359,31 +1359,10 @@ class CtrlOptPred:
 
         # Optimization method of critic
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-        if self.critic_opt_method == "trust-constr":
-            critic_opt_options = {
-                "maxiter": 200,
-                "disp": False,
-            }  #'disp': True, 'verbose': 2}
-        else:
-            critic_opt_options = {
-                "maxiter": 200,
-                "maxfev": 1500,
-                "disp": False,
-                "adaptive": True,
-                "xatol": 1e-7,
-                "fatol": 1e-7,
-            }  # 'disp': True, 'verbose': 2}
 
-        bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
-
-        w_critic = minimize(
-            lambda w_critic: self._critic_cost(w_critic),
-            self.w_critic_init,
-            method=self.critic_opt_method,
-            tol=1e-7,
-            bounds=bnds,
-            options=critic_opt_options,
-        ).x
+        w_critic = self.critic_optimizer(
+            lambda w_critic: self._critic_cost(w_critic), self.w_critic_init
+        )
 
         # DEBUG ===================================================================
         # print('-----------------------Critic parameters--------------------------')
@@ -1508,20 +1487,6 @@ class CtrlOptPred:
         # Optimization method of actor
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
         # actor_opt_method = 'SLSQP' # Standard
-        if self.actor_opt_method == "trust-constr":
-            actor_opt_options = {
-                "maxiter": 300,
-                "disp": False,
-            }  #'disp': True, 'verbose': 2}
-        else:
-            actor_opt_options = {
-                "maxiter": 300,
-                "maxfev": 5000,
-                "disp": False,
-                "adaptive": True,
-                "xatol": 1e-7,
-                "fatol": 1e-7,
-            }  # 'disp': True, 'verbose': 2}
 
         isGlobOpt = 0
 
@@ -1529,37 +1494,10 @@ class CtrlOptPred:
             self.action_sqn_init, [self.Nactor * self.dim_input,]
         )
 
-        bnds = sp.optimize.Bounds(
-            self.action_sqn_min, self.action_sqn_max, keep_feasible=True
+        action_sqn = self.actor_optimizer.optimize(
+            lambda my_action_sqn: self._actor_cost(my_action_sqn, observation),
+            my_action_sqn_init,
         )
-
-        try:
-            if isGlobOpt:
-                minimizer_kwargs = {
-                    "method": self.actor_opt_method,
-                    "bounds": bnds,
-                    "tol": 1e-7,
-                    "options": actor_opt_options,
-                }
-                action_sqn = basinhopping(
-                    lambda action_sqn: self._actor_cost(action_sqn, observation),
-                    my_action_sqn_init,
-                    minimizer_kwargs=minimizer_kwargs,
-                    niter=10,
-                ).x
-            else:
-                action_sqn = minimize(
-                    lambda action_sqn: self._actor_cost(action_sqn, observation),
-                    my_action_sqn_init,
-                    method=self.actor_opt_method,
-                    tol=1e-7,
-                    bounds=bnds,
-                    options=actor_opt_options,
-                ).x
-
-        except ValueError:
-            print("Actor" "s optimizer failed. Returning default action")
-            action_sqn = my_action_sqn_init
 
         # DEBUG ===================================================================
         # ================================Interm output of model prediction quality

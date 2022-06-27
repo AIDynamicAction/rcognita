@@ -25,8 +25,7 @@ class TestPipeline3WRobot(Pipeline3WRobotTest):
 
     def test_run_raw(self):
         with ArgvContext("run_raw", "--no_visual"):
-            args = {"no_visual": True}
-            self.pipeline_execution(args)
+            self.pipeline_execution()
 
     def test_trajectory_(self, load_trajectory):
         with ArgvContext("trajectory", "--no_visual", "--save_trajectory"):

@@ -11,14 +11,11 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import csv
 import rcognita
+import numpy as np
+from rcognita.utilities import rep_mat
 
 from config_blueprints import Config2Tank
 from pipeline_blueprints import AbstractPipeline
-
-PARENT_DIR = os.path.abspath(__file__ + "/../..")
-sys.path.insert(0, PARENT_DIR)
-
-import rcognita
 
 if os.path.abspath(rcognita.__file__ + "/../..") == PARENT_DIR:
     info = (
@@ -37,7 +34,15 @@ else:
     )
 print("INFO:", info)
 
-from rcognita import controllers, visuals, simulator, systems, loggers, state_predictors
+from rcognita import (
+    controllers,
+    visuals,
+    simulator,
+    systems,
+    loggers,
+    state_predictors,
+    optimizers,
+)
 from datetime import datetime
 from rcognita.utilities import on_key_press
 
@@ -63,6 +68,38 @@ class Pipeline2Tank(AbstractPipeline):
             self.Nactor,
         )
 
+    def optimizers_initialization(self):
+        if self.critic_struct == "quad-lin":
+            self.dim_critic = int(
+                (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
+            )
+            self.Wmin = -1e3 * np.ones(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+        elif self.critic_struct == "quadratic":
+            self.dim_critic = int((self.dim_output + 1) * self.dim_output / 2).astype(
+                int
+            )
+            self.Wmin = np.zeros(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+        elif self.critic_struct == "quad-nomix":
+            self.dim_critic = self.dim_output
+            self.Wmin = np.zeros(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+
+        self.action_min = np.array(self.ctrl_bnds[:, 0])
+        self.action_max = np.array(self.ctrl_bnds[:, 1])
+        self.action_sqn_min = rep_mat(self.action_min, 1, self.Nactor)
+        self.action_sqn_max = rep_mat(self.action_max, 1, self.Nactor)
+
+        self.actor_optimizer = optimizers.RcognitaOptimizer.standard_actor_optimizer(
+            actor_opt_method="SLSQP",
+            action_sqn_min=self.action_sqn_min,
+            action_sqn_max=self.action_sqn_max,
+        )
+        self.critic_optimizer = optimizers.RcognitaOptimizer.standard_critic_optimizer(
+            critic_opt_method="SLSQP", Wmin=self.Wmin, Wmax=self.Wmax
+        )
+
     def controller_initialization(self):
         self.my_ctrl_opt_pred = controllers.CtrlOptPred(
             self.dim_input,
@@ -73,6 +110,7 @@ class Pipeline2Tank(AbstractPipeline):
             t0=self.t0,
             sampling_time=self.dt,
             Nactor=self.Nactor,
+            actor_optimizer=self.actor_optimizer,
             pred_step_size=self.pred_step_size,
             sys_rhs=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
@@ -87,6 +125,7 @@ class Pipeline2Tank(AbstractPipeline):
             model_est_checks=self.model_est_checks,
             gamma=self.gamma,
             Ncritic=self.Ncritic,
+            critic_optimizer=self.critic_optimizer,
             critic_period=self.critic_period,
             critic_struct=self.critic_struct,
             stage_obj_struct=self.stage_obj_struct,
@@ -312,12 +351,13 @@ class Pipeline2Tank(AbstractPipeline):
 
                 accum_obj = 0
 
-    def pipeline_execution(self, args={}):
+    def pipeline_execution(self, **kwargs):
         self.load_config(Config2Tank)
         self.setup_env()
-        self.__dict__.update(args)
+        self.__dict__.update(kwargs)
         self.system_initialization()
         self.state_predictor_initialization()
+        self.optimizers_initialization()
         self.controller_initialization()
         self.simulator_initialization()
         self.logger_initialization()
