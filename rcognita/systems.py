@@ -14,6 +14,7 @@ Remarks:
 import numpy as np
 from numpy.random import randn
 
+
 class System:
     """
     Interface class of dynamical systems a.k.a. environments.
@@ -66,18 +67,21 @@ class System:
    Each concrete system must realize ``System`` and define ``name`` attribute.   
         
     """
-    def __init__(self,
-                 sys_type,
-                 dim_state,
-                 dim_input,
-                 dim_output,
-                 dim_disturb,
-                 pars=[],
-                 ctrl_bnds=[],
-                 is_dyn_ctrl=0,
-                 is_disturb=0,
-                 pars_disturb=[]):
-        
+
+    def __init__(
+        self,
+        sys_type,
+        dim_state,
+        dim_input,
+        dim_output,
+        dim_disturb,
+        pars=[],
+        ctrl_bnds=[],
+        is_dyn_ctrl=0,
+        is_disturb=0,
+        pars_disturb=[],
+    ):
+
         """
         Parameters
         ----------
@@ -114,28 +118,30 @@ class System:
         pars_disturb : : list
             Parameters of the disturbance model        
         """
-        
+
         self.sys_type = sys_type
-        
+
         self.dim_state = dim_state
         self.dim_input = dim_input
         self.dim_output = dim_output
-        self.dim_disturb = dim_disturb   
+        self.dim_disturb = dim_disturb
         self.pars = pars
         self.ctrl_bnds = ctrl_bnds
         self.is_dyn_ctrl = is_dyn_ctrl
         self.is_disturb = is_disturb
         self.pars_disturb = pars_disturb
-        
+
         # Track system's state
         self._state = np.zeros(dim_state)
-        
+
         # Current input (a.k.a. action)
         self.action = np.zeros(dim_input)
-        
+
         if is_dyn_ctrl:
             if is_disturb:
-                self._dim_full_state = self.dim_state + self.dim_disturb + self.dim_input
+                self._dim_full_state = (
+                    self.dim_state + self.dim_disturb + self.dim_input
+                )
             else:
                 self._dim_full_state = self.dim_state
         else:
@@ -143,7 +149,7 @@ class System:
                 self._dim_full_state = self.dim_state + self.dim_disturb
             else:
                 self._dim_full_state = self.dim_state
-            
+
     def _state_dyn(self, t, state, action, disturb):
         """
         Description of the system internal dynamics.
@@ -161,7 +167,7 @@ class System:
         | ``sys_type = "discr_fnc"`` : :math:`disturb^+ = f_q(disturb)`
         | ``sys_type = "discr_prob"`` : :math:`disturb^+ \sim P_Q(disturb^+|disturb)`
         
-        """       
+        """
         pass
 
     def _ctrl_dyn(self, t, action, observation):
@@ -179,8 +185,8 @@ class System:
         
         """
         Daction = np.zeros(self.dim_input)
-    
-        return Daction 
+
+        return Daction
 
     def out(self, state, action=[]):
         """
@@ -196,7 +202,7 @@ class System:
         # Trivial case: output identical to state
         observation = state
         return observation
-    
+
     def receive_action(self, action):
         """
         Receive exogeneous control action to be fed into the system.
@@ -209,7 +215,7 @@ class System:
             
         """
         self.action = action
-        
+
     def closed_loop_rhs(self, t, state_full):
         """
         Right-hand side of the closed-loop system description.
@@ -222,36 +228,39 @@ class System:
         
         """
         rhs_full_state = np.zeros(self._dim_full_state)
-        
-        state = state_full[0:self.dim_state]
-        
+
+        state = state_full[0 : self.dim_state]
+
         if self.is_disturb:
-            disturb = state_full[self.dim_state:]
+            disturb = state_full[self.dim_state :]
         else:
             disturb = []
-        
+
         if self.is_dyn_ctrl:
-            action = state_full[-self.dim_input:]
+            action = state_full[-self.dim_input :]
             observation = self.out(state)
-            rhs_full_state[-self.dim_input:] = self._ctrlDyn(t, action, observation)
+            rhs_full_state[-self.dim_input :] = self._ctrlDyn(t, action, observation)
         else:
             # Fetch the control action stored in the system
             action = self.action
-        
+
         if self.ctrl_bnds.any():
             for k in range(self.dim_input):
-                action[k] = np.clip(action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])
-        
-        rhs_full_state[0:self.dim_state] = self._state_dyn(t, state, action, disturb)
-        
+                action[k] = np.clip(
+                    action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
+                )
+
+        rhs_full_state[0 : self.dim_state] = self._state_dyn(t, state, action, disturb)
+
         if self.is_disturb:
-            rhs_full_state[self.dim_state:] = self._disturb_dyn(t, disturb)
-        
+            rhs_full_state[self.dim_state :] = self._disturb_dyn(t, disturb)
+
         # Track system's state
         self._state = state
-        
-        return rhs_full_state    
-    
+
+        return rhs_full_state
+
+
 class Sys3WRobot(System):
     """
     System class: 3-wheel robot with dynamical actuators.
@@ -293,35 +302,35 @@ class Sys3WRobot(System):
     .. [1] W. Abbasi, F. urRehman, and I. Shah. “Backstepping based nonlinear adaptive control for the extended
         nonholonomic double integrator”. In: Kybernetika 53.4 (2017), pp. 578–594
     
-    """ 
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-        self.name = '3wrobot'
-        
+
+        self.name = "3wrobot"
+
         if self.is_disturb:
             self.sigma_disturb = self.pars_disturb[0]
             self.mu_disturb = self.pars_disturb[1]
             self.tau_disturb = self.pars_disturb[2]
-    
-    def _state_dyn(self, t, state, action, disturb=[]):   
+
+    def _state_dyn(self, t, state, action, disturb=[]):
         m, I = self.pars[0], self.pars[1]
 
         Dstate = np.zeros(self.dim_state)
-        Dstate[0] = state[3] * np.cos( state[2] )
-        Dstate[1] = state[3] * np.sin( state[2] )
+        Dstate[0] = state[3] * np.cos(state[2])
+        Dstate[1] = state[3] * np.sin(state[2])
         Dstate[2] = state[4]
-        
+
         if self.is_disturb and (disturb != []):
-            Dstate[3] = 1/m * (action[0] + disturb[0])
-            Dstate[4] = 1/I * (action[1] + disturb[1])
+            Dstate[3] = 1 / m * (action[0] + disturb[0])
+            Dstate[4] = 1 / I * (action[1] + disturb[1])
         else:
-            Dstate[3] = 1/m * action[0]
-            Dstate[4] = 1/I * action[1] 
-            
-        return Dstate    
- 
+            Dstate[3] = 1 / m * action[0]
+            Dstate[4] = 1 / I * action[1]
+
+        return Dstate
+
     def _disturb_dyn(self, t, disturb):
         """
         Description
@@ -336,93 +345,99 @@ class Sys3WRobot(System):
         
         ``pars_disturb = [sigma_disturb, mu_disturb, tau_disturb]``, with each being an array of shape ``[dim_disturb, ]``
         
-        """       
+        """
         Ddisturb = np.zeros(self.dim_disturb)
-   
+
         for k in range(0, self.dim_disturb):
-            Ddisturb[k] = - self.tau_disturb[k] * ( disturb[k] + self.sigma_disturb[k] * (randn() + self.mu_disturb[k]) )
-                
-        return Ddisturb   
-    
+            Ddisturb[k] = -self.tau_disturb[k] * (
+                disturb[k] + self.sigma_disturb[k] * (randn() + self.mu_disturb[k])
+            )
+
+        return Ddisturb
+
     def out(self, state, action=[]):
         observation = np.zeros(self.dim_output)
         # observation = state[:3] + measNoise # <-- Measure only position and orientation
         observation = state  # <-- Position, force and torque sensors on
         return observation
 
+
 class Sys3WRobotNI(System):
     """
     System class: 3-wheel robot with static actuators (the NI - non-holonomic integrator).
     
     
-    """ 
-    
+    """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-        self.name = '3wrobotNI'
-        
+
+        self.name = "3wrobotNI"
+
         if self.is_disturb:
             self.sigma_disturb = self.pars_disturb[0]
             self.mu_disturb = self.pars_disturb[1]
             self.tau_disturb = self.pars_disturb[2]
-    
-    def _state_dyn(self, t, state, action, disturb=[]):   
+
+    def _state_dyn(self, t, state, action, disturb=[]):
         Dstate = np.zeros(self.dim_state)
-        
+
         if self.is_disturb and (disturb != []):
-            Dstate[0] = action[0] * np.cos( state[2] ) + disturb[0]
-            Dstate[1] = action[0] * np.sin( state[2] ) + disturb[0]
+            Dstate[0] = action[0] * np.cos(state[2]) + disturb[0]
+            Dstate[1] = action[0] * np.sin(state[2]) + disturb[0]
             Dstate[2] = action[1] + disturb[1]
         else:
-            Dstate[0] = action[0] * np.cos( state[2] )
-            Dstate[1] = action[0] * np.sin( state[2] )
-            Dstate[2] = action[1]           
-             
-        return Dstate    
- 
+            Dstate[0] = action[0] * np.cos(state[2])
+            Dstate[1] = action[0] * np.sin(state[2])
+            Dstate[2] = action[1]
+
+        return Dstate
+
     def _disturb_dyn(self, t, disturb):
         """
         
         
-        """       
+        """
         Ddisturb = np.zeros(self.dim_disturb)
-        
+
         for k in range(0, self.dim_disturb):
-            Ddisturb[k] = - self.tau_disturb[k] * ( disturb[k] + self.sigma_disturb[k] * (randn() + self.mu_disturb[k]) )
-                
-        return Ddisturb   
-    
+            Ddisturb[k] = -self.tau_disturb[k] * (
+                disturb[k] + self.sigma_disturb[k] * (randn() + self.mu_disturb[k])
+            )
+
+        return Ddisturb
+
     def out(self, state, action=[]):
         observation = np.zeros(self.dim_output)
         observation = state
         return observation
+
 
 class Sys2Tank(System):
     """
     Two-tank system with nonlinearity.
     
     """
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
-        self.name = '2tank'    
-    
-    def _state_dyn(self, t, state, action, disturb=[]):     
+
+        self.name = "2tank"
+
+    def _state_dyn(self, t, state, action, disturb=[]):
         tau1, tau2, K1, K2, K3 = self.pars
 
         Dstate = np.zeros(self.dim_state)
-        Dstate[0] = 1/(tau1) * ( -state[0] + K1 * action)
-        Dstate[1] = 1/(tau2) * ( -state[1] + K2 * state[0] + K3 * state[1]**2)
-            
-        return Dstate    
- 
-    def _disturb_dyn(self, t, disturb):   
+        Dstate[0] = 1 / (tau1) * (-state[0] + K1 * action)
+        Dstate[1] = 1 / (tau2) * (-state[1] + K2 * state[0] + K3 * state[1] ** 2)
+
+        return Dstate
+
+    def _disturb_dyn(self, t, disturb):
         Ddisturb = np.zeros(self.dim_disturb)
-                
-        return Ddisturb   
-    
+
+        return Ddisturb
+
     def out(self, state, action=[]):
         observation = state
-        return observation   
+        return observation

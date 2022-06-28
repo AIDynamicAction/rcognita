@@ -222,11 +222,11 @@ Some key settings are described below (full description is available via
 +-------------------------+-----------+--------------------------------------------------------+
 | ``state_init``          | list      | Initial state                                          |
 +-------------------------+-----------+--------------------------------------------------------+
-| ``is_log_data``         | binary    | Flag to log data                                       |
+| ``is_log``              | binary    | Flag to log data                                       |
 +-------------------------+-----------+--------------------------------------------------------+
-| ``is_visualization``    | binary    | Flag to produce graphical output                       |
+| ``no_visual``           | binary    | Flag to supress graphical output                       |
 +-------------------------+-----------+--------------------------------------------------------+
-| ``is_print_sim_step``   | binary    | Flag to print simulation step data                     |
+| ``no_print``            | binary    | Flag to supress printing of simulation step data       |
 +-------------------------+-----------+--------------------------------------------------------+
 | ``is_est_model``        | binary    | If a model of the system is to be estimated online     |
 +-------------------------+-----------+--------------------------------------------------------+
@@ -241,6 +241,8 @@ Some key settings are described below (full description is available via
 | ``critic_struct``       | string    | Structure of critic features                           |
 +-------------------------+-----------+--------------------------------------------------------+
 | ``actor_struct``        | string    | Structure of actor features                            |
++-------------------------+-----------+--------------------------------------------------------+
+| ``save_trajectory``     | binary    | Flag to store trajectory during the execution of the pipeline|
 +-------------------------+-----------+--------------------------------------------------------+
 
 Advanced customization

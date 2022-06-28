@@ -11,6 +11,7 @@ Remarks:
 
 """
 
+from sympy import EX
 from .utilities import dss_sim
 from .utilities import rep_mat
 from .utilities import uptria2vec
@@ -24,7 +25,6 @@ from scipy.optimize import basinhopping
 from scipy.optimize import NonlinearConstraint
 from numpy.linalg import lstsq
 from numpy import reshape
-from abc import ABCMeta, abstractmethod
 import warnings
 
 # For debugging purposes
@@ -33,10 +33,15 @@ from tabulate import tabulate
 try:
     import sippy
 except ModuleNotFoundError:
-    warnings.warn_explicit('\nImporting sippy failed. You may still use rcognita, but' +
-                  ' without model identification capability. \nRead on how' +
-                  ' to install sippy at https://github.com/AIDynamicAction/rcognita\n', 
-                  UserWarning, __file__, 33)
+    warnings.warn_explicit(
+        "\nImporting sippy failed. You may still use rcognita, but"
+        + " without model identification capability. \nRead on how"
+        + " to install sippy at https://github.com/AIDynamicAction/rcognita\n",
+        UserWarning,
+        __file__,
+        33,
+    )
+
 
 def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode):
     """
@@ -53,44 +58,16 @@ def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking
         Control action.
 
     """
-    
-    if mode=='manual': 
+
+    if mode == "manual":
         action = action_manual
-    elif mode=='nominal': 
+    elif mode == "nominal":
         action = ctrl_nominal.compute_action(t, observation)
-    else: # Controller for benchmakring
+    else:  # Controller for benchmakring
         action = ctrl_benchmarking.compute_action(t, observation)
-        
+
     return action
-class BaseStatePredictor(metaclass=ABCMeta):
-    @abstractmethod
-    def predict_state(self):
-        pass
-    
-    @abstractmethod
-    def predict_state_sqn(self):
-        pass
 
-class EulerStatePredictor(BaseStatePredictor):
-    def __init__(self, pred_step_size, sys_rhs, sys_out, dim_output, Nsteps):
-        self.pred_step_size = pred_step_size
-        self.sys_rhs = sys_rhs
-        self.sys_out = sys_out
-        self.dim_output = dim_output
-        self.Nsteps = Nsteps
-
-    def predict_state(self, cur_state, action_sqn, k):
-        next_state = cur_state + self.pred_step_size * self.sys_rhs([], cur_state, action_sqn[k-1, :])
-        return next_state
-
-    def predict_state_sqn(self, state_start, observation, action_sqn):
-        observation_sqn = np.zeros([self.Nsteps, self.dim_output])
-        observation_sqn[0,:] = observation
-        state = state_start
-        for k in range(1, self.Nsteps):
-            state = self.predict_state(state, action_sqn, k)
-            observation_sqn[k, :] = self.sys_out(state)
-        return observation_sqn
 
 class CtrlRLStab:
     """
@@ -126,37 +103,39 @@ class CtrlRLStab:
     
     """
 
-    def __init__(self,
-                 dim_input,
-                 dim_output,
-                 mode = 'JACS',
-                 ctrl_bnds = [],
-                 action_init = [],
-                 t0=0,
-                 sampling_time=0.1,
-                 Nactor=1,
-                 pred_step_size=0.1,
-                 sys_rhs=[],
-                 sys_out=[],
-                 state_sys=[],
-                 prob_noise_pow = 1,
-                 is_est_model=0,
-                 model_est_stage=1,
-                 model_est_period=0.1,
-                 buffer_size=20,
-                 model_order=3,
-                 model_est_checks=0,
-                 gamma=1,
-                 Ncritic=4,
-                 critic_period=0.1,
-                 critic_struct='quad-nomix',
-                 actor_struct='quad-nomix',
-                 stage_obj_struct='quadratic',
-                 stage_obj_pars=[],
-                 observation_target=[],   
-                 safe_ctrl=[],
-                 safe_decay_rate=[]):
-        
+    def __init__(
+        self,
+        dim_input,
+        dim_output,
+        mode="JACS",
+        ctrl_bnds=[],
+        action_init=[],
+        t0=0,
+        sampling_time=0.1,
+        Nactor=1,
+        pred_step_size=0.1,
+        sys_rhs=[],
+        sys_out=[],
+        state_sys=[],
+        prob_noise_pow=1,
+        is_est_model=0,
+        model_est_stage=1,
+        model_est_period=0.1,
+        buffer_size=20,
+        model_order=3,
+        model_est_checks=0,
+        gamma=1,
+        Ncritic=4,
+        critic_period=0.1,
+        critic_struct="quad-nomix",
+        actor_struct="quad-nomix",
+        stage_obj_struct="quadratic",
+        stage_obj_pars=[],
+        observation_target=[],
+        safe_ctrl=[],
+        safe_decay_rate=[],
+    ):
+
         """
         Parameter specification largely resembles that of ``CtrlOptPred`` class.
         
@@ -249,39 +228,39 @@ class CtrlRLStab:
                  - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
                    should be ``[R1, R2]``
         """
-        
+
         self.dim_input = dim_input
         self.dim_output = dim_output
-        
+
         self.mode = mode
 
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
-        
+
         # Controller: common
         self.Nactor = Nactor
         self.pred_step_size = pred_step_size
-        
-        self.action_min = np.array( ctrl_bnds[:,0] )
-        self.action_max = np.array( ctrl_bnds[:,1] )
+
+        self.action_min = np.array(ctrl_bnds[:, 0])
+        self.action_max = np.array(ctrl_bnds[:, 1])
         self.action_sqn_min = rep_mat(self.action_min, 1, Nactor)
-        self.action_sqn_max = rep_mat(self.action_max, 1, Nactor) 
-        
+        self.action_sqn_max = rep_mat(self.action_max, 1, Nactor)
+
         if len(action_init) == 0:
-            self.action_curr = self.action_min/10
-            self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
+            self.action_curr = self.action_min / 10
+            self.action_sqn_init = rep_mat(self.action_min / 10, 1, self.Nactor)
         else:
             self.action_curr = action_init
-            self.action_sqn_init = rep_mat( action_init , 1, self.Nactor)            
-        
-        self.action_buffer = np.zeros( [buffer_size, dim_input] )
-        self.observation_buffer = np.zeros( [buffer_size, dim_output] )        
-        
+            self.action_sqn_init = rep_mat(action_init, 1, self.Nactor)
+
+        self.action_buffer = np.zeros([buffer_size, dim_input])
+        self.observation_buffer = np.zeros([buffer_size, dim_output])
+
         # Exogeneous model's things
         self.sys_rhs = sys_rhs
         self.sys_out = sys_out
         self.state_sys = state_sys
-        
+
         # Model estimator's things
         self.est_clock = t0
         self.is_prob_noise = 1
@@ -291,69 +270,77 @@ class CtrlRLStab:
         self.buffer_size = buffer_size
         self.model_order = model_order
         self.model_est_checks = model_est_checks
-        
-        A = np.zeros( [self.model_order, self.model_order] )
-        B = np.zeros( [self.model_order, self.dim_input] )
-        C = np.zeros( [self.dim_output, self.model_order] )
-        D = np.zeros( [self.dim_output, self.dim_input] )
-        x0est = np.zeros( self.model_order )
-        
+
+        A = np.zeros([self.model_order, self.model_order])
+        B = np.zeros([self.model_order, self.dim_input])
+        C = np.zeros([self.dim_output, self.model_order])
+        D = np.zeros([self.dim_output, self.dim_input])
+        x0est = np.zeros(self.model_order)
+
         self.my_model = models.ModelSS(A, B, C, D, x0est)
-        
+
         self.model_stack = []
         for k in range(self.model_est_checks):
-            self.model_stack.append(self.my_model)        
-        
+            self.model_stack.append(self.my_model)
+
         # RL elements
         self.critic_clock = t0
         self.gamma = gamma
         self.Ncritic = Ncritic
-        self.Ncritic = np.min([self.Ncritic, self.buffer_size-1]) # Clip critic buffer size
+        self.Ncritic = np.min(
+            [self.Ncritic, self.buffer_size - 1]
+        )  # Clip critic buffer size
         self.critic_period = critic_period
         self.critic_struct = critic_struct
         self.actor_struct = actor_struct
         self.stage_obj_struct = stage_obj_struct
         self.stage_obj_pars = stage_obj_pars
         self.observation_target = observation_target
-        
+
         self.accum_obj_val = 0
 
-        if self.critic_struct == 'quad-lin':
-            self.dim_critic = int( (  self.dim_output  + 1 ) *  self.dim_output / 2 + self.dim_output )
-            self.Wmin = -1e3*np.ones(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic) 
-        elif self.critic_struct == 'quadratic':
-            self.dim_critic = int( ( self.dim_output + 1 ) * self.dim_output / 2 ).astype(int)
-            self.Wmin = np.zeros(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)    
-        elif self.critic_struct == 'quad-nomix':
+        if self.critic_struct == "quad-lin":
+            self.dim_critic = int(
+                (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
+            )
+            self.Wmin = -1e3 * np.ones(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+        elif self.critic_struct == "quadratic":
+            self.dim_critic = int((self.dim_output + 1) * self.dim_output / 2).astype(
+                int
+            )
+            self.Wmin = np.zeros(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+        elif self.critic_struct == "quad-nomix":
             self.dim_critic = self.dim_output
-            self.Wmin = np.zeros(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)
- 
+            self.Wmin = np.zeros(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+
         self.w_critic_prev = self.Wmin
         self.w_critic_init = np.ones(self.dim_critic)
-        
+
         self.lmbd_prev = 0
         self.lmbd_init = 0
-        
+
         self.lmbd_min = 0
         self.lmbd_max = 1
-           
-        if self.actor_struct == 'quad-lin':
-            self.dim_actor_per_input = int( ( self.dim_output  + 1 ) *  self.dim_output / 2 + self.dim_output ) 
-        elif self.actor_struct == 'quadratic':
-            self.dim_actor_per_input = int( ( self.dim_output + 1 ) * self.dim_output / 2 )
-        elif self.actor_struct == 'quad-nomix':
+
+        if self.actor_struct == "quad-lin":
+            self.dim_actor_per_input = int(
+                (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
+            )
+        elif self.actor_struct == "quadratic":
+            self.dim_actor_per_input = int((self.dim_output + 1) * self.dim_output / 2)
+        elif self.actor_struct == "quad-nomix":
             self.dim_actor_per_input = self.dim_output
-          
-        self.dim_actor = self.dim_actor_per_input * self.dim_input   
-            
-        self.Hmin = -0.5e1*np.ones(self.dim_actor) 
-        self.Hmax = 0.5e1*np.ones(self.dim_actor)   
- 
+
+        self.dim_actor = self.dim_actor_per_input * self.dim_input
+
+        self.Hmin = -0.5e1 * np.ones(self.dim_actor)
+        self.Hmax = 0.5e1 * np.ones(self.dim_actor)
+
         # Stabilizing constraint stuff
-        self.safe_ctrl = safe_ctrl          # Safe controller (agent)
+        self.safe_ctrl = safe_ctrl  # Safe controller (agent)
         self.safe_decay_rate = safe_decay_rate
 
     def reset(self, t0):
@@ -364,15 +351,15 @@ class CtrlRLStab:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = self.action_min/10
-    
+        self.action_curr = self.action_min / 10
+
     def receive_sys_state(self, state):
         """
         Fetch exogenous model state. Used in some controller modes. See class documentation.
 
         """
         self.state_sys = state
-    
+
     def stage_obj(self, observation, action):
         """
         Stage (equivalently, instantaneous or running) objective. Depending on the context, it is also called utility, reward, running cost etc.
@@ -383,19 +370,19 @@ class CtrlRLStab:
             chi = np.concatenate([observation, action])
         else:
             chi = np.concatenate([observation - self.observation_target, action])
-        
+
         stage_obj = 0
 
-        if self.stage_obj_struct == 'quadratic':
+        if self.stage_obj_struct == "quadratic":
             R1 = self.stage_obj_pars[0]
             stage_obj = chi @ R1 @ chi
-        elif self.stage_obj_struct == 'biquadratic':
+        elif self.stage_obj_struct == "biquadratic":
             R1 = self.stage_obj_pars[0]
             R2 = self.stage_obj_pars[1]
-            stage_obj = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
-        
+            stage_obj = chi ** 2 @ R2 @ chi ** 2 + chi @ R1 @ chi
+
         return stage_obj
-        
+
     def upd_accum_obj(self, observation, action):
         """
         Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
@@ -403,8 +390,8 @@ class CtrlRLStab:
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead).
         
         """
-        self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
-    
+        self.accum_obj_val += self.stage_obj(observation, action) * self.sampling_time
+
     def _actor(self, observation, w_actor):
         """
         Actor: a routine that models the policy.
@@ -413,14 +400,21 @@ class CtrlRLStab:
 
         """
 
-        if self.actor_struct == 'quad-lin':
-            regressor_actor = np.concatenate([ uptria2vec( np.outer(observation, observation) ), observation ])
-        elif self.actor_struct == 'quadratic':
-            regressor_actor = np.concatenate([ uptria2vec( np.outer(observation, observation) ) ])   
-        elif self.actor_struct == 'quad-nomix':
-            regressor_actor = observation * observation        
+        if self.actor_struct == "quad-lin":
+            regressor_actor = np.concatenate(
+                [uptria2vec(np.outer(observation, observation)), observation]
+            )
+        elif self.actor_struct == "quadratic":
+            regressor_actor = np.concatenate(
+                [uptria2vec(np.outer(observation, observation))]
+            )
+        elif self.actor_struct == "quad-nomix":
+            regressor_actor = observation * observation
 
-        return reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ regressor_actor
+        return (
+            reshape(w_actor, (self.dim_input, self.dim_actor_per_input))
+            @ regressor_actor
+        )
 
     def _critic(self, observation, w_critic, lmbd):
         """
@@ -436,15 +430,17 @@ class CtrlRLStab:
             chi = observation
         else:
             chi = observation - self.observation_target
-        
-        if self.critic_struct == 'quad-lin':
-            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
-        elif self.critic_struct == 'quadratic':
-            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
-        elif self.critic_struct == 'quad-nomix':
+
+        if self.critic_struct == "quad-lin":
+            regressor_critic = np.concatenate([uptria2vec(np.outer(chi, chi)), chi])
+        elif self.critic_struct == "quadratic":
+            regressor_critic = np.concatenate([uptria2vec(np.outer(chi, chi))])
+        elif self.critic_struct == "quad-nomix":
             regressor_critic = chi * chi
 
-        return lmbd * w_critic @ regressor_critic + ( 1 - lmbd ) * self.safe_ctrl.compute_LF( observation )
+        return lmbd * w_critic @ regressor_critic + (
+            1 - lmbd
+        ) * self.safe_ctrl.compute_LF(observation)
 
     def _w_actor_from_action(self, action, observation):
         """
@@ -453,44 +449,54 @@ class CtrlRLStab:
         The current implementation is for linearly parametrized models so far.
 
         """
-        
-        if self.actor_struct == 'quad-lin':
-            regressor_actor = np.concatenate([ uptria2vec( np.outer(observation, observation) ), observation ])
-        elif self.actor_struct == 'quadratic':
-            regressor_actor = np.concatenate([ uptria2vec( np.outer(observation, observation) ) ])   
-        elif self.actor_struct == 'quad-nomix':
-            regressor_actor = observation * observation          
-        
-        return reshape(lstsq( np.array( [ regressor_actor ] ), np.array( [ action ] ) )[0].T, self.dim_actor ) 
+
+        if self.actor_struct == "quad-lin":
+            regressor_actor = np.concatenate(
+                [uptria2vec(np.outer(observation, observation)), observation]
+            )
+        elif self.actor_struct == "quadratic":
+            regressor_actor = np.concatenate(
+                [uptria2vec(np.outer(observation, observation))]
+            )
+        elif self.actor_struct == "quad-nomix":
+            regressor_actor = observation * observation
+
+        return reshape(
+            lstsq(np.array([regressor_actor]), np.array([action]))[0].T, self.dim_actor
+        )
 
     def _actor_critic_cost(self, w_all):
         """
         Cost (loss) of joint actor-critic (stabilizing) a.k.a. JACS
        
-        """        
-        
-        observation_sqn = self.observation_buffer[-self.Ncritic:,:]
-        
-        w_critic = w_all[:self.dim_critic]
+        """
+
+        observation_sqn = self.observation_buffer[-self.Ncritic :, :]
+
+        w_critic = w_all[: self.dim_critic]
         # lmbd = w_all[self.dim_critic+1]
-        w_actor = w_all[-self.dim_actor:]         
-        
+        w_actor = w_all[-self.dim_actor :]
+
         Jc = 0
-        
-        for k in range(self.Ncritic-1, 0, -1):
-            observation_prev = observation_sqn[k-1, :]
+
+        for k in range(self.Ncritic - 1, 0, -1):
+            observation_prev = observation_sqn[k - 1, :]
             observation_next = observation_sqn[k, :]
-            
+
             critic_prev = self._critic(observation_prev, w_critic, 1)
             critic_next = self._critic(observation_next, self.w_critic_prev, 1)
-            
+
             action = self._actor(observation_prev, w_actor)
-            
+
             # Temporal difference
-            e = critic_prev - self.gamma * critic_next - self.stage_obj(observation_prev, action)
-            
-            Jc += 1/2 * e**2
-        
+            e = (
+                critic_prev
+                - self.gamma * critic_next
+                - self.stage_obj(observation_prev, action)
+            )
+
+            Jc += 1 / 2 * e ** 2
+
         return Jc
 
     def _actor_critic_optimizer(self, observation):
@@ -505,206 +511,234 @@ class CtrlRLStab:
         The key point of CtrlRLStab agent is its stabilizing constraints that can actually be invoked as a filter (a safety checker), that replaces the action and 
         critic parameters for safe ones if any of the stabilizing constraints are violated.
 
-        """  
+        """
 
         def constr_stab_par_decay(w_all, observation):
-            w_critic = w_all[:self.dim_critic]
+            w_critic = w_all[: self.dim_critic]
             lmbd = w_all[self.dim_critic]
-            
-            critic_curr = self._critic(observation, self.w_critic_prev, self.lmbd_prev)   
+
+            critic_curr = self._critic(observation, self.w_critic_prev, self.lmbd_prev)
             critic_new = self._critic(observation, w_critic, lmbd)
-            
+
             return critic_new - critic_curr
-            
+
         def constr_stab_LF_bound(w_all, observation):
-            w_critic = w_all[:self.dim_critic]
+            w_critic = w_all[: self.dim_critic]
             lmbd = w_all[self.dim_critic]
-            w_actor = w_all[-self.dim_actor:] 
-                        
+            w_actor = w_all[-self.dim_actor :]
+
             action = self._actor(observation, w_actor)
-            
-            observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
-            
-            critic_next = self._critic(observation_next, w_critic, lmbd) 
-            
-            return self.safe_ctrl.compute_LF(observation_next) - critic_next        
-        
+
+            observation_next = observation + self.pred_step_size * self.sys_rhs(
+                [], observation, action
+            )  # Euler scheme
+
+            critic_next = self._critic(observation_next, w_critic, lmbd)
+
+            return self.safe_ctrl.compute_LF(observation_next) - critic_next
+
         def constr_stab_decay(w_all, observation):
-            w_critic = w_all[:self.dim_critic]
+            w_critic = w_all[: self.dim_critic]
             lmbd = w_all[self.dim_critic]
-            w_actor = w_all[-self.dim_actor:]   
-            
+            w_actor = w_all[-self.dim_actor :]
+
             action = self._actor(observation, w_actor)
-            
-            observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)  # Euler scheme
-            
-            critic_new = self._critic(observation, w_critic, lmbd)   
-            critic_next = self._critic(observation_next, w_critic, lmbd)   
-            
+
+            observation_next = observation + self.pred_step_size * self.sys_rhs(
+                [], observation, action
+            )  # Euler scheme
+
+            critic_new = self._critic(observation, w_critic, lmbd)
+            critic_next = self._critic(observation_next, w_critic, lmbd)
+
             return critic_next - critic_new + self.safe_decay_rate
 
         def constr_stab_positive(w_all, observation):
-            w_critic = w_all[:self.dim_critic]
+            w_critic = w_all[: self.dim_critic]
             lmbd = w_all[self.dim_critic]
-            
+
             critic_new = self._critic(observation, w_critic, lmbd)
-            
-            return - critic_new
+
+            return -critic_new
 
         # Constraint violation tolerance
         eps1 = 1e-3
         eps2 = 1e-3
         eps3 = 1e-3
         eps4 = 1e-3
-        
+
         # my_constraints = (
         #     NonlinearConstraint(lambda w_all: constr_stab_par_decay( w_all, observation ), -np.inf, eps1, keep_feasible=True),
         #     NonlinearConstraint(lambda w_all: constr_stab_LF_bound( w_all, observation ), -np.inf, eps2, keep_feasible=True),
         #     NonlinearConstraint(lambda w_all: constr_stab_decay( w_all, observation ), -np.inf, eps3, keep_feasible=True),
         #     NonlinearConstraint(lambda w_all: constr_stab_positive( w_all, observation ), -np.inf, eps4, keep_feasible=True)
         #     )
-        
+
         my_constraints = (
-            NonlinearConstraint(lambda w_all: constr_stab_par_decay( w_all, observation ), -np.inf, eps1),
-            NonlinearConstraint(lambda w_all: constr_stab_LF_bound( w_all, observation ), -np.inf, eps2),
-            NonlinearConstraint(lambda w_all: constr_stab_decay( w_all, observation ), -np.inf, eps3),
-            NonlinearConstraint(lambda w_all: constr_stab_positive( w_all, observation ), -np.inf, eps4)
-            )        
+            NonlinearConstraint(
+                lambda w_all: constr_stab_par_decay(w_all, observation), -np.inf, eps1
+            ),
+            NonlinearConstraint(
+                lambda w_all: constr_stab_LF_bound(w_all, observation), -np.inf, eps2
+            ),
+            NonlinearConstraint(
+                lambda w_all: constr_stab_decay(w_all, observation), -np.inf, eps3
+            ),
+            NonlinearConstraint(
+                lambda w_all: constr_stab_positive(w_all, observation), -np.inf, eps4
+            ),
+        )
 
         # Optimization methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-        opt_method = 'SLSQP'
-        if opt_method == 'trust-constr':
-            opt_options = {'maxiter': 10, 'disp': False} #'disp': True, 'verbose': 2}
+        opt_method = "SLSQP"
+        if opt_method == "trust-constr":
+            opt_options = {"maxiter": 10, "disp": False}  #'disp': True, 'verbose': 2}
         else:
-            opt_options = {'maxiter': 10, 'maxfev': 10, 'disp': False, 'adaptive': True, 'xatol': 1e-4, 'fatol': 1e-4} # 'disp': True, 'verbose': 2} 
-        
+            opt_options = {
+                "maxiter": 10,
+                "maxfev": 10,
+                "disp": False,
+                "adaptive": True,
+                "xatol": 1e-4,
+                "fatol": 1e-4,
+            }  # 'disp': True, 'verbose': 2}
+
         # Bounds are not practically necessary for stabilizing joint actor-critic to function
-        # bnds = sp.optimize.Bounds(np.hstack([self.Wmin, self.lmbd_min, self.Hmin]), 
-        #                           np.hstack([self.Wmax, self.lmbd_max, self.Hmax]), 
+        # bnds = sp.optimize.Bounds(np.hstack([self.Wmin, self.lmbd_min, self.Hmin]),
+        #                           np.hstack([self.Wmax, self.lmbd_max, self.Hmax]),
         #                           keep_feasible=True)
-        
+
         # ToDo: make a better routine to determine initial actor weights for the given action
-        self.w_actor_init = self._w_actor_from_action( self.safe_ctrl.compute_action_vanila( observation ), observation )
-        
+        self.w_actor_init = self._w_actor_from_action(
+            self.safe_ctrl.compute_action_vanila(observation), observation
+        )
+
         # DEBUG ===================================================================
         # ================================Constraint debugger
 
         # w_all = np.concatenate([self.w_critic_init, np.array([self.lmbd_init]), self.w_actor_init])
-        
+
         # w_critic = w_all[:self.dim_critic]
         # lmbd = w_all[self.dim_critic]
-        # w_actor = w_all[-self.dim_actor:] 
-                    
+        # w_actor = w_all[-self.dim_actor:]
+
         # action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )
-        
+
         # constr_stab_par_decay(w_all, observation)
         # constr_stab_LF_bound(w_all, observation)
         # constr_stab_decay(w_all, observation)
         # constr_stab_positive(w_all, observation)
 
-        # /DEBUG ===================================================================         
-        
+        # /DEBUG ===================================================================
+
         # Notice `bounds=bnds` is removed from arguments of minimize.
         # It is because bounds are not practically necessary for stabilizing joint actor-critic to function
         # w_all = minimize(self._actor_critic_cost,
         #                     np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.w_actor_init]),
         #                     method=opt_method, tol=1e-4, constraints=my_constraints, options=opt_options).x
-        
-        w_all = minimize(self._actor_critic_cost,
-                            np.hstack([self.w_critic_init,np.array([self.lmbd_init]),self.w_actor_init]),
-                            method=opt_method,
-                            tol=1e-4,
-                            options=opt_options).x        
-        
-        w_critic = w_all[:self.dim_critic]
+
+        w_all = minimize(
+            self._actor_critic_cost,
+            np.hstack(
+                [self.w_critic_init, np.array([self.lmbd_init]), self.w_actor_init]
+            ),
+            method=opt_method,
+            tol=1e-4,
+            options=opt_options,
+        ).x
+
+        w_critic = w_all[: self.dim_critic]
         lmbd = w_all[self.dim_critic]
-        w_actor = w_all[-self.dim_actor:]       
-        
+        w_actor = w_all[-self.dim_actor :]
+
         action = self._actor(observation, w_actor)
-        
-        # DEBUG ===================================================================   
+
+        # DEBUG ===================================================================
         # ================================Constraint debugger
         # R  = '\033[31m'
         # Bl  = '\033[30m'
-        # headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']  
+        # headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']
         # dataRow = [constr_stab_par_decay(w_all, observation), constr_stab_LF_bound(w_all, observation), constr_stab_decay(w_all, observation), constr_stab_positive(w_all, observation)]
-        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
-        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')
+        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
         # print(R+table+Bl)
-        # /DEBUG ===================================================================        
-        
+        # /DEBUG ===================================================================
+
         # Safety checker!
-        if constr_stab_par_decay(w_all, observation) >= eps1 or \
-            constr_stab_LF_bound(w_all, observation) >= eps2 or \
-            constr_stab_decay(w_all, observation) >= eps3 or \
-            constr_stab_positive(w_all, observation) >= eps4 :
-                
+        if (
+            constr_stab_par_decay(w_all, observation) >= eps1
+            or constr_stab_LF_bound(w_all, observation) >= eps2
+            or constr_stab_decay(w_all, observation) >= eps3
+            or constr_stab_positive(w_all, observation) >= eps4
+        ):
+
             w_critic = self.w_critic_init
             lmbd = self.lmbd_init
 
-            action = self.safe_ctrl.compute_action_vanila( observation )
-            
-            w_actor = self._w_actor_from_action( action, observation )
-       
-        # DEBUG ===================================================================   
-        # ================================Put safe controller through        
+            action = self.safe_ctrl.compute_action_vanila(observation)
+
+            w_actor = self._w_actor_from_action(action, observation)
+
+        # DEBUG ===================================================================
+        # ================================Put safe controller through
         # w_critic = self.w_critic_init
         # lmbd = self.lmbd_init
-        # action = self.safe_ctrl.compute_action_vanila(observation)        
-        # /DEBUG ===================================================================         
-        
-        # DEBUG ===================================================================   
+        # action = self.safe_ctrl.compute_action_vanila(observation)
+        # /DEBUG ===================================================================
+
+        # DEBUG ===================================================================
         # ================================Constraint debugger
         # R  = '\033[31m'
         # Bl  = '\033[30m'
-        # headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']  
+        # headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']
         # dataRow = [constr_stab_par_decay(w_all, observation), constr_stab_LF_bound(w_all, observation), constr_stab_decay(w_all, observation), constr_stab_positive(w_all, observation)]
-        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
-        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')
+        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
         # print(R+table+Bl)
-        # /DEBUG ===================================================================  
-        
-        # STUB ===================================================================   
+        # /DEBUG ===================================================================
+
+        # STUB ===================================================================
         # ================================Optimization of one stage_obj + LF_next
         # def J_tmp(action, observation):
         #     observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)
-        #     return self.safe_ctrl.compute_LF(observation_next) + self.stage_obj(observation_next, action) 
+        #     return self.safe_ctrl.compute_LF(observation_next) + self.stage_obj(observation_next, action)
         #     # return self.safe_ctrl.compute_LF(observation_next)
-        
+
         # action = minimize(lambda action: J_tmp(action, observation),
         #               np.zeros(2),
-        #               method=opt_method, tol=1e-6, options=opt_options).x        
-        
+        #               method=opt_method, tol=1e-6, options=opt_options).x
+
         # /STUB ===================================================================
-        
+
         return w_critic, lmbd, action
-        
+
     def compute_action(self, t, observation):
 
         time_in_sample = t - self.ctrl_clock
-        
-        if time_in_sample >= self.sampling_time: # New sample
+
+        if time_in_sample >= self.sampling_time:  # New sample
             # Update controller's internal clock
             self.ctrl_clock = t
-            
+
             # Update data buffers
             self.action_buffer = push_vec(self.action_buffer, self.action_curr)
-            self.observation_buffer = push_vec(self.observation_buffer, observation)          
-            
+            self.observation_buffer = push_vec(self.observation_buffer, observation)
+
             w_critic, lmbd, action = self._actor_critic_optimizer(observation)
-            
-            self.w_critic_prev = w_critic            
+
+            self.w_critic_prev = w_critic
             self.lmbd_prev = lmbd
 
             for k in range(2):
-                action[k] = np.clip(action[k], self.action_min[k], self.action_max[k]) 
+                action[k] = np.clip(action[k], self.action_min[k], self.action_max[k])
 
             self.action_curr = action
 
             return action
-        
+
         else:
-            return self.action_curr        
+            return self.action_curr
+
 
 class CtrlOptPred:
     """
@@ -836,38 +870,40 @@ class CtrlOptPred:
     ----------
     .. [1] Osinenko, Pavel, et al. "Stacked adaptive dynamic programming with unknown system model." IFAC-PapersOnLine 50.1 (2017): 4150-4155        
         
-    """    
-         
-    def __init__(self,
-                 dim_input,
-                 dim_output,
-                 mode='MPC',
-                 ctrl_bnds=[],
-                 action_init = [],
-                 t0=0,
-                 sampling_time=0.1,
-                 Nactor=1,
-                 actor_opt_method='SLSQP',
-                 pred_step_size=0.1,
-                 sys_rhs=[],
-                 sys_out=[],
-                 state_sys=[],
-                 state_predictor=[],
-                 prob_noise_pow = 1,
-                 is_est_model=0,
-                 model_est_stage=1,
-                 model_est_period=0.1,
-                 buffer_size=20,
-                 model_order=3,
-                 model_est_checks=0,
-                 gamma=1,
-                 Ncritic=4,
-                 critic_opt_method='SLSQP',
-                 critic_period=0.1,
-                 critic_struct='quad-nomix',
-                 stage_obj_struct='quadratic',
-                 stage_obj_pars=[],
-                 observation_target=[]):
+    """
+
+    def __init__(
+        self,
+        dim_input,
+        dim_output,
+        mode="MPC",
+        ctrl_bnds=[],
+        action_init=[],
+        t0=0,
+        sampling_time=0.1,
+        Nactor=1,
+        actor_optimizer=[],
+        pred_step_size=0.1,
+        sys_rhs=[],
+        sys_out=[],
+        state_sys=[],
+        state_predictor=[],
+        prob_noise_pow=1,
+        is_est_model=0,
+        model_est_stage=1,
+        model_est_period=0.1,
+        buffer_size=20,
+        model_order=3,
+        model_est_checks=0,
+        gamma=1,
+        Ncritic=4,
+        critic_optimizer=[],
+        critic_period=0.1,
+        critic_struct="quad-nomix",
+        stage_obj_struct="quadratic",
+        stage_obj_pars=[],
+        observation_target=[],
+    ):
         """
         Parameters
         ----------
@@ -985,41 +1021,40 @@ class CtrlOptPred:
                  - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
                    should be ``[R1, R2]``
         """
-        
+
         self.dim_input = dim_input
         self.dim_output = dim_output
-        
+
         self.mode = mode
 
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
-        
+
         # Controller: common
-        self.Nactor = Nactor 
-        self.actor_opt_method = actor_opt_method
+        self.Nactor = Nactor
         self.pred_step_size = pred_step_size
-        
-        self.action_min = np.array( ctrl_bnds[:,0] )
-        self.action_max = np.array( ctrl_bnds[:,1] )
+
+        self.action_min = np.array(ctrl_bnds[:, 0])
+        self.action_max = np.array(ctrl_bnds[:, 1])
         self.action_sqn_min = rep_mat(self.action_min, 1, Nactor)
-        self.action_sqn_max = rep_mat(self.action_max, 1, Nactor) 
-        
+        self.action_sqn_max = rep_mat(self.action_max, 1, Nactor)
+
         if len(action_init) == 0:
-            self.action_curr = self.action_min/10
-            self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
+            self.action_curr = self.action_min / 10
+            self.action_sqn_init = rep_mat(self.action_min / 10, 1, self.Nactor)
         else:
             self.action_curr = action_init
-            self.action_sqn_init = rep_mat( action_init , 1, self.Nactor)
-        
-        self.action_buffer = np.zeros( [buffer_size, dim_input] )
-        self.observation_buffer = np.zeros( [buffer_size, dim_output] )        
-        
+            self.action_sqn_init = rep_mat(action_init, 1, self.Nactor)
+
+        self.action_buffer = np.zeros([buffer_size, dim_input])
+        self.observation_buffer = np.zeros([buffer_size, dim_output])
+
         # Exogeneous model's things
         self.sys_rhs = sys_rhs
         self.sys_out = sys_out
         self.state_sys = state_sys
-        self.state_predictor=state_predictor
-        
+        self.state_predictor = state_predictor
+
         # Model estimator's things
         self.is_est_model = is_est_model
         self.est_clock = t0
@@ -1030,53 +1065,67 @@ class CtrlOptPred:
         self.buffer_size = buffer_size
         self.model_order = model_order
         self.model_est_checks = model_est_checks
-        
-        A = np.zeros( [self.model_order, self.model_order] )
-        B = np.zeros( [self.model_order, self.dim_input] )
-        C = np.zeros( [self.dim_output, self.model_order] )
-        D = np.zeros( [self.dim_output, self.dim_input] )
-        x0est = np.zeros( self.model_order )
-        
+
+        A = np.zeros([self.model_order, self.model_order])
+        B = np.zeros([self.model_order, self.dim_input])
+        C = np.zeros([self.dim_output, self.model_order])
+        D = np.zeros([self.dim_output, self.dim_input])
+        x0est = np.zeros(self.model_order)
+
         self.my_model = models.ModelSS(A, B, C, D, x0est)
-        
+
         self.model_stack = []
         for k in range(self.model_est_checks):
-            self.model_stack.append(self.my_model)        
-        
+            self.model_stack.append(self.my_model)
+
         # RL elements
         self.critic_clock = t0
         self.gamma = gamma
         self.Ncritic = Ncritic
-        self.critic_opt_method = critic_opt_method
-        self.Ncritic = np.min([self.Ncritic, self.buffer_size-1]) # Clip critic buffer size
+        self.Ncritic = np.min(
+            [self.Ncritic, self.buffer_size - 1]
+        )  # Clip critic buffer size
         self.critic_period = critic_period
         self.critic_struct = critic_struct
         self.stage_obj_struct = stage_obj_struct
         self.stage_obj_pars = stage_obj_pars
         self.observation_target = observation_target
-        
+
         self.accum_obj_val = 0
 
-        if self.critic_struct == 'quad-lin':
-            self.dim_critic = int( ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 + (self.dim_output + self.dim_input) ) 
-            self.Wmin = -1e3*np.ones(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic) 
-        elif self.critic_struct == 'quadratic':
-            self.dim_critic = int( ( ( self.dim_output + self.dim_input ) + 1 ) * ( self.dim_output + self.dim_input )/2 )
-            self.Wmin = np.zeros(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)    
-        elif self.critic_struct == 'quad-nomix':
+        if self.critic_struct == "quad-lin":
+            self.dim_critic = int(
+                ((self.dim_output + self.dim_input) + 1)
+                * (self.dim_output + self.dim_input)
+                / 2
+                + (self.dim_output + self.dim_input)
+            )
+            self.Wmin = -1e3 * np.ones(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+        elif self.critic_struct == "quadratic":
+            self.dim_critic = int(
+                ((self.dim_output + self.dim_input) + 1)
+                * (self.dim_output + self.dim_input)
+                / 2
+            )
+            self.Wmin = np.zeros(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+        elif self.critic_struct == "quad-nomix":
             self.dim_critic = self.dim_output + self.dim_input
-            self.Wmin = np.zeros(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)    
-        elif self.critic_struct == 'quad-mix':
-            self.dim_critic = int( self.dim_output + self.dim_output * self.dim_input + self.dim_input )
-            self.Wmin = -1e3*np.ones(self.dim_critic) 
-            self.Wmax = 1e3*np.ones(self.dim_critic)
-            
-        self.w_critic_prev = np.zeros(self.dim_critic)  
+            self.Wmin = np.zeros(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+        elif self.critic_struct == "quad-mix":
+            self.dim_critic = int(
+                self.dim_output + self.dim_output * self.dim_input + self.dim_input
+            )
+            self.Wmin = -1e3 * np.ones(self.dim_critic)
+            self.Wmax = 1e3 * np.ones(self.dim_critic)
+
+        self.w_critic_prev = np.zeros(self.dim_critic)
         self.w_critic_init = self.w_critic_prev
-        
+        self.actor_optimizer = actor_optimizer
+        self.critic_optimizer = critic_optimizer
+
         # self.big_number = 1e4
 
     def reset(self, t0):
@@ -1087,15 +1136,15 @@ class CtrlOptPred:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = self.action_min/10
-    
+        self.action_curr = self.action_min / 10
+
     def receive_sys_state(self, state):
         """
         Fetch exogenous model state. Used in some controller modes. See class documentation.
 
         """
         self.state_sys = state
-    
+
     def stage_obj(self, observation, action):
         """
         Stage (equivalently, instantaneous or running) objective. Depending on the context, it is also called utility, reward, running cost etc.
@@ -1106,19 +1155,19 @@ class CtrlOptPred:
             chi = np.concatenate([observation, action])
         else:
             chi = np.concatenate([observation - self.observation_target, action])
-        
+
         stage_obj = 0
 
-        if self.stage_obj_struct == 'quadratic':
+        if self.stage_obj_struct == "quadratic":
             R1 = self.stage_obj_pars[0]
             stage_obj = chi @ R1 @ chi
-        elif self.stage_obj_struct == 'biquadratic':
+        elif self.stage_obj_struct == "biquadratic":
             R1 = self.stage_obj_pars[0]
             R2 = self.stage_obj_pars[1]
-            stage_obj = chi**2 @ R2 @ chi**2 + chi @ R1 @ chi
-        
+            stage_obj = chi ** 2 @ R2 @ chi ** 2 + chi @ R1 @ chi
+
         return stage_obj
-        
+
     def upd_accum_obj(self, observation, action):
         """
         Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
@@ -1126,51 +1175,56 @@ class CtrlOptPred:
         The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead).
         
         """
-        self.accum_obj_val += self.stage_obj(observation, action)*self.sampling_time
-    
+        self.accum_obj_val += self.stage_obj(observation, action) * self.sampling_time
+
     def _estimate_model(self, t, observation):
         """
         Estimate model parameters by accumulating data buffers ``action_buffer`` and ``observation_buffer``.
         
         """
-        
+
         time_in_sample = t - self.ctrl_clock
-        
-        if time_in_sample >= self.sampling_time: # New sample
+
+        if time_in_sample >= self.sampling_time:  # New sample
             # Update buffers when using RL or requiring estimated model
-            if self.is_est_model or self.mode in ['RQL', 'SQL']:
+            if self.is_est_model or self.mode in ["RQL", "SQL"]:
                 time_in_est_period = t - self.est_clock
-                
+
                 # Estimate model if required
                 if (time_in_est_period >= self.model_est_period) and self.is_est_model:
                     # Update model estimator's internal clock
                     self.est_clock = t
-                    
+
                     try:
-                        # Using Github:CPCLAB-UNIPI/SIPPY 
+                        # Using Github:CPCLAB-UNIPI/SIPPY
                         # method: N4SID, MOESP, CVA, PARSIM-P, PARSIM-S, PARSIM-K
-                        SSest = sippy.system_identification(self.observation_buffer, self.action_buffer,
-                                                            id_method='N4SID',
-                                                            SS_fixed_order=self.model_order,
-                                                            SS_D_required=False,
-                                                            SS_A_stability=False,
-                                                            # SS_f=int(self.buffer_size/12),
-                                                            # SS_p=int(self.buffer_size/10),
-                                                            SS_PK_B_reval=False,
-                                                            tsample=self.sampling_time)
-                        
+                        SSest = sippy.system_identification(
+                            self.observation_buffer,
+                            self.action_buffer,
+                            id_method="N4SID",
+                            SS_fixed_order=self.model_order,
+                            SS_D_required=False,
+                            SS_A_stability=False,
+                            # SS_f=int(self.buffer_size/12),
+                            # SS_p=int(self.buffer_size/10),
+                            SS_PK_B_reval=False,
+                            tsample=self.sampling_time,
+                        )
+
                         self.my_model.upd_pars(SSest.A, SSest.B, SSest.C, SSest.D)
-                        
+
                         # ToDo: train an NN via Torch
                         # NN_wgts = NN_train(...)
-                        
+
                     except:
-                        print('Model estimation problem')
-                        self.my_model.upd_pars(np.zeros( [self.model_order, self.model_order] ),
-                                                np.zeros( [self.model_order, self.dim_input] ),
-                                                np.zeros( [self.dim_output, self.model_order] ),
-                                                np.zeros( [self.dim_output, self.dim_input] ) )
-                    
+                        print("Model estimation problem")
+                        self.my_model.upd_pars(
+                            np.zeros([self.model_order, self.model_order]),
+                            np.zeros([self.model_order, self.dim_input]),
+                            np.zeros([self.dim_output, self.model_order]),
+                            np.zeros([self.dim_output, self.dim_input]),
+                        )
+
                     # Model checks
                     if self.model_est_checks > 0:
                         # Update estimated model parameter stacks
@@ -1180,27 +1234,36 @@ class CtrlOptPred:
                         # Perform check of stack of models and pick the best
                         tot_abs_err_curr = 1e8
                         for k in range(self.model_est_checks):
-                            A, B, C, D = self.model_stack[k].A, self.model_stack[k].B, self.model_stack[k].C, self.model_stack[k].D
-                            x0est,_,_,_ = np.linalg.lstsq(C, observation)
-                            Yest,_ = dss_sim(A, B, C, D, self.action_buffer, x0est, observation)
+                            A, B, C, D = (
+                                self.model_stack[k].A,
+                                self.model_stack[k].B,
+                                self.model_stack[k].C,
+                                self.model_stack[k].D,
+                            )
+                            x0est, _, _, _ = np.linalg.lstsq(C, observation)
+                            Yest, _ = dss_sim(
+                                A, B, C, D, self.action_buffer, x0est, observation
+                            )
                             mean_err = np.mean(Yest - self.observation_buffer, axis=0)
-                            
+
                             # DEBUG ===================================================================
                             # ================================Interm output of model prediction quality
-                            # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']  
+                            # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
                             # dataRow = []
                             # for k in range(dim_output):
                             #     dataRow.append( mean_err[k] )
-                            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')   
-                            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+                            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
+                            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
                             # print( table )
                             # /DEBUG ===================================================================
-                            
-                            tot_abs_err = np.sum( np.abs( mean_err ) )
+
+                            tot_abs_err = np.sum(np.abs(mean_err))
                             if tot_abs_err <= tot_abs_err_curr:
                                 tot_abs_err_curr = tot_abs_err
-                                self.my_model.upd_pars(SSest.A, SSest.B, SSest.C, SSest.D)
-                        
+                                self.my_model.upd_pars(
+                                    SSest.A, SSest.B, SSest.C, SSest.D
+                                )
+
                         # DEBUG ===================================================================
                         # ==========================================Print quality of the best model
                         # R  = '\033[31m'
@@ -1208,22 +1271,22 @@ class CtrlOptPred:
                         # x0est,_,_,_ = np.linalg.lstsq(ctrlStat.C, observation)
                         # Yest,_ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, ctrlStat.action_buffer, x0est, observation)
                         # mean_err = np.mean(Yest - ctrlStat.observation_buffer, axis=0)
-                        # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']  
+                        # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
                         # dataRow = []
                         # for k in range(dim_output):
                         #     dataRow.append( mean_err[k] )
-                        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')   
-                        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+                        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
+                        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
                         # print(R+table+Bl)
-                        # /DEBUG ===================================================================                    
-            
+                        # /DEBUG ===================================================================
+
             # Update initial state estimate
-            x0est,_,_,_ = np.linalg.lstsq(self.my_model.C, observation)
+            x0est, _, _, _ = np.linalg.lstsq(self.my_model.C, observation)
             self.my_model.updateIC(x0est)
-     
+
             if t >= self.model_est_stage:
-                    # Drop probing noise
-                    self.is_prob_noise = 0 
+                # Drop probing noise
+                self.is_prob_noise = 0
 
     def _critic(self, observation, action, w_critic):
         """
@@ -1237,18 +1300,20 @@ class CtrlOptPred:
             chi = np.concatenate([observation, action])
         else:
             chi = np.concatenate([observation - self.observation_target, action])
-        
-        if self.critic_struct == 'quad-lin':
-            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ), chi ])
-        elif self.critic_struct == 'quadratic':
-            regressor_critic = np.concatenate([ uptria2vec( np.outer(chi, chi) ) ])   
-        elif self.critic_struct == 'quad-nomix':
+
+        if self.critic_struct == "quad-lin":
+            regressor_critic = np.concatenate([uptria2vec(np.outer(chi, chi)), chi])
+        elif self.critic_struct == "quadratic":
+            regressor_critic = np.concatenate([uptria2vec(np.outer(chi, chi))])
+        elif self.critic_struct == "quad-nomix":
             regressor_critic = chi * chi
-        elif self.critic_struct == 'quad-mix':
-            regressor_critic = np.concatenate([ observation**2, np.kron(observation, action), action**2 ]) 
+        elif self.critic_struct == "quad-mix":
+            regressor_critic = np.concatenate(
+                [observation ** 2, np.kron(observation, action), action ** 2]
+            )
 
         return w_critic @ regressor_critic
-    
+
     def _critic_cost(self, w_critic):
         """
         Cost function of the critic.
@@ -1262,49 +1327,50 @@ class CtrlOptPred:
        
         """
         Jc = 0
-        
-        for k in range(self.buffer_size-1, self.buffer_size - self.Ncritic, -1):
-            observation_prev = self.observation_buffer[k-1, :]
-            observation_next = self.observation_buffer[k, :]
-            action_prev = self.action_buffer[k-1, :]
-            action_next = self.action_buffer[k, :]
-            
-            # Temporal difference
-            
-            critic_prev = self._critic(observation_prev, action_prev, w_critic)
-            critic_next = self._critic(observation_next, action_next, self.w_critic_prev)            
 
-            e = critic_prev - self.gamma * critic_next - self.stage_obj(observation_prev, action_prev)
-            
-            Jc += 1/2 * e**2
-            
+        for k in range(self.buffer_size - 1, self.buffer_size - self.Ncritic, -1):
+            observation_prev = self.observation_buffer[k - 1, :]
+            observation_next = self.observation_buffer[k, :]
+            action_prev = self.action_buffer[k - 1, :]
+            action_next = self.action_buffer[k, :]
+
+            # Temporal difference
+
+            critic_prev = self._critic(observation_prev, action_prev, w_critic)
+            critic_next = self._critic(
+                observation_next, action_next, self.w_critic_prev
+            )
+
+            e = (
+                critic_prev
+                - self.gamma * critic_next
+                - self.stage_obj(observation_prev, action_prev)
+            )
+
+            Jc += 1 / 2 * e ** 2
+
         return Jc
-        
-        
+
     def _critic_optimizer(self):
         """
         This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._critic_cost`.
 
-        """        
-        
-        # Optimization method of critic    
+        """
+
+        # Optimization method of critic
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-        if self.critic_opt_method == 'trust-constr':
-            critic_opt_options = {'maxiter': 200, 'disp': False} #'disp': True, 'verbose': 2}
-        else:
-            critic_opt_options = {'maxiter': 200, 'maxfev': 1500, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2} 
-        
-        bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
-    
-        w_critic = minimize(lambda w_critic: self._critic_cost(w_critic), self.w_critic_init, method=self.critic_opt_method, tol=1e-7, bounds=bnds, options=critic_opt_options).x
-        
+
+        w_critic = self.critic_optimizer(
+            lambda w_critic: self._critic_cost(w_critic), self.w_critic_init
+        )
+
         # DEBUG ===================================================================
         # print('-----------------------Critic parameters--------------------------')
         # print( w_critic )
         # /DEBUG ==================================================================
-        
+
         return w_critic
-    
+
     def _actor_cost(self, action_sqn, observation):
         """
         See class documentation.
@@ -1315,45 +1381,69 @@ class CtrlOptPred:
         Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
 
         """
-        
+
         my_action_sqn = np.reshape(action_sqn, [self.Nactor, self.dim_input])
         # System output prediction
-        if not self.is_est_model:    # Via exogenously passed model
+        if not self.is_est_model:  # Via exogenously passed model
             state = self.state_sys
-            observation_sqn = self.state_predictor.predict_state_sqn(state, observation, my_action_sqn)
+            observation_sqn = self.state_predictor.predict_state_sqn(
+                state, observation, my_action_sqn
+            )
 
-        elif self.is_est_model:    # Via estimated model
-            my_action_sqn_upsampled = my_action_sqn.repeat(int(self.pred_step_size/self.sampling_time), axis=0)
-            observation_sqn_upsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, my_action_sqn_upsampled, self.my_model.x0est, observation)
-            observation_sqn = observation_sqn_upsampled[::int(self.pred_step_size/self.sampling_time)]
-        
-        J = 0   
-        if self.mode=='MPC':
+        elif self.is_est_model:  # Via estimated model
+            my_action_sqn_upsampled = my_action_sqn.repeat(
+                int(self.pred_step_size / self.sampling_time), axis=0
+            )
+            observation_sqn_upsampled, _ = dss_sim(
+                self.my_model.A,
+                self.my_model.B,
+                self.my_model.C,
+                self.my_model.D,
+                my_action_sqn_upsampled,
+                self.my_model.x0est,
+                observation,
+            )
+            observation_sqn = observation_sqn_upsampled[
+                :: int(self.pred_step_size / self.sampling_time)
+            ]
+
+        J = 0
+        if self.mode == "MPC":
             for k in range(self.Nactor):
-                J += self.gamma**k * self.stage_obj(observation_sqn[k, :], my_action_sqn[k, :])
-        elif self.mode=='RQL':     # RL: Q-learning with Ncritic-1 roll-outs of stage objectives
-             for k in range(self.Nactor-1):
-                J += self.gamma**k * self.stage_obj(observation_sqn[k, :], my_action_sqn[k, :])
-             J += self._critic(observation_sqn[-1, :], my_action_sqn[-1, :], self.w_critic)
-        elif self.mode=='SQL':     # RL: stacked Q-learning
-             for k in range(self.Nactor): 
-                Q = self._critic(observation_sqn[k, :], my_action_sqn[k, :], self.w_critic)
-                
+                J += self.gamma ** k * self.stage_obj(
+                    observation_sqn[k, :], my_action_sqn[k, :]
+                )
+        elif (
+            self.mode == "RQL"
+        ):  # RL: Q-learning with Ncritic-1 roll-outs of stage objectives
+            for k in range(self.Nactor - 1):
+                J += self.gamma ** k * self.stage_obj(
+                    observation_sqn[k, :], my_action_sqn[k, :]
+                )
+            J += self._critic(
+                observation_sqn[-1, :], my_action_sqn[-1, :], self.w_critic
+            )
+        elif self.mode == "SQL":  # RL: stacked Q-learning
+            for k in range(self.Nactor):
+                Q = self._critic(
+                    observation_sqn[k, :], my_action_sqn[k, :], self.w_critic
+                )
+
                 # With state constraints via indicator function
                 # Q = w_critic @ self._regressor_critic( observation_sqn[k, :], my_action_sqn[k, :] ) + state_constraint_indicator(observation_sqn[k, 0])
-                
+
                 # DEBUG ===================================================================
                 # =========================================================================
                 # R  = '\033[31m'
                 # Bl  = '\033[30m'
                 # if state_constraint_indicator(observation_sqn[k, 0]) > 1:
                 #     print(R+str(state_constraint_indicator(observation_sqn[k, 0]))+Bl)
-                # /DEBUG ==================================================================                 
-                
-                J += Q 
+                # /DEBUG ==================================================================
+
+                J += Q
 
         return J
-    
+
     def _actor_optimizer(self, observation):
         """
         This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._actor_cost`.
@@ -1370,11 +1460,11 @@ class CtrlOptPred:
         # For direct implementation of state constraints, this needs `partial` from `functools`
         # See [here](https://stackoverflow.com/questions/27659235/adding-multiple-constraints-to-scipy-minimize-autogenerate-constraint-dictionar)
         # def state_constraint(action_sqn, idx):
-            
+
         #     my_action_sqn = np.reshape(action_sqn, [N, self.dim_input])
-            
-        #     observation_sqn = np.zeros([idx, self.dim_output])    
-            
+
+        #     observation_sqn = np.zeros([idx, self.dim_output])
+
         #     # System output prediction
         #     if (mode==1) or (mode==3) or (mode==5):    # Via exogenously passed model
         #         observation_sqn[0, :] = observation
@@ -1384,8 +1474,8 @@ class CtrlOptPred:
         #         for k in range(1, idx):
         #             # state = get_next_state(state, my_action_sqn[k-1, :], delta)
         #             state = state + delta * self.sys_rhs([], state, my_action_sqn[k-1, :], [])  # Euler scheme
-        #             observation_sqn[k, :] = self.sys_out(state)            
-            
+        #             observation_sqn[k, :] = self.sys_out(state)
+
         #     return observation_sqn[-1, 1] - 1
 
         # my_constraints=[]
@@ -1394,44 +1484,26 @@ class CtrlOptPred:
 
         # my_constraints = {'type': 'ineq', 'fun': state_constraint}
 
-        # Optimization method of actor    
+        # Optimization method of actor
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
         # actor_opt_method = 'SLSQP' # Standard
-        if self.actor_opt_method == 'trust-constr':
-            actor_opt_options = {'maxiter': 300, 'disp': False} #'disp': True, 'verbose': 2}
-        else:
-            actor_opt_options = {'maxiter': 300, 'maxfev': 5000, 'disp': False, 'adaptive': True, 'xatol': 1e-7, 'fatol': 1e-7} # 'disp': True, 'verbose': 2} 
-       
-        isGlobOpt = 0
-        
-        my_action_sqn_init = np.reshape(self.action_sqn_init, [self.Nactor*self.dim_input,])
-        
-        bnds = sp.optimize.Bounds(self.action_sqn_min, self.action_sqn_max, keep_feasible=True)
-        
-        try:
-            if isGlobOpt:
-                minimizer_kwargs = {'method': self.actor_opt_method, 'bounds': bnds, 'tol': 1e-7, 'options': actor_opt_options}
-                action_sqn = basinhopping(lambda action_sqn: self._actor_cost(action_sqn, observation),
-                                          my_action_sqn_init,
-                                          minimizer_kwargs=minimizer_kwargs,
-                                          niter = 10).x
-            else:
-                action_sqn = minimize(lambda action_sqn: self._actor_cost(action_sqn, observation),
-                                      my_action_sqn_init,
-                                      method=self.actor_opt_method,
-                                      tol=1e-7,
-                                      bounds=bnds,
-                                      options=actor_opt_options).x        
 
-        except ValueError:
-            print('Actor''s optimizer failed. Returning default action')
-            action_sqn = my_action_sqn_init
-        
+        isGlobOpt = 0
+
+        my_action_sqn_init = np.reshape(
+            self.action_sqn_init, [self.Nactor * self.dim_input,]
+        )
+
+        action_sqn = self.actor_optimizer.optimize(
+            lambda my_action_sqn: self._actor_cost(my_action_sqn, observation),
+            my_action_sqn_init,
+        )
+
         # DEBUG ===================================================================
         # ================================Interm output of model prediction quality
         # R  = '\033[31m'
         # Bl  = '\033[30m'
-        # my_action_sqn = np.reshape(action_sqn, [N, self.dim_input])    
+        # my_action_sqn = np.reshape(action_sqn, [N, self.dim_input])
         # my_action_sqn_upsampled = my_action_sqn.repeat(int(delta/self.sampling_time), axis=0)
         # observation_sqn_upsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, my_action_sqn_upsampled, self.my_model.x0est, observation)
         # observation_sqn = observation_sqn_upsampled[::int(delta/self.sampling_time)]
@@ -1440,18 +1512,18 @@ class CtrlOptPred:
         # state = self.state_sys
         # for k in range(1, Nactor):
         #     state = state + delta * self.sys_rhs([], state, my_action_sqn[k-1, :], [])  # Euler scheme
-        #     Yt[k, :] = self.sys_out(state)           
-        # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']  
+        #     Yt[k, :] = self.sys_out(state)
+        # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
         # dataRow = []
         # for k in range(dim_output):
         #     dataRow.append( np.mean(observation_sqn[:,k] - Yt[:,k]) )
-        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')   
-        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
+        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
         # print(R+table+Bl)
-        # /DEBUG ==================================================================     
-        
-        return action_sqn[:self.dim_input]    # Return first action
-                    
+        # /DEBUG ==================================================================
+
+        return action_sqn[: self.dim_input]  # Return first action
+
     def compute_action(self, t, observation):
         """
         Main method. See class documentation.
@@ -1461,63 +1533,64 @@ class CtrlOptPred:
         
         Add your modes, that you introduced in :func:`~controllers.CtrlOptPred._actor_cost`, here.
 
-        """       
-        
+        """
+
         time_in_sample = t - self.ctrl_clock
-        
-        if time_in_sample >= self.sampling_time: # New sample
+
+        if time_in_sample >= self.sampling_time:  # New sample
             # Update controller's internal clock
             self.ctrl_clock = t
-            
-            if self.mode == 'MPC':  
-                
-                # Apply control when model estimation phase is over  
+
+            if self.mode == "MPC":
+
+                # Apply control when model estimation phase is over
                 if self.is_prob_noise and self.is_est_model:
                     return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
-                
+
                 elif not self.is_prob_noise and self.is_est_model:
                     action = self._actor_optimizer(observation)
 
-                elif self.mode=='MPC':
+                elif self.mode == "MPC":
                     action = self._actor_optimizer(observation)
-                    
-            elif self.mode in ['RQL', 'SQL']:
+
+            elif self.mode in ["RQL", "SQL"]:
                 # Critic
                 timeInCriticPeriod = t - self.critic_clock
-                
+
                 # Update data buffers
                 self.action_buffer = push_vec(self.action_buffer, self.action_curr)
                 self.observation_buffer = push_vec(self.observation_buffer, observation)
-                
+
                 if timeInCriticPeriod >= self.critic_period:
                     # Update critic's internal clock
                     self.critic_clock = t
-                    
+
                     self.w_critic = self._critic_optimizer()
                     self.w_critic_prev = self.w_critic
-                    
+
                     # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
                     # self.w_critic_init = self.w_critic_prev
-                    
+
                 else:
                     self.w_critic = self.w_critic_prev
-                    
+
                 # Actor. Apply control when model estimation phase is over
                 if self.is_prob_noise and self.is_est_model:
                     action = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
                 elif not self.is_prob_noise and self.is_est_model:
                     action = self._actor_optimizer(observation)
-                    
-                elif self.mode in ['RQL', 'SQL']:
-                    action = self._actor_optimizer(observation) 
-            
+
+                elif self.mode in ["RQL", "SQL"]:
+                    action = self._actor_optimizer(observation)
+
             self.action_curr = action
-            
-            return action    
-    
+
+            return action
+
         else:
             return self.action_curr
-        
+
+
 class CtrlNominal3WRobot:
     """
     This is a class of nominal controllers for 3-wheel robots used for benchmarking of other controllers.
@@ -1549,7 +1622,7 @@ class CtrlNominal3WRobot:
     ..   [3] Osinenko, Pavel, Patrick Schmidt, and Stefan Streif. "Nonsmooth stabilization and its computational aspects." arXiv preprint arXiv:2006.14013 (2020)
     
     """
-    
+
     def __init__(self, m, I, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1):
         self.m = m
         self.I = I
@@ -1557,102 +1630,130 @@ class CtrlNominal3WRobot:
         self.ctrl_bnds = ctrl_bnds
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
-        
+
         self.action_curr = np.zeros(2)
-   
+
     def reset(self, t0):
         """
         Resets controller for use in multi-episode simulation.
         
         """
         self.ctrl_clock = t0
-        self.action_curr = np.zeros(2)   
-    
+        self.action_curr = np.zeros(2)
+
     def _zeta(self, xNI, theta):
         """
         Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators).
 
         """
-        
+
         #                                 3
         #                             |x |
-        #         4     4             | 3|          
+        #         4     4             | 3|
         # L(x) = x  +  x  +  ----------------------------------=   min F(x)
-        #         1     2                                        theta   
+        #         1     2                                        theta
         #                     /     / 2   2 \             \ 2
         #                    | sqrt| x + x   | + sqrt|x |  |
-        #                     \     \ 1   2 /        | 3| /  
+        #                     \     \ 1   2 /        | 3| /
         #                        \_________  __________/
         #                                 \/
         #                               sigma
         #                                         3
         #                                     |x |
-        #            4     4                     | 3|          
+        #            4     4                     | 3|
         # F(x; theta) = x  +  x  +  ----------------------------------------
-        #            1     2    
+        #            1     2
         #                        /                                     \ 2
         #                        | x cos theta + x sin theta + sqrt|x | |
         #                        \ 1             2                | 3| /
         #                           \_______________  ______________/
         #                                            \/
-        #                                            sigma~ 
-    
-        sigma_tilde = xNI[0]*np.cos(theta) + xNI[1]*np.sin(theta) + np.sqrt(np.abs(xNI[2]))
-        
+        #                                            sigma~
+
+        sigma_tilde = (
+            xNI[0] * np.cos(theta) + xNI[1] * np.sin(theta) + np.sqrt(np.abs(xNI[2]))
+        )
+
         nablaF = np.zeros(3)
-        
-        nablaF[0] = 4*xNI[0]**3 - 2 * np.abs(xNI[2])**3 * np.cos(theta)/sigma_tilde**3
-        
-        nablaF[1] = 4*xNI[1]**3 - 2 * np.abs(xNI[2])**3 * np.sin(theta)/sigma_tilde**3
-        
-        nablaF[2] = ( 3*xNI[0]*np.cos(theta) + 3*xNI[1]*np.sin(theta) + 2*np.sqrt(np.abs(xNI[2])) ) * xNI[2]**2 * np.sign(xNI[2]) / sigma_tilde**3  
-    
+
+        nablaF[0] = (
+            4 * xNI[0] ** 3 - 2 * np.abs(xNI[2]) ** 3 * np.cos(theta) / sigma_tilde ** 3
+        )
+
+        nablaF[1] = (
+            4 * xNI[1] ** 3 - 2 * np.abs(xNI[2]) ** 3 * np.sin(theta) / sigma_tilde ** 3
+        )
+
+        nablaF[2] = (
+            (
+                3 * xNI[0] * np.cos(theta)
+                + 3 * xNI[1] * np.sin(theta)
+                + 2 * np.sqrt(np.abs(xNI[2]))
+            )
+            * xNI[2] ** 2
+            * np.sign(xNI[2])
+            / sigma_tilde ** 3
+        )
+
         return nablaF
-    
-    def _kappa(self, xNI, theta): 
+
+    def _kappa(self, xNI, theta):
         """
         Stabilizing controller for NI-part.
 
         """
         kappa_val = np.zeros(2)
-        
+
         G = np.zeros([3, 2])
-        G[:,0] = np.array([1, 0, xNI[1]])
-        G[:,1] = np.array([0, 1, -xNI[0]])
-                         
+        G[:, 0] = np.array([1, 0, xNI[1]])
+        G[:, 1] = np.array([0, 1, -xNI[0]])
+
         zeta_val = self._zeta(xNI, theta)
-        
-        kappa_val[0] = - np.abs( np.dot( zeta_val, G[:,0] ) )**(1/3) * np.sign( np.dot( zeta_val, G[:,0] ) )
-        kappa_val[1] = - np.abs( np.dot( zeta_val, G[:,1] ) )**(1/3) * np.sign( np.dot( zeta_val, G[:,1] ) )
-        
+
+        kappa_val[0] = -np.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * np.sign(
+            np.dot(zeta_val, G[:, 0])
+        )
+        kappa_val[1] = -np.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * np.sign(
+            np.dot(zeta_val, G[:, 1])
+        )
+
         return kappa_val
-    
+
     def _Fc(self, xNI, eta, theta):
         """
         Marginal function for ENDI constructed by nonsmooth backstepping. See details in the literature mentioned in the class documentation.
 
         """
-        
-        sigma_tilde = xNI[0]*np.cos(theta) + xNI[1]*np.sin(theta) + np.sqrt(np.abs(xNI[2]))
-        
-        F = xNI[0]**4 + xNI[1]**4 + np.abs( xNI[2] )**3 / sigma_tilde**2
-        
+
+        sigma_tilde = (
+            xNI[0] * np.cos(theta) + xNI[1] * np.sin(theta) + np.sqrt(np.abs(xNI[2]))
+        )
+
+        F = xNI[0] ** 4 + xNI[1] ** 4 + np.abs(xNI[2]) ** 3 / sigma_tilde ** 2
+
         z = eta - self._kappa(xNI, theta)
-        
-        return F + 1/2 * np.dot(z, z)
-    
+
+        return F + 1 / 2 * np.dot(z, z)
+
     def _minimizer_theta(self, xNI, eta):
         thetaInit = 0
-        
+
         bnds = sp.optimize.Bounds(-np.pi, np.pi, keep_feasible=False)
-        
-        options = {'maxiter': 50, 'disp': False}
-        
-        theta_val = minimize(lambda theta: self._Fc(xNI, eta, theta), thetaInit, method='trust-constr', tol=1e-6, bounds=bnds, options=options).x
-        
+
+        options = {"maxiter": 50, "disp": False}
+
+        theta_val = minimize(
+            lambda theta: self._Fc(xNI, eta, theta),
+            thetaInit,
+            method="trust-constr",
+            tol=1e-6,
+            bounds=bnds,
+            options=options,
+        ).x
+
         return theta_val
-        
-    def _Cart2NH(self, coords_Cart): 
+
+    def _Cart2NH(self, coords_Cart):
         """
         Transformation from Cartesian coordinates to non-holonomic (NH) coordinates.
         See Section VIII.A in [[1]_].
@@ -1665,26 +1766,28 @@ class CtrlNominal3WRobot:
                integrator model and invariant manifold theory. In 2010 IEEE/RSJ International Conference on Intelligent Robots and Systems (pp. 2862-2867)
 
         """
-        
+
         xNI = np.zeros(3)
         eta = np.zeros(2)
-        
+
         xc = coords_Cart[0]
         yc = coords_Cart[1]
         alpha = coords_Cart[2]
         v = coords_Cart[3]
         omega = coords_Cart[4]
-        
+
         xNI[0] = alpha
         xNI[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
-        xNI[2] = - 2 * ( yc * np.cos(alpha) - xc * np.sin(alpha) ) - alpha * ( xc * np.cos(alpha) + yc * np.sin(alpha) )
-        
+        xNI[2] = -2 * (yc * np.cos(alpha) - xc * np.sin(alpha)) - alpha * (
+            xc * np.cos(alpha) + yc * np.sin(alpha)
+        )
+
         eta[0] = omega
-        eta[1] = ( yc * np.cos(alpha) - xc * np.sin(alpha) ) * omega + v   
-        
+        eta[1] = (yc * np.cos(alpha) - xc * np.sin(alpha)) * omega + v
+
         return [xNI, eta]
-  
-    def _NH2ctrl_Cart(self, xNI, eta, uNI): 
+
+    def _NH2ctrl_Cart(self, xNI, eta, uNI):
         """
         Get control for Cartesian NI from NH coordinates.
         See Section VIII.A in [[1]_].
@@ -1700,10 +1803,14 @@ class CtrlNominal3WRobot:
         """
 
         uCart = np.zeros(2)
-        
-        uCart[0] = self.m * ( uNI[1] + xNI[1] * eta[0]**2 + 1/2 * ( xNI[0] * xNI[1] * uNI[0] + uNI[0] * xNI[2] ) )
+
+        uCart[0] = self.m * (
+            uNI[1]
+            + xNI[1] * eta[0] ** 2
+            + 1 / 2 * (xNI[0] * xNI[1] * uNI[0] + uNI[0] * xNI[2])
+        )
         uCart[1] = self.I * uNI[0]
-        
+
         return uCart
 
     def compute_action(self, t, observation):
@@ -1720,40 +1827,42 @@ class CtrlNominal3WRobot:
         .. [2] Osinenko, Pavel, Patrick Schmidt, and Stefan Streif. "Nonsmooth stabilization and its computational aspects." arXiv preprint arXiv:2006.14013 (2020)
         
         """
-        
+
         time_in_sample = t - self.ctrl_clock
-        
-        if time_in_sample >= self.sampling_time: # New sample
+
+        if time_in_sample >= self.sampling_time:  # New sample
             # Update internal clock
             self.ctrl_clock = t
-            
+
             # This controller needs full-state measurement
-            xNI, eta = self._Cart2NH( observation ) 
+            xNI, eta = self._Cart2NH(observation)
             theta_star = self._minimizer_theta(xNI, eta)
             kappa_val = self._kappa(xNI, theta_star)
             z = eta - kappa_val
-            uNI = - self.ctrl_gain * z
+            uNI = -self.ctrl_gain * z
             action = self._NH2ctrl_Cart(xNI, eta, uNI)
-            
+
             if self.ctrl_bnds.any():
                 for k in range(2):
-                    action[k] = np.clip(action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])           
-            
+                    action[k] = np.clip(
+                        action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
+                    )
+
             self.action_curr = action
 
-            # DEBUG ===================================================================   
+            # DEBUG ===================================================================
             # ================================LF debugger
             # R  = '\033[31m'
             # Bl  = '\033[30m'
-            # headerRow = ['L']  
+            # headerRow = ['L']
             # dataRow = [self.compute_LF(observation)]
-            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
-            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')
+            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
             # print(R+table+Bl)
-            # /DEBUG ===================================================================             
+            # /DEBUG ===================================================================
 
-            return action    
-    
+            return action
+
         else:
             return self.action_curr
 
@@ -1762,161 +1871,202 @@ class CtrlNominal3WRobot:
         Same as :func:`~CtrlNominal3WRobot.compute_action`, but without invoking the internal clock.
 
         """
-        
-        xNI, eta = self._Cart2NH( observation ) 
+
+        xNI, eta = self._Cart2NH(observation)
         theta_star = self._minimizer_theta(xNI, eta)
         kappa_val = self._kappa(xNI, theta_star)
         z = eta - kappa_val
-        uNI = - self.ctrl_gain * z
+        uNI = -self.ctrl_gain * z
         action = self._NH2ctrl_Cart(xNI, eta, uNI)
-        
+
         self.action_curr = action
-        
+
         return action
 
     def compute_LF(self, observation):
-        
-        xNI, eta = self._Cart2NH( observation ) 
+
+        xNI, eta = self._Cart2NH(observation)
         theta_star = self._minimizer_theta(xNI, eta)
-        
+
         return self._Fc(xNI, eta, theta_star)
-    
+
+
 class CtrlNominal3WRobotNI:
     """
     Nominal parking controller for NI using disassembled subgradients.
     
     """
-    
+
     def __init__(self, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1):
         self.ctrl_gain = ctrl_gain
         self.ctrl_bnds = ctrl_bnds
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
-        
+
         self.action_curr = np.zeros(2)
-   
+
     def reset(self, t0):
         """
         Resets controller for use in multi-episode simulation.
         
         """
         self.ctrl_clock = t0
-        self.action_curr = np.zeros(2)   
-    
+        self.action_curr = np.zeros(2)
+
     def _zeta(self, xNI):
         """
         Analytic disassembled subgradient, without finding minimizer theta.
 
         """
-        
+
         #                                 3
         #                             |x |
-        #         4     4             | 3|          
+        #         4     4             | 3|
         # L(x) = x  +  x  +  ----------------------------------=   min F(x)
-        #         1     2                                        theta   
+        #         1     2                                        theta
         #                     /     / 2   2 \             \ 2
         #                     | sqrt| x + x   | + sqrt|x | |
-        #                     \     \ 1   2 /        | 3| /  
+        #                     \     \ 1   2 /        | 3| /
         #                        \_________  __________/
         #                                 \/
         #                               sigma
         #                                                3
         #                                            |x |
-        #                4     4                     | 3|          
+        #                4     4                     | 3|
         # F(x; theta) = x  +  x  +  ----------------------------------------
-        #                1     2    
+        #                1     2
         #                           /                                      \ 2
         #                           | x cos theta + x sin theta + sqrt|x | |
         #                           \ 1             2                | 3|  /
         #                              \_______________  ______________/
         #                                              \/
-        #                                             sigma~ 
-    
-    
-        sigma = np.sqrt( xNI[0]**2 + xNI[1]**2 ) + np.sqrt(abs(xNI[2]));
-        
+        #                                             sigma~
+
+        sigma = np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) + np.sqrt(abs(xNI[2]))
+
         nablaL = np.zeros(3)
-        
-        nablaL[0] = 4*xNI[0]**3 + np.abs(xNI[2])**3/sigma**3 * 1/np.sqrt( xNI[0]**2 + xNI[1]**2 )**3 * 2 * xNI[0];
-        nablaL[1] = 4*xNI[1]**3 + np.abs(xNI[2])**3/sigma**3 * 1/np.sqrt( xNI[0]**2 + xNI[1]**2 )**3 * 2 * xNI[1]; 
-        nablaL[2] = 3 * np.abs(xNI[2])**2 * np.sign(xNI[2]) + np.abs(xNI[2])**3 / sigma**3 * 1/np.sqrt(np.abs(xNI[2])) * np.sign(xNI[2]);
-    
+
+        nablaL[0] = (
+            4 * xNI[0] ** 3
+            + np.abs(xNI[2]) ** 3
+            / sigma ** 3
+            * 1
+            / np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) ** 3
+            * 2
+            * xNI[0]
+        )
+        nablaL[1] = (
+            4 * xNI[1] ** 3
+            + np.abs(xNI[2]) ** 3
+            / sigma ** 3
+            * 1
+            / np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) ** 3
+            * 2
+            * xNI[1]
+        )
+        nablaL[2] = 3 * np.abs(xNI[2]) ** 2 * np.sign(xNI[2]) + np.abs(
+            xNI[2]
+        ) ** 3 / sigma ** 3 * 1 / np.sqrt(np.abs(xNI[2])) * np.sign(xNI[2])
+
         theta = 0
-        
-        sigma_tilde = xNI[0]*np.cos(theta) + xNI[1]*np.sin(theta) + np.sqrt(np.abs(xNI[2]))
-        
+
+        sigma_tilde = (
+            xNI[0] * np.cos(theta) + xNI[1] * np.sin(theta) + np.sqrt(np.abs(xNI[2]))
+        )
+
         nablaF = np.zeros(3)
-        
-        nablaF[0] = 4*xNI[0]**3 - 2 * np.abs(xNI[2])**3 * np.cos(theta)/sigma_tilde**3
-        nablaF[1] = 4*xNI[1]**3 - 2 * np.abs(xNI[2])**3 * np.sin(theta)/sigma_tilde**3
-        nablaF[2] = ( 3*xNI[0]*np.cos(theta) + 3*xNI[1]*np.sin(theta) + 2*np.sqrt(np.abs(xNI[2])) ) * xNI[2]**2 * np.sign(xNI[2]) / sigma_tilde**3  
-    
+
+        nablaF[0] = (
+            4 * xNI[0] ** 3 - 2 * np.abs(xNI[2]) ** 3 * np.cos(theta) / sigma_tilde ** 3
+        )
+        nablaF[1] = (
+            4 * xNI[1] ** 3 - 2 * np.abs(xNI[2]) ** 3 * np.sin(theta) / sigma_tilde ** 3
+        )
+        nablaF[2] = (
+            (
+                3 * xNI[0] * np.cos(theta)
+                + 3 * xNI[1] * np.sin(theta)
+                + 2 * np.sqrt(np.abs(xNI[2]))
+            )
+            * xNI[2] ** 2
+            * np.sign(xNI[2])
+            / sigma_tilde ** 3
+        )
+
         if xNI[0] == 0 and xNI[1] == 0:
             return nablaF
         else:
             return nablaL
-    
-    def _kappa(self, xNI): 
+
+    def _kappa(self, xNI):
         """
         Stabilizing controller for NI-part.
 
         """
         kappa_val = np.zeros(2)
-        
+
         G = np.zeros([3, 2])
-        G[:,0] = np.array([1, 0, xNI[1]])
-        G[:,1] = np.array([0, 1, -xNI[0]])
-                         
+        G[:, 0] = np.array([1, 0, xNI[1]])
+        G[:, 1] = np.array([0, 1, -xNI[0]])
+
         zeta_val = self._zeta(xNI)
-        
-        kappa_val[0] = - np.abs( np.dot( zeta_val, G[:,0] ) )**(1/3) * np.sign( np.dot( zeta_val, G[:,0] ) )
-        kappa_val[1] = - np.abs( np.dot( zeta_val, G[:,1] ) )**(1/3) * np.sign( np.dot( zeta_val, G[:,1] ) )
-        
+
+        kappa_val[0] = -np.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * np.sign(
+            np.dot(zeta_val, G[:, 0])
+        )
+        kappa_val[1] = -np.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * np.sign(
+            np.dot(zeta_val, G[:, 1])
+        )
+
         return kappa_val
-    
+
     def _F(self, xNI, eta, theta):
         """
         Marginal function for NI.
 
         """
-        
-        sigma_tilde = xNI[0]*np.cos(theta) + xNI[1]*np.sin(theta) + np.sqrt(np.abs(xNI[2]))
-        
-        F = xNI[0]**4 + xNI[1]**4 + np.abs( xNI[2] )**3 / sigma_tilde**2
-        
+
+        sigma_tilde = (
+            xNI[0] * np.cos(theta) + xNI[1] * np.sin(theta) + np.sqrt(np.abs(xNI[2]))
+        )
+
+        F = xNI[0] ** 4 + xNI[1] ** 4 + np.abs(xNI[2]) ** 3 / sigma_tilde ** 2
+
         z = eta - self._kappa(xNI, theta)
-        
-        return F + 1/2 * np.dot(z, z)
-      
-    def _Cart2NH(self, coords_Cart): 
+
+        return F + 1 / 2 * np.dot(z, z)
+
+    def _Cart2NH(self, coords_Cart):
         """
         Transformation from Cartesian coordinates to non-holonomic (NH) coordinates.
 
         """
-        
+
         xNI = np.zeros(3)
-        
+
         xc = coords_Cart[0]
         yc = coords_Cart[1]
         alpha = coords_Cart[2]
-        
+
         xNI[0] = alpha
         xNI[1] = xc * np.cos(alpha) + yc * np.sin(alpha)
-        xNI[2] = - 2 * ( yc * np.cos(alpha) - xc * np.sin(alpha) ) - alpha * ( xc * np.cos(alpha) + yc * np.sin(alpha) )
-        
+        xNI[2] = -2 * (yc * np.cos(alpha) - xc * np.sin(alpha)) - alpha * (
+            xc * np.cos(alpha) + yc * np.sin(alpha)
+        )
+
         return xNI
-  
-    def _NH2ctrl_Cart(self, xNI, uNI): 
+
+    def _NH2ctrl_Cart(self, xNI, uNI):
         """
         Get control for Cartesian NI from NH coordinates.       
 
         """
 
         uCart = np.zeros(2)
-        
-        uCart[0] = uNI[1] + 1/2 * uNI[0] * ( xNI[2] + xNI[0] * xNI[1] )
+
+        uCart[0] = uNI[1] + 1 / 2 * uNI[0] * (xNI[2] + xNI[0] * xNI[1])
         uCart[1] = uNI[0]
-        
+
         return uCart
 
     def compute_action(self, t, observation):
@@ -1924,37 +2074,39 @@ class CtrlNominal3WRobotNI:
         Compute sampled action.
         
         """
-        
+
         time_in_sample = t - self.ctrl_clock
-        
-        if time_in_sample >= self.sampling_time: # New sample
+
+        if time_in_sample >= self.sampling_time:  # New sample
             # Update internal clock
             self.ctrl_clock = t
-            
-            xNI = self._Cart2NH( observation ) 
+
+            xNI = self._Cart2NH(observation)
             kappa_val = self._kappa(xNI)
             uNI = self.ctrl_gain * kappa_val
             action = self._NH2ctrl_Cart(xNI, uNI)
-            
+
             if self.ctrl_bnds.any():
                 for k in range(2):
-                    action[k] = np.clip(action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1])           
-            
+                    action[k] = np.clip(
+                        action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
+                    )
+
             self.action_curr = action
-            
-            # DEBUG ===================================================================   
+
+            # DEBUG ===================================================================
             # ================================LF debugger
             # R  = '\033[31m'
             # Bl  = '\033[30m'
-            # headerRow = ['L']  
+            # headerRow = ['L']
             # dataRow = [self.compute_LF(observation)]
-            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')   
-            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')  
+            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')
+            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
             # print(R+table+Bl)
-            # /DEBUG ===================================================================            
-            
-            return action    
-    
+            # /DEBUG ===================================================================
+
+            return action
+
         else:
             return self.action_curr
 
@@ -1963,20 +2115,20 @@ class CtrlNominal3WRobotNI:
         Same as :func:`~CtrlNominal3WRobotNI.compute_action`, but without invoking the internal clock.
 
         """
-        
-        xNI = self._Cart2NH( observation ) 
+
+        xNI = self._Cart2NH(observation)
         kappa_val = self._kappa(xNI)
         uNI = self.ctrl_gain * kappa_val
         action = self._NH2ctrl_Cart(xNI, uNI)
-        
+
         self.action_curr = action
-        
+
         return action
 
     def compute_LF(self, observation):
-        
-        xNI = self._Cart2NH( observation ) 
-        
-        sigma = np.sqrt( xNI[0]**2 + xNI[1]**2 ) + np.sqrt( np.abs(xNI[2]) )
-        
-        return xNI[0]**4 + xNI[1]**4 + np.abs( xNI[2] )**3 / sigma**2
+
+        xNI = self._Cart2NH(observation)
+
+        sigma = np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) + np.sqrt(np.abs(xNI[2]))
+
+        return xNI[0] ** 4 + xNI[1] ** 4 + np.abs(xNI[2]) ** 3 / sigma ** 2
