@@ -13,15 +13,15 @@ class BaseStatePredictor(metaclass=ABCMeta):
 
 
 class EulerStatePredictor(BaseStatePredictor):
-    def __init__(self, pred_step_size, sys_rhs, sys_out, dim_output, Nsteps):
+    def __init__(self, pred_step_size, state_dyn, sys_out, dim_output, Nsteps):
         self.pred_step_size = pred_step_size
-        self.sys_rhs = sys_rhs
+        self.state_dyn = state_dyn
         self.sys_out = sys_out
         self.dim_output = dim_output
         self.Nsteps = Nsteps
 
     def predict_state(self, cur_state, action_sqn, k):
-        next_state = cur_state + self.pred_step_size * self.sys_rhs(
+        next_state = cur_state + self.pred_step_size * self.state_dyn(
             [], cur_state, action_sqn[k - 1, :]
         )
         return next_state

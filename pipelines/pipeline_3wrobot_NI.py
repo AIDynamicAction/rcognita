@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import csv
 import rcognita
 import numpy as np
-from rcognita.utilities import rep_mat
 
 from config_blueprints import Config3WRobotNI
 from pipeline_blueprints import AbstractPipeline
@@ -72,35 +71,15 @@ class Pipeline3WRobotNI(AbstractPipeline):
         )
 
     def optimizers_initialization(self):
-        if self.critic_struct == "quad-lin":
-            self.dim_critic = int(
-                (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
-            )
-            self.Wmin = -1e3 * np.ones(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-        elif self.critic_struct == "quadratic":
-            self.dim_critic = int((self.dim_output + 1) * self.dim_output / 2).astype(
-                int
-            )
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-        elif self.critic_struct == "quad-nomix":
-            self.dim_critic = self.dim_output
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-
-        self.action_min = np.array(self.ctrl_bnds[:, 0])
-        self.action_max = np.array(self.ctrl_bnds[:, 1])
-        self.action_sqn_min = rep_mat(self.action_min, 1, self.Nactor)
-        self.action_sqn_max = rep_mat(self.action_max, 1, self.Nactor)
 
         self.actor_optimizer = optimizers.RcognitaOptimizer.standard_actor_optimizer(
-            actor_opt_method="SLSQP",
-            action_sqn_min=self.action_sqn_min,
-            action_sqn_max=self.action_sqn_max,
+            actor_opt_method="SLSQP", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
         )
         self.critic_optimizer = optimizers.RcognitaOptimizer.standard_critic_optimizer(
-            critic_opt_method="SLSQP", Wmin=self.Wmin, Wmax=self.Wmax
+            critic_opt_method="SLSQP",
+            critic_struct=self.critic_struct,
+            dim_input=self.dim_input,
+            dim_output=self.dim_output,
         )
 
     def controller_initialization(self):
@@ -120,7 +99,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             Nactor=self.Nactor,
             actor_optimizer=self.actor_optimizer,
             pred_step_size=self.pred_step_size,
-            sys_rhs=self.my_sys._state_dyn,
+            state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
             state_sys=self.state_init,
             state_predictor=self.state_predictor,
@@ -152,7 +131,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             sampling_time=self.dt,
             Nactor=self.Nactor,
             pred_step_size=self.pred_step_size,
-            sys_rhs=self.my_sys._state_dyn,
+            state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
             state_sys=self.state_init,
             prob_noise_pow=self.prob_noise_pow,

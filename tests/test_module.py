@@ -27,6 +27,10 @@ class TestPipeline3WRobot(Pipeline3WRobotTest):
         with ArgvContext("run_raw", "--no_visual"):
             self.pipeline_execution()
 
+    def test_run_raw_sql(self):
+        with ArgvContext("run_raw_sql", "--no_visual", "--ctrl_mode", "SQL"):
+            self.pipeline_execution()
+
     def test_trajectory_(self, load_trajectory):
         with ArgvContext("trajectory", "--no_visual", "--save_trajectory"):
             self.pipeline_execution()
@@ -47,6 +51,10 @@ class TestPipeline3WRobotNI(Pipeline3WRobotNITest):
         with ArgvContext("run_animate", "--no_visual"):
             self.pipeline_execution()
 
+    def test_run_raw_sql(self):
+        with ArgvContext("run_raw_sql", "--no_visual", "--ctrl_mode", "SQL"):
+            self.pipeline_execution()
+
     def test_trajectory_(self, load_trajectory):
         with ArgvContext("trajectory", "--no_visual", "--save_trajectory"):
             self.pipeline_execution()
@@ -65,6 +73,10 @@ class TestPipeline2Tank(Pipeline2TankTest):
 
     def test_run_raw(self):
         with ArgvContext("run_animate", "--no_visual"):
+            self.pipeline_execution()
+
+    def test_run_raw_sql(self):
+        with ArgvContext("run_raw_sql", "--no_visual", "--ctrl_mode", "SQL"):
             self.pipeline_execution()
 
     def test_trajectory_(self, load_trajectory):

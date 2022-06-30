@@ -325,7 +325,7 @@ class Config3WRobotNI(AbstractConfig):
             type=str,
             nargs="+",
             metavar="state_init",
-            default=["5", "5", "-3*pi/4"],
+            default=["2", "2", "pi"],
             help="Initial state (as sequence of numbers); "
             + "dimension is environment-specific!",
         )
@@ -490,10 +490,10 @@ class Config3WRobotNI(AbstractConfig):
         self.model_est_checks = 0
 
         # Control constraints
-        self.v_min = -25
-        self.v_max = 25
-        self.omega_min = -5
-        self.omega_max = 5
+        self.v_min = -0.22
+        self.v_max = 0.22
+        self.omega_min = -2.84
+        self.omega_max = 2.84
         self.ctrl_bnds = np.array(
             [[self.v_min, self.v_max], [self.omega_min, self.omega_max]]
         )

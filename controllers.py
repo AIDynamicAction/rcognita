@@ -11,7 +11,7 @@ Remarks:
 
 """
 
-from sympy import EX
+import rospy
 from .utilities import dss_sim
 from .utilities import rep_mat
 from .utilities import uptria2vec
@@ -25,8 +25,9 @@ from scipy.optimize import basinhopping
 from scipy.optimize import NonlinearConstraint
 from numpy.linalg import lstsq
 from numpy import reshape
-from functools import partial
+from abc import ABCMeta, abstractmethod
 import warnings
+from functools import partial
 
 # For debugging purposes
 from tabulate import tabulate
@@ -82,6 +83,40 @@ def ctrl_selector(
     return action
 
 
+class BaseStatePredictor(metaclass=ABCMeta):
+    @abstractmethod
+    def predict_state(self):
+        pass
+
+    @abstractmethod
+    def predict_state_sqn(self):
+        pass
+
+
+class EulerStatePredictor(BaseStatePredictor):
+    def __init__(self, pred_step_size, sys_rhs, sys_out, dim_output, Nsteps):
+        self.pred_step_size = pred_step_size
+        self.sys_rhs = sys_rhs
+        self.sys_out = sys_out
+        self.dim_output = dim_output
+        self.Nsteps = Nsteps
+
+    def predict_state(self, cur_state, action_sqn, k):
+        next_state = cur_state + self.pred_step_size * self.sys_rhs(
+            [], cur_state, action_sqn[k - 1, :]
+        )
+        return next_state
+
+    def predict_state_sqn(self, state_start, observation, action_sqn):
+        observation_sqn = np.zeros([self.Nsteps, self.dim_output])
+        observation_sqn[0, :] = observation
+        state = state_start
+        for k in range(1, self.Nsteps):
+            state = self.predict_state(state, action_sqn, k)
+            observation_sqn[k, :] = self.sys_out(state)
+        return observation_sqn
+
+
 class CtrlRLStab:
     """
     Class of reinforcement learning agents with stabilizing constraints.
@@ -127,7 +162,7 @@ class CtrlRLStab:
         sampling_time=0.1,
         Nactor=1,
         pred_step_size=0.1,
-        state_dyn=[],
+        sys_rhs=[],
         sys_out=[],
         state_sys=[],
         prob_noise_pow=1,
@@ -167,11 +202,11 @@ class CtrlRLStab:
             Initial value of the controller's internal clock.
         sampling_time : : number
             Controller's sampling time (in seconds).
-        state_dyn, sys_out : : functions        
+        sys_rhs, sys_out : : functions        
             Functions that represent the right-hand side, resp., the output of the exogenously passed model.
             The latter could be, for instance, the true model of the system.
             In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-            Parameters ``state_dyn, sys_out, state_sys`` are used in those controller modes which rely on them.
+            Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them.
         prob_noise_pow : : number
             Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
         is_est_model : : number
@@ -270,7 +305,7 @@ class CtrlRLStab:
         self.observation_buffer = np.zeros([buffer_size, dim_output])
 
         # Exogeneous model's things
-        self.state_dyn = state_dyn
+        self.sys_rhs = sys_rhs
         self.sys_out = sys_out
         self.state_sys = state_sys
 
@@ -542,7 +577,7 @@ class CtrlRLStab:
 
             action = self._actor(observation, w_actor)
 
-            observation_next = observation + self.pred_step_size * self.state_dyn(
+            observation_next = observation + self.pred_step_size * self.sys_rhs(
                 [], observation, action
             )  # Euler scheme
 
@@ -557,7 +592,7 @@ class CtrlRLStab:
 
             action = self._actor(observation, w_actor)
 
-            observation_next = observation + self.pred_step_size * self.state_dyn(
+            observation_next = observation + self.pred_step_size * self.sys_rhs(
                 [], observation, action
             )  # Euler scheme
 
@@ -713,7 +748,7 @@ class CtrlRLStab:
         # STUB ===================================================================
         # ================================Optimization of one stage_obj + LF_next
         # def J_tmp(action, observation):
-        #     observation_next = observation + self.pred_step_size * self.state_dyn([], observation, action)
+        #     observation_next = observation + self.pred_step_size * self.sys_rhs([], observation, action)
         #     return self.safe_ctrl.compute_LF(observation_next) + self.stage_obj(observation_next, action)
         #     # return self.safe_ctrl.compute_LF(observation_next)
 
@@ -798,11 +833,11 @@ class CtrlOptPred:
     pred_step_size : : number
         Prediction step size in :math:`J_a` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
         convenience. Larger prediction step size leads to longer factual horizon.
-    state_dyn, sys_out : : functions        
+    sys_rhs, sys_out : : functions        
         Functions that represent the right-hand side, resp., the output of the exogenously passed model.
         The latter could be, for instance, the true model of the system.
         In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-        Parameters ``state_dyn, sys_out, state_sys`` are used in those controller modes which rely on them.
+        Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them.
     prob_noise_pow : : number
         Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
     is_est_model : : number
@@ -895,9 +930,9 @@ class CtrlOptPred:
         t0=0,
         sampling_time=0.1,
         Nactor=1,
-        actor_optimizer=[],
+        actor_opt_method="SLSQP",
         pred_step_size=0.1,
-        state_dyn=[],
+        sys_rhs=[],
         sys_out=[],
         state_sys=[],
         state_predictor=[],
@@ -910,7 +945,6 @@ class CtrlOptPred:
         model_est_checks=0,
         gamma=1,
         Ncritic=4,
-        critic_optimizer=[],
         critic_period=0.1,
         critic_struct="quad-nomix",
         stage_obj_struct="quadratic",
@@ -957,11 +991,11 @@ class CtrlOptPred:
         pred_step_size : : number
             Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
             convenience. Larger prediction step size leads to longer factual horizon.
-        state_dyn, sys_out : : functions        
+        sys_rhs, sys_out : : functions        
             Functions that represent the right-hand side, resp., the output of the exogenously passed model.
             The latter could be, for instance, the true model of the system.
             In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-            Parameters ``state_dyn, sys_out, state_sys`` are used in those controller modes which rely on them.
+            Parameters ``sys_rhs, sys_out, state_sys`` are used in those controller modes which rely on them.
         prob_noise_pow : : number
             Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
         is_est_model : : number
@@ -1045,6 +1079,7 @@ class CtrlOptPred:
 
         # Controller: common
         self.Nactor = Nactor
+        self.actor_opt_method = actor_opt_method
         self.pred_step_size = pred_step_size
 
         self.action_min = np.array(ctrl_bnds[:, 0])
@@ -1063,7 +1098,7 @@ class CtrlOptPred:
         self.observation_buffer = np.zeros([buffer_size, dim_output])
 
         # Exogeneous model's things
-        self.state_dyn = state_dyn
+        self.sys_rhs = sys_rhs
         self.sys_out = sys_out
         self.state_sys = state_sys
         self.state_predictor = state_predictor
@@ -1136,10 +1171,12 @@ class CtrlOptPred:
 
         self.w_critic_prev = np.zeros(self.dim_critic)
         self.w_critic_init = self.w_critic_prev
-        self.actor_optimizer = actor_optimizer
-        self.critic_optimizer = critic_optimizer
 
         # self.big_number = 1e4
+        self.counter = 0
+        self.total_time = 0
+        self.max_time = 0
+        self.start_iter_time = rospy.get_time()
 
     def reset(self, t0):
         """
@@ -1372,9 +1409,32 @@ class CtrlOptPred:
 
         # Optimization method of critic
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-        w_critic = self.critic_optimizer.optimize(
-            lambda w_critic: self._critic_cost(w_critic), self.w_critic_init
-        )
+        critic_opt_method = "SLSQP"
+        if critic_opt_method == "trust-constr":
+            critic_opt_options = {
+                "maxiter": 200,
+                "disp": False,
+            }  #'disp': True, 'verbose': 2}
+        else:
+            critic_opt_options = {
+                "maxiter": 200,
+                "maxfev": 1500,
+                "disp": False,
+                "adaptive": True,
+                "xatol": 1e-7,
+                "fatol": 1e-7,
+            }  # 'disp': True, 'verbose': 2}
+
+        bnds = sp.optimize.Bounds(self.Wmin, self.Wmax, keep_feasible=True)
+
+        w_critic = minimize(
+            lambda w_critic: self._critic_cost(w_critic),
+            self.w_critic_init,
+            method=critic_opt_method,
+            tol=1e-7,
+            bounds=bnds,
+            options=critic_opt_options,
+        ).x
 
         # DEBUG ===================================================================
         # print('-----------------------Critic parameters--------------------------')
@@ -1487,7 +1547,7 @@ class CtrlOptPred:
         #         x = self.x_s
         #         for k in range(1, idx):
         #             # state = get_next_state(state, my_action_sqn[k-1, :], delta)
-        #             state = state + delta * self.state_dyn([], state, my_action_sqn[k-1, :], [])  # Euler scheme
+        #             state = state + delta * self.sys_rhs([], state, my_action_sqn[k-1, :], [])  # Euler scheme
         #             observation_sqn[k, :] = self.sys_out(state)
 
         #     return observation_sqn[-1, 1] - 1
@@ -1501,6 +1561,30 @@ class CtrlOptPred:
         # Optimization method of actor
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
         # actor_opt_method = 'SLSQP' # Standard
+        if self.actor_opt_method == "trust-constr":
+            actor_opt_options = {
+                "maxiter": 300,
+                "disp": False,
+            }  #'disp': True, 'verbose': 2}
+        else:
+            actor_opt_options = {
+                "maxiter": 300,
+                "maxfev": 5000,
+                "disp": False,
+                "adaptive": True,
+                "xatol": 1e-7,
+                "fatol": 1e-7,
+            }  # 'disp': True, 'verbose': 2}
+
+        isGlobOpt = 0
+
+        my_action_sqn_init = np.reshape(
+            self.action_sqn_init, [self.Nactor * self.dim_input,]
+        )
+
+        bnds = sp.optimize.Bounds(
+            self.action_sqn_min, self.action_sqn_max, keep_feasible=True
+        )
 
         _constraints = []
 
@@ -1536,15 +1620,33 @@ class CtrlOptPred:
                 )
             )
 
-        my_action_sqn_init = np.reshape(
-            self.action_sqn_init, [self.Nactor * self.dim_input,]
-        )
+        try:
+            if isGlobOpt:
+                minimizer_kwargs = {
+                    "method": self.actor_opt_method,
+                    "bounds": bnds,
+                    "tol": 1e-7,
+                    "options": actor_opt_options,
+                }
+                action_sqn = basinhopping(
+                    lambda action_sqn: self._actor_cost(action_sqn, observation),
+                    my_action_sqn_init,
+                    minimizer_kwargs=minimizer_kwargs,
+                    niter=10,
+                ).x
+            else:
+                action_sqn = minimize(
+                    lambda action_sqn: self._actor_cost(action_sqn, observation),
+                    my_action_sqn_init,
+                    method=self.actor_opt_method,
+                    tol=1e-7,
+                    bounds=bnds,
+                    options=actor_opt_options,
+                ).x
 
-        action_sqn = self.actor_optimizer.optimize(
-            lambda my_action_sqn: self._actor_cost(my_action_sqn, observation),
-            my_action_sqn_init,
-            constraints=_constraints,
-        )
+        except ValueError:
+            print("Actor" "s optimizer failed. Returning default action")
+            action_sqn = my_action_sqn_init
 
         # DEBUG ===================================================================
         # ================================Interm output of model prediction quality
@@ -1558,7 +1660,7 @@ class CtrlOptPred:
         # Yt[0, :] = observation
         # state = self.state_sys
         # for k in range(1, Nactor):
-        #     state = state + delta * self.state_dyn([], state, my_action_sqn[k-1, :], [])  # Euler scheme
+        #     state = state + delta * self.sys_rhs([], state, my_action_sqn[k-1, :], [])  # Euler scheme
         #     Yt[k, :] = self.sys_out(state)
         # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
         # dataRow = []
