@@ -1360,7 +1360,7 @@ class CtrlOptPred:
         # Optimization method of critic
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
 
-        w_critic = self.critic_optimizer(
+        w_critic = self.critic_optimizer.optimize(
             lambda w_critic: self._critic_cost(w_critic), self.w_critic_init
         )
 

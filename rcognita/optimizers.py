@@ -1,8 +1,7 @@
-from numpy.random import rand
+from rcognita.utilities import rep_mat
 import scipy as sp
 from scipy.optimize import minimize
-from scipy.optimize import basinhopping
-from scipy.optimize import NonlinearConstraint
+import numpy as np
 
 
 class RcognitaOptimizer:
@@ -18,7 +17,6 @@ class RcognitaOptimizer:
         options = self.options
         bounds = self.bounds
         tol = self.tol
-        # print(method, options, bounds, tol, x0)
         result = self.optimizer(
             cost=cost, x0=x0, bounds=bounds, options=options, tol=tol, opt_method=method
         )
@@ -39,7 +37,13 @@ class RcognitaOptimizer:
         return opt_wrapper
 
     @staticmethod
-    def standard_actor_optimizer(actor_opt_method, action_sqn_min, action_sqn_max):
+    def standard_actor_optimizer(actor_opt_method, **kwargs):
+        ctrl_bnds = kwargs.get("ctrl_bnds")
+        Nactor = kwargs.get("Nactor")
+        action_min = np.array(ctrl_bnds[:, 0])
+        action_max = np.array(ctrl_bnds[:, 1])
+        action_sqn_min = rep_mat(action_min, 1, Nactor)
+        action_sqn_max = rep_mat(action_max, 1, Nactor)
 
         if actor_opt_method == "trust-constr":
             actor_opt_options = {
@@ -59,9 +63,7 @@ class RcognitaOptimizer:
         bnds = sp.optimize.Bounds(action_sqn_min, action_sqn_max, keep_feasible=True)
 
         @RcognitaOptimizer.from_scipy_transformer
-        def minimizer(actor_cost, x0, opt_method, options, bounds, tol):
-            # print(locals())
-            # raise ValueError
+        def minimizer(actor_cost, x0, opt_method, options, bounds, tol, constraints=()):
             return minimize(
                 lambda w_actor: actor_cost(w_actor),
                 x0=x0,
@@ -69,17 +71,45 @@ class RcognitaOptimizer:
                 tol=tol,
                 bounds=bounds,
                 options=options,
+                constraints=constraints,
             )
 
         return RcognitaOptimizer(actor_opt_method, minimizer, bnds, actor_opt_options)
 
     @staticmethod
-    def standard_critic_optimizer(critic_opt_method, Wmin, Wmax):
+    def standard_critic_optimizer(critic_opt_method, **kwargs):
+
+        critic_struct = kwargs.get("critic_struct")
+        dim_input = kwargs.get("dim_input")
+        dim_output = kwargs.get("dim_output")
+
+        if critic_struct == "quad-lin":
+            dim_critic = int(
+                ((dim_output + dim_input) + 1) * (dim_output + dim_input) / 2
+                + (dim_output + dim_input)
+            )
+            Wmin = -1e3 * np.ones(dim_critic)
+            Wmax = 1e3 * np.ones(dim_critic)
+
+        elif critic_struct == "quadratic":
+            dim_critic = int(
+                ((dim_output + dim_input) + 1) * (dim_output + dim_input) / 2
+            )
+            Wmin = np.zeros(dim_critic)
+            Wmax = 1e3 * np.ones(dim_critic)
+        elif critic_struct == "quad-nomix":
+            dim_critic = dim_output + dim_input
+            Wmin = np.zeros(dim_critic)
+            Wmax = 1e3 * np.ones(dim_critic)
+        elif critic_struct == "quad-mix":
+            dim_critic = int(dim_output + dim_output * dim_input + dim_input)
+            Wmin = -1e3 * np.ones(dim_critic)
+            Wmax = 1e3 * np.ones(dim_critic)
         if critic_opt_method == "trust-constr":
             critic_opt_options = {
                 "maxiter": 200,
                 "disp": False,
-            }  #'disp': True, 'verbose': 2}
+            }
         else:
             critic_opt_options = {
                 "maxiter": 200,
@@ -88,12 +118,14 @@ class RcognitaOptimizer:
                 "adaptive": True,
                 "xatol": 1e-7,
                 "fatol": 1e-7,
-            }  # 'disp': True, 'verbose': 2}
+            }
 
         bnds = sp.optimize.Bounds(Wmin, Wmax, keep_feasible=True)
 
         @RcognitaOptimizer.from_scipy_transformer
-        def minimizer(critic_cost, x0, opt_method, options, bounds, tol):
+        def minimizer(
+            critic_cost, x0, opt_method, options, bounds, tol, constraints=()
+        ):
             result = minimize(
                 lambda w_critic: critic_cost(w_critic),
                 x0=x0,
@@ -101,6 +133,7 @@ class RcognitaOptimizer:
                 tol=tol,
                 bounds=bounds,
                 options=options,
+                constraints=constraints,
             )
 
             return result
