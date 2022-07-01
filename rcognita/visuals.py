@@ -121,7 +121,6 @@ class Animator3WRobot(Animator):
             self.ctrl_nominal,
             self.ctrl_benchmarking,
             self.datafiles,
-            self.ctrl_selector,
             self.logger,
         ) = self.objects
 
@@ -365,14 +364,7 @@ class Animator3WRobot(Animator):
 
             self.ctrl_benchmarking.receive_sys_state(self.sys._state)
 
-            action = self.ctrl_selector(
-                t,
-                observation,
-                self.action_manual,
-                self.ctrl_nominal,
-                self.ctrl_benchmarking,
-                self.ctrl_mode,
-            )
+            action = self.ctrl_benchmarking.compute_action(t, observation)
 
             self.sys.receive_action(action)
             self.ctrl_benchmarking.upd_accum_obj(observation, action)
@@ -505,7 +497,6 @@ class Animator3WRobotNI(Animator):
             self.ctrl_nominal,
             self.ctrl_benchmarking,
             self.datafiles,
-            self.ctrl_selector,
             self.logger,
         ) = self.objects
 
@@ -740,14 +731,7 @@ class Animator3WRobotNI(Animator):
             t, state, observation, state_full = self.simulator.get_sim_step_data()
             self.ctrl_benchmarking.receive_sys_state(self.sys._state)
 
-            action = self.ctrl_selector(
-                t,
-                observation,
-                self.action_manual,
-                self.ctrl_nominal,
-                self.ctrl_benchmarking,
-                self.ctrl_mode,
-            )
+            action = self.ctrl_benchmarking.compute_action(t, observation)
 
             self.sys.receive_action(action)
             self.ctrl_benchmarking.upd_accum_obj(observation, action)
@@ -876,7 +860,6 @@ class Animator2Tank(Animator):
             self.ctrl_nominal,
             self.ctrl_benchmarking,
             self.datafiles,
-            self.ctrl_selector,
             self.logger,
         ) = self.objects
 
@@ -1052,14 +1035,7 @@ class Animator2Tank(Animator):
             t, state, observation, state_full = self.simulator.get_sim_step_data()
             self.ctrl_benchmarking.receive_sys_state(self.sys._state)
 
-            action = self.ctrl_selector(
-                t,
-                observation,
-                self.action_manual,
-                self.ctrl_nominal,
-                self.ctrl_benchmarking,
-                self.ctrl_mode,
-            )
+            action = self.ctrl_benchmarking.compute_action(t, observation)
 
             self.sys.receive_action(action)
             self.ctrl_benchmarking.upd_accum_obj(observation, action)

@@ -220,7 +220,6 @@ class Pipeline2Tank(AbstractPipeline):
                 [],
                 self.my_ctrl_benchm,
                 self.datafiles,
-                controllers.ctrl_selector,
                 self.my_logger,
             ),
             pars=(

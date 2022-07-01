@@ -43,32 +43,6 @@ except ModuleNotFoundError:
     )
 
 
-def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode):
-    """
-    Main interface for various controllers.
-
-    Parameters
-    ----------
-    mode : : string
-        Controller mode as acronym of the respective control method.
-
-    Returns
-    -------
-    action : : array of shape ``[dim_input, ]``.
-        Control action.
-
-    """
-
-    if mode == "manual":
-        action = action_manual
-    elif mode == "nominal":
-        action = ctrl_nominal.compute_action(t, observation)
-    else:  # Controller for benchmakring
-        action = ctrl_benchmarking.compute_action(t, observation)
-
-    return action
-
-
 class CtrlRLStab:
     """
     Class of reinforcement learning agents with stabilizing constraints.

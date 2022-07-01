@@ -273,7 +273,6 @@ class Pipeline3WRobotNI(AbstractPipeline):
                 self.my_ctrl_nominal,
                 self.my_ctrl_benchm,
                 self.datafiles,
-                controllers.ctrl_selector,
                 self.my_logger,
             ),
             pars=(
