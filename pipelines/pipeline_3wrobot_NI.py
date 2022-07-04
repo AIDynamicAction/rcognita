@@ -333,14 +333,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             if self.save_trajectory:
                 self.trajectory.append(state_full)
 
-            action = controllers.ctrl_selector(
-                t,
-                observation,
-                self.action_manual,
-                self.my_ctrl_nominal,
-                self.my_ctrl_benchm,
-                self.ctrl_mode,
-            )
+            action = self.my_ctrl_benchm.compute_action(t, observation)
 
             self.my_sys.receive_action(action)
             self.my_ctrl_benchm.receive_sys_state(self.my_sys._state)
