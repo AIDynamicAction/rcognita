@@ -504,6 +504,20 @@ class Config3WRobotNI(AbstractConfig):
         self.alpha_deg_0 = self.alpha0 / 2 / np.pi
 
 
+class ConfigROS3WRobotNI(Config3WRobotNI):
+    def get_env(self):
+        self.argument_parser()
+        self.pre_processing()
+        self.v_min = -0.22
+        self.v_max = 0.22
+        self.omega_min = -2.84
+        self.omega_max = 2.84
+        self.ctrl_bnds = np.array(
+            [[self.v_min, self.v_max], [self.omega_min, self.omega_max]]
+        )
+        return self.__dict__
+
+
 class Config2Tank(AbstractConfig):
     def __init__(self):
         self.config_name = "2tank"

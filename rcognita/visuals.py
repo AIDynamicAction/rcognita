@@ -18,6 +18,7 @@ from .utilities import reset_line
 from .utilities import upd_scatter
 from .utilities import upd_text
 from .utilities import to_col_vec
+from rcognita.npcasadi_api import SymbolicHandler
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -122,6 +123,8 @@ class Animator3WRobot(Animator):
             self.ctrl_benchmarking,
             self.datafiles,
             self.logger,
+            self.actor_optimizer,
+            self.critic_optimizer,
         ) = self.objects
 
         (
@@ -348,7 +351,8 @@ class Animator3WRobot(Animator):
         self.datafile_curr = self.datafiles[0]
 
     def animate(self, k):
-
+        is_symbolic = self.actor_optimizer.is_symbolic
+        npcsd = SymbolicHandler(is_symbolic)
         if self.is_playback:
             self.upd_sim_data_row()
             t = self.t
@@ -364,7 +368,11 @@ class Animator3WRobot(Animator):
 
             self.ctrl_benchmarking.receive_sys_state(self.sys._state)
 
-            action = self.ctrl_benchmarking.compute_action(t, observation)
+            action = self.ctrl_benchmarking.compute_action(
+                t, npcsd.array(observation), is_symbolic=is_symbolic
+            )
+            if is_symbolic:
+                action = np.array(action).reshape(-1)
 
             self.sys.receive_action(action)
             self.ctrl_benchmarking.upd_accum_obj(observation, action)
@@ -498,6 +506,8 @@ class Animator3WRobotNI(Animator):
             self.ctrl_benchmarking,
             self.datafiles,
             self.logger,
+            self.actor_optimizer,
+            self.critic_optimizer,
         ) = self.objects
 
         (
@@ -716,7 +726,8 @@ class Animator3WRobotNI(Animator):
         self.datafile_curr = self.datafiles[0]
 
     def animate(self, k):
-
+        is_symbolic = self.actor_optimizer.is_symbolic
+        npcsd = SymbolicHandler(is_symbolic)
         if self.is_playback:
             self.upd_sim_data_row()
             t = self.t
@@ -731,8 +742,11 @@ class Animator3WRobotNI(Animator):
             t, state, observation, state_full = self.simulator.get_sim_step_data()
             self.ctrl_benchmarking.receive_sys_state(self.sys._state)
 
-            action = self.ctrl_benchmarking.compute_action(t, observation)
-
+            action = self.ctrl_benchmarking.compute_action(
+                t, npcsd.array(observation), is_symbolic=is_symbolic
+            )
+            if is_symbolic:
+                action = np.array(action).reshape(-1)
             self.sys.receive_action(action)
             self.ctrl_benchmarking.upd_accum_obj(observation, action)
 

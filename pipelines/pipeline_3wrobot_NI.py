@@ -13,6 +13,7 @@ import csv
 import rcognita
 import numpy as np
 from rcognita.utilities import rep_mat
+from rcognita.npcasadi_api import SymbolicHandler
 
 from config_blueprints import Config3WRobotNI
 from pipeline_blueprints import AbstractPipeline
@@ -100,7 +101,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             Nactor=self.Nactor,
             actor_optimizer=self.actor_optimizer,
             pred_step_size=self.pred_step_size,
-            sys_rhs=self.my_sys._state_dyn,
+            state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
             state_sys=self.state_init,
             state_predictor=self.state_predictor,
@@ -132,7 +133,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             sampling_time=self.dt,
             Nactor=self.Nactor,
             pred_step_size=self.pred_step_size,
-            sys_rhs=self.my_sys._state_dyn,
+            state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
             state_sys=self.state_init,
             prob_noise_pow=self.prob_noise_pow,
@@ -274,6 +275,8 @@ class Pipeline3WRobotNI(AbstractPipeline):
                 self.my_ctrl_benchm,
                 self.datafiles,
                 self.my_logger,
+                self.actor_optimizer,
+                self.critic_optimizer,
             ),
             pars=(
                 self.state_init,
@@ -321,6 +324,8 @@ class Pipeline3WRobotNI(AbstractPipeline):
         plt.show()
 
     def main_loop_raw(self):
+        is_symbolic = self.actor_optimizer.is_symbolic
+        npcsd = SymbolicHandler(is_symbolic)
         run_curr = 1
         datafile = self.datafiles[0]
 
@@ -333,17 +338,23 @@ class Pipeline3WRobotNI(AbstractPipeline):
             if self.save_trajectory:
                 self.trajectory.append(state_full)
 
-            action = self.my_ctrl_benchm.compute_action(t, observation)
+            action = self.my_ctrl_benchm.compute_action(
+                t, npcsd.array(observation, array_type="SX"), is_symbolic=is_symbolic
+            )
 
             self.my_sys.receive_action(action)
             self.my_ctrl_benchm.receive_sys_state(self.my_sys._state)
-            self.my_ctrl_benchm.upd_accum_obj(observation, action)
+            self.my_ctrl_benchm.upd_accum_obj(
+                npcsd.array(observation), npcsd.array(action), is_symbolic=is_symbolic
+            )
 
             xCoord = state_full[0]
             yCoord = state_full[1]
             alpha = state_full[2]
 
-            stage_obj = self.my_ctrl_benchm.stage_obj(observation, action)
+            stage_obj = self.my_ctrl_benchm.stage_obj(
+                npcsd.array(observation).T, npcsd.array(action).T, is_symbolic
+            )
             accum_obj = self.my_ctrl_benchm.accum_obj_val
 
             if not self.no_print:

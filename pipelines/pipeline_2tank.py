@@ -92,7 +92,7 @@ class Pipeline2Tank(AbstractPipeline):
             Nactor=self.Nactor,
             actor_optimizer=self.actor_optimizer,
             pred_step_size=self.pred_step_size,
-            sys_rhs=self.my_sys._state_dyn,
+            state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
             state_sys=self.state_init,
             state_predictor=self.state_predictor,

@@ -17,6 +17,7 @@ from numpy.matlib import repmat
 import scipy.stats as st
 from scipy import signal
 import matplotlib.pyplot as plt
+from .npcasadi_api import SymbolicHandler
 
 
 def rej_sampling_rvs(dim, pdf, M):
@@ -79,8 +80,9 @@ def rep_mat(argin, n, m):
     return np.squeeze(repmat(argin, n, m))
 
 
-def push_vec(matrix, vec):
-    return np.vstack([matrix[1:, :], vec])
+def push_vec(matrix, vec, is_symbolic=False):
+    npcsd = SymbolicHandler(is_symbolic)
+    return npcsd.vstack([matrix[1:, :], vec.T])
 
 
 def uptria2vec(mat):
