@@ -78,7 +78,7 @@ class Actor:
         J = 0
         for k in range(self.Nactor):
             J += self.gamma ** k * self.stage_obj(
-                observation_sqn[k, :], my_action_sqn[k, :], is_symbolic=is_symbolic
+                observation_sqn[k, :].T, my_action_sqn[k, :].T, is_symbolic=is_symbolic
             )
         return J
 
