@@ -454,6 +454,8 @@ class Sys2Tank(System):
 
         return Ddisturb
 
-    def out(self, state, action=[]):
+    def out(self, state, action=[], is_symbolic=False):
+        npcsd = SymbolicHandler(is_symbolic)
+        observation = npcsd.zeros(self.dim_output)
         observation = state
         return observation

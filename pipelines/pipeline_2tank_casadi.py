@@ -4,7 +4,6 @@ PARENT_DIR = os.path.abspath(__file__ + "/../../")
 sys.path.insert(0, PARENT_DIR)
 CUR_DIR = os.path.abspath(__file__ + "/..")
 sys.path.insert(0, CUR_DIR)
-
 import rcognita
 
 if os.path.abspath(rcognita.__file__ + "/../..") == PARENT_DIR:
@@ -25,26 +24,23 @@ else:
 print("INFO:", info)
 
 from rcognita import optimizers
-from pipeline_3wrobot import Pipeline3WRobot
+from pipeline_2tank import Pipeline2Tank
 
 
-class Pipeline3WRobotCasadi(Pipeline3WRobot):
+class Pipeline2TankCasadi(Pipeline2Tank):
     def optimizers_initialization(self):
 
         self.actor_optimizer = optimizers.RcognitaOptimizer.casadi_actor_optimizer(
             actor_opt_method="ipopt", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
         )
         self.critic_optimizer = optimizers.RcognitaOptimizer.casadi_critic_optimizer(
-            critic_opt_method="ipopt",
+            critic_opt_method="SLSQP",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
         )
 
 
-def main():
-    Pipeline3WRobotCasadi().pipeline_execution()
-
-
 if __name__ == "__main__":
-    main()
+
+    Pipeline2TankCasadi().pipeline_execution()

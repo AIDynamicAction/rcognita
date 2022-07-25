@@ -356,7 +356,17 @@ class CtrlRLStab:
         else:
             chi = npcsd.concatenate([observation - self.observation_target, action])
 
-        stage_obj = self.stage_obj_model(chi, chi, is_symbolic=is_symbolic)
+        stage_obj = 0
+
+        if self.stage_obj_struct == "quadratic":
+            R1 = self.stage_obj_pars[0]
+            stage_obj = npcsd.matmul(npcsd.matmul(chi.T, R1), chi)
+        elif self.stage_obj_struct == "biquadratic":
+            R1 = self.stage_obj_pars[0]
+            R2 = self.stage_obj_pars[1]
+            stage_obj = npcsd.matmul(
+                npcsd.matmul(chi.T ** 2, R2), chi ** 2
+            ) + npcsd.matmul(npcsd.matmul(chi.T, R1), chi)
 
         return stage_obj
 
@@ -371,6 +381,58 @@ class CtrlRLStab:
             self.stage_obj(observation.T, action.T, is_symbolic) * self.sampling_time
         )
 
+    def _actor(self, observation, w_actor, is_symbolic=False):
+        npcsd = SymbolicHandler(is_symbolic)
+        """
+        Actor: a routine that models the policy.
+        
+        Currently, this implementation is for linearly parametrized models.
+
+        """
+
+        if self.actor_struct == "quad-lin":
+            regressor_actor = npcsd.concatenate(
+                [uptria2vec(np.outer(observation, observation)), observation]
+            )
+        elif self.actor_struct == "quadratic":
+            regressor_actor = npcsd.concatenate(
+                [uptria2vec(np.outer(observation, observation))]
+            )
+        elif self.actor_struct == "quad-nomix":
+            regressor_actor = observation * observation
+
+        return (
+            npcsd.reshape(w_actor, (self.dim_input, self.dim_actor_per_input))
+            @ regressor_actor.T
+        )
+
+    def _critic(self, observation, w_critic, lmbd, is_symbolic=False):
+        npcsd = SymbolicHandler(is_symbolic)
+        """
+        Critic: a routine that models something related to the objective, e.g., value function, Q-function, advantage etc.
+        
+        The parameter ``lmbd`` is needed here specifically for joint actor-critic (stabilizing) a.k.a. JACS.
+        
+        Currently, this implementation is for linearly parametrized models.
+
+        """
+
+        if self.observation_target == []:
+            chi = observation
+        else:
+            chi = observation - self.observation_target
+
+        if self.critic_struct == "quad-lin":
+            regressor_critic = npcsd.concatenate([uptria2vec(np.outer(chi, chi)), chi])
+        elif self.critic_struct == "quadratic":
+            regressor_critic = npcsd.concatenate([uptria2vec(np.outer(chi, chi))])
+        elif self.critic_struct == "quad-nomix":
+            regressor_critic = chi * chi
+
+        return lmbd * npcsd.dot(w_critic.T, regressor_critic) + (
+            1 - lmbd
+        ) * self.safe_ctrl.compute_LF(observation)
+
     def _w_actor_from_action(self, action, observation, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
         """
@@ -379,12 +441,57 @@ class CtrlRLStab:
         The current implementation is for linearly parametrized models so far.
 
         """
-        regressor_actor = self.actor(observation, observation, is_symbolic=is_symbolic)
+
+        if self.actor_struct == "quad-lin":
+            regressor_actor = npcsd.concatenate(
+                [uptria2vec(np.outer(observation, observation)), observation]
+            )
+        elif self.actor_struct == "quadratic":
+            regressor_actor = npcsd.concatenate(
+                [uptria2vec(np.outer(observation, observation))]
+            )
+        elif self.actor_struct == "quad-nomix":
+            regressor_actor = observation * observation
 
         a = np.array(npcsd.array(regressor_actor)).T
         b = np.array(npcsd.array(action)).T
 
         return reshape(lstsq(a, b)[0].T, self.dim_actor,)
+
+    def _actor_critic_cost(self, w_all, is_symbolic=False):
+        npcsd = SymbolicHandler(is_symbolic)
+        """
+        Cost (loss) of joint actor-critic (stabilizing) a.k.a. JACS
+       
+        """
+
+        observation_sqn = self.observation_buffer[-self.Ncritic :, :]
+
+        w_critic = w_all[: self.dim_critic]
+        # lmbd = w_all[self.dim_critic+1]
+        w_actor = w_all[-self.dim_actor :]
+
+        Jc = 0
+
+        for k in range(self.Ncritic - 1, 0, -1):
+            observation_prev = observation_sqn[k - 1, :]
+            observation_next = observation_sqn[k, :]
+
+            critic_prev = self._critic(observation_prev, w_critic, 1)
+            critic_next = self._critic(observation_next, self.w_critic_prev.T, 1)
+
+            action = self._actor(observation_prev, w_actor, is_symbolic)
+
+            # Temporal difference
+            e = (
+                critic_prev
+                - self.gamma * critic_next
+                - self.stage_obj(observation_prev, action.T, is_symbolic)
+            )
+
+            Jc += 1 / 2 * e ** 2
+
+        return Jc
 
     def _actor_critic_optimizer(self, observation, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -605,39 +712,39 @@ class CtrlRLStab:
 
         return w_critic, lmbd, action
 
-    def compute_action_sampled(self, t, observation, is_symbolic=False):
+    def compute_action(self, t, observation, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
 
         time_in_sample = t - self.ctrl_clock
 
         if time_in_sample >= self.sampling_time:  # New sample
-            self.ctrl_clock = t
             # Update controller's internal clock
-            self.compute_action(t, observation, is_symbolic)
+            self.ctrl_clock = t
+
+            # Update data buffers
+            self.action_buffer = npcsd.push_vec(
+                self.action_buffer, npcsd.array(self.action_curr)
+            )
+            npcsd.push_vec(
+                npcsd.array(self.observation_buffer), npcsd.array(observation)
+            )
+
+            w_critic, lmbd, action = self._actor_critic_optimizer(
+                observation, is_symbolic
+            )
+
+            self.w_critic_prev = w_critic
+            self.lmbd_prev = lmbd
+
+            for k in range(2):
+                action[k] = np.clip(action[k], self.action_min[k], self.action_max[k])
+
+            self.action_curr = action
+
+            return action
 
         else:
             return self.action_curr
-
-    def compute_action(self, t, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-
-        # Update data buffers
-        self.action_buffer = npcsd.push_vec(
-            self.action_buffer, npcsd.array(self.action_curr)
-        )
-        npcsd.push_vec(npcsd.array(self.observation_buffer), npcsd.array(observation))
-
-        w_critic, lmbd, action = self._actor_critic_optimizer(observation, is_symbolic)
-
-        self.w_critic_prev = w_critic
-        self.lmbd_prev = lmbd
-
-        for k in range(2):
-            action[k] = np.clip(action[k], self.action_min[k], self.action_max[k])
-
-        self.action_curr = action
-
-        return action
 
 
 class CtrlOptPred:
@@ -774,9 +881,15 @@ class CtrlOptPred:
 
     def __init__(
         self,
+        dim_input,
+        dim_output,
+        mode="MPC",
+        ctrl_bnds=[],
         action_init=[],
         t0=0,
         sampling_time=0.1,
+        Nactor=1,
+        actor_optimizer=[],
         pred_step_size=0.1,
         state_dyn=[],
         sys_out=[],
@@ -789,9 +902,10 @@ class CtrlOptPred:
         buffer_size=20,
         model_order=3,
         model_est_checks=0,
+        gamma=1,
         critic_period=0.1,
-        actor=[],
         critic=[],
+        stage_obj_struct="quadratic",
         stage_obj_pars=[],
         observation_target=[],
     ):
@@ -912,41 +1026,40 @@ class CtrlOptPred:
                  - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
                    should be ``[R1, R2]``
         """
-        self.actor = actor
-        is_symbolic = self.actor.actor_optimizer.is_symbolic
+        self.actor_optimizer = actor_optimizer
+        self.critic = critic
+
+        is_symbolic = self.actor_optimizer.is_symbolic
 
         npcsd = SymbolicHandler(is_symbolic=is_symbolic)
         # npcsd = SymbolicHandler(is_symbolic=self.critic_optimizer.is_symbolic)
 
-        self.dim_input = self.actor.dim_input
-        self.dim_output = self.actor.dim_output
+        self.dim_input = dim_input
+        self.dim_output = dim_output
+
+        self.mode = mode
 
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
         # Controller: common
+        self.Nactor = Nactor
         self.pred_step_size = pred_step_size
 
-        if isinstance(self.actor.actor_optimizer.bounds, list):
-            self.action_min = np.array(
-                self.actor.actor_optimizer.bounds[0][: self.dim_input]
-            )
-        else:
-            self.action_min = np.array(
-                self.actor.actor_optimizer.bounds.lb[: self.dim_input]
-            )
+        self.action_min = npcsd.array(ctrl_bnds[:, 0])
+        self.action_max = npcsd.array(ctrl_bnds[:, 1])
+        self.action_sqn_min = npcsd.rep_mat(self.action_min, 1, Nactor)
+        self.action_sqn_max = npcsd.rep_mat(self.action_max, 1, Nactor)
 
         if len(action_init) == 0:
             self.action_curr = self.action_min / 10
-            self.action_sqn_init = npcsd.rep_mat(
-                self.action_min / 10, 1, self.actor.Nactor
-            )
+            self.action_sqn_init = npcsd.rep_mat(self.action_min / 10, 1, self.Nactor)
         else:
             self.action_curr = action_init
-            self.action_sqn_init = npcsd.rep_mat(action_init, 1, self.actor.Nactor)
+            self.action_sqn_init = npcsd.rep_mat(action_init, 1, self.Nactor)
 
-        self.action_buffer = npcsd.zeros([buffer_size, self.dim_input])
-        self.observation_buffer = npcsd.zeros([buffer_size, self.dim_output])
+        self.action_buffer = npcsd.zeros([buffer_size, dim_input])
+        self.observation_buffer = npcsd.zeros([buffer_size, dim_output])
 
         # Exogeneous model's things
         self.state_dyn = state_dyn
@@ -979,17 +1092,51 @@ class CtrlOptPred:
 
         # RL elements
         self.critic_clock = t0
+        self.gamma = gamma
+        self.Ncritic = Ncritic
+        self.Ncritic = np.min(
+            [self.Ncritic, self.buffer_size - 1]
+        )  # Clip critic buffer size
         self.critic_period = critic_period
         self.critic = critic
+        self.stage_obj_struct = stage_obj_struct
         self.stage_obj_pars = stage_obj_pars
-        self.stage_obj_model = models.ModelQuadForm(
-            **{f"R{i+1}": x for (i, x) in enumerate(self.stage_obj_pars)}
-        )
         self.observation_target = observation_target
 
         self.accum_obj_val = 0
 
-        self.ctrl_mode = self.actor.ctrl_mode
+        if self.critic_struct == "quad-lin":
+            self.dim_critic = int(
+                ((self.dim_output + self.dim_input) + 1)
+                * (self.dim_output + self.dim_input)
+                / 2
+                + (self.dim_output + self.dim_input)
+            )
+            self.Wmin = -1e3 * npcsd.ones(self.dim_critic)
+            self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
+        elif self.critic_struct == "quadratic":
+            self.dim_critic = int(
+                ((self.dim_output + self.dim_input) + 1)
+                * (self.dim_output + self.dim_input)
+                / 2
+            )
+            self.Wmin = npcsd.zeros(self.dim_critic)
+            self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
+        elif self.critic_struct == "quad-nomix":
+            self.dim_critic = self.dim_output + self.dim_input
+            self.Wmin = npcsd.zeros(self.dim_critic)
+            self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
+        elif self.critic_struct == "quad-mix":
+            self.dim_critic = int(
+                self.dim_output + self.dim_output * self.dim_input + self.dim_input
+            )
+            self.Wmin = -1e3 * npcsd.ones(self.dim_critic)
+            self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
+
+        self.w_critic_prev = npcsd.zeros(self.dim_critic)
+        self.w_critic_init = self.w_critic_prev
+
+        # self.big_number = 1e4
 
     def reset(self, t0):
         """
@@ -1020,7 +1167,17 @@ class CtrlOptPred:
         else:
             chi = npcsd.concatenate([(observation - self.observation_target), action])
 
-        stage_obj = self.stage_obj_model(chi, chi, is_symbolic=is_symbolic)
+        stage_obj = 0
+
+        if self.stage_obj_struct == "quadratic":
+            R1 = npcsd.array(self.stage_obj_pars[0])
+            stage_obj = npcsd.matmul(npcsd.matmul(chi.T, R1), chi)
+        elif self.stage_obj_struct == "biquadratic":
+            R1 = npcsd.array(self.stage_obj_pars[0])
+            R2 = npcsd.array(self.stage_obj_pars[1])
+            stage_obj = npcsd.matmul(
+                npcsd.matmul(chi.T ** 2, R2), chi ** 2
+            ) + npcsd.matmul(npcsd.matmul(chi.T, R1), chi)
 
         return stage_obj
 
@@ -1148,27 +1305,216 @@ class CtrlOptPred:
                 # Drop probing noise
                 self.is_prob_noise = 0
 
-    def compute_action_sampled(self, t, observation, constraints=(), is_symbolic=False):
+    def _actor_cost(self, action_sqn, observation, is_symbolic=False):
+        npcsd = SymbolicHandler(is_symbolic)
+        """
+        See class documentation.
+        
+        Customization
+        -------------        
+        
+        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
 
-        time_in_sample = t - self.ctrl_clock
+        """
 
-        if time_in_sample >= self.sampling_time:  # New sample
-            # Update controller's internal clock
-            self.ctrl_clock = t
-
-            action = self.compute_action(
-                t, observation, constraints, is_symbolic=is_symbolic
+        my_action_sqn = npcsd.reshape(action_sqn, [self.Nactor, self.dim_input])
+        # System output prediction
+        if not self.is_est_model:  # Via exogenously passed model
+            state = npcsd.array(self.state_sys)
+            observation_sqn = self.state_predictor.predict_state_sqn(
+                observation, my_action_sqn, is_symbolic
             )
 
-            self.action_curr = action
+        elif self.is_est_model:  # Via estimated model
+            my_action_sqn_upsampled = my_action_sqn.repeat(
+                int(self.pred_step_size / self.sampling_time), axis=0
+            )
+            observation_sqn_upsampled, _ = dss_sim(
+                self.my_model.A,
+                self.my_model.B,
+                self.my_model.C,
+                self.my_model.D,
+                my_action_sqn_upsampled,
+                self.my_model.x0est,
+                observation,
+            )
+            observation_sqn = observation_sqn_upsampled[
+                :: int(self.pred_step_size / self.sampling_time)
+            ]
 
-            return action
+        J = 0
+        if self.mode == "MPC":
+            for k in range(self.Nactor):
+                J += self.gamma ** k * self.stage_obj(
+                    observation_sqn[k, :], my_action_sqn[k, :], is_symbolic
+                )
+        elif (
+            self.mode == "RQL"
+        ):  # RL: Q-learning with Ncritic-1 roll-outs of stage objectives
+            for k in range(self.Nactor - 1):
+                J += self.gamma ** k * self.stage_obj(
+                    observation_sqn[k, :], my_action_sqn[k, :], is_symbolic
+                )
+            J += self._critic(
+                observation_sqn[-1, :], my_action_sqn[-1, :], self.w_critic, is_symbolic
+            )
+        elif self.mode == "SQL":  # RL: stacked Q-learning
+            for k in range(self.Nactor):
+                Q = self._critic(
+                    observation_sqn[k, :],
+                    my_action_sqn[k, :],
+                    self.w_critic,
+                    is_symbolic,
+                )
 
-        else:
-            return self.action_curr
+                # With state constraints via indicator function
+                # Q = w_critic @ self._regressor_critic( observation_sqn[k, :], my_action_sqn[k, :] ) + state_constraint_indicator(observation_sqn[k, 0])
+
+                # DEBUG ===================================================================
+                # =========================================================================
+                # R  = '\033[31m'
+                # Bl  = '\033[30m'
+                # if state_constraint_indicator(observation_sqn[k, 0]) > 1:
+                #     print(R+str(state_constraint_indicator(observation_sqn[k, 0]))+Bl)
+                # /DEBUG ==================================================================
+
+                J += Q
+
+        return J
+
+    def _actor_optimizer(
+        self,
+        observation,
+        constraints=[],
+        line_constraints=None,
+        circ_constraints=None,
+        is_symbolic=False,
+    ):
+        npcsd = SymbolicHandler(is_symbolic)
+        """
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._actor_cost`.
+        See class documentation.
+        
+        Customization
+        -------------         
+        
+        This method normally should not be altered, adjust :func:`~controllers.CtrlOptPred._actor_cost` instead.
+        The only customization you might want here is regarding the optimization algorithm.
+
+        """
+
+        # For direct implementation of state constraints, this needs `partial` from `functools`
+        # See [here](https://stackoverflow.com/questions/27659235/adding-multiple-constraints-to-scipy-minimize-autogenerate-constraint-dictionar)
+        # def state_constraint(action_sqn, idx):
+
+        #     my_action_sqn = np.reshape(action_sqn, [N, self.dim_input])
+
+        #     observation_sqn = npcsd.zeros([idx, self.dim_output])
+
+        #     # System output prediction
+        #     if (mode==1) or (mode==3) or (mode==5):    # Via exogenously passed model
+        #         observation_sqn[0, :] = observation
+        #         state = self.state_sys
+        #         Y[0, :] = observation
+        #         x = self.x_s
+        #         for k in range(1, idx):
+        #             # state = get_next_state(state, my_action_sqn[k-1, :], delta)
+        #             state = state + delta * self.state_dyn([], state, my_action_sqn[k-1, :], [])  # Euler scheme
+        #             observation_sqn[k, :] = self.sys_out(state)
+
+        #     return observation_sqn[-1, 1] - 1
+
+        # my_constraints=[]
+        # for my_idx in range(1, self.Nactor+1):
+        #     my_constraints.append({'type': 'eq', 'fun': lambda action_sqn: state_constraint(action_sqn, idx=my_idx)})
+
+        # my_constraints = {'type': 'ineq', 'fun': state_constraint}
+
+        # Optimization method of actor
+        # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
+        # actor_opt_method = 'SLSQP' # Standard
+
+        _constraints = []
+
+        def constrs(u, constraints, y, is_symbolic=False):
+            npcsd = SymbolicHandler(is_symbolic)
+            res = y
+            cons = []
+            for constr in constraints:
+                cons.append(constr(res))
+            f1 = npcsd.max(cons)
+            start_in_danger = f1 > 0.0
+
+            res_constr = []
+            f1 = -1
+            my_action_sqn = npcsd.reshape(u, [self.Nactor, self.dim_input])
+            for i in range(1, self.Nactor, 1):
+                if f1 > 0.0 and not start_in_danger:
+                    res_constr.append(f1)
+                    continue
+                res = res + self.pred_step_size * self.state_dyn(
+                    [], res, my_action_sqn[i - 1, :], is_symbolic
+                )
+                cons = []
+                for constr in constraints:
+                    cons.append(constr(res))
+                f1 = npcsd.max(cons)
+                res_constr.append(f1)
+            return res_constr
+
+        if not constraints is None and len(constraints) > 0 and not is_symbolic:
+            _constraints.append(
+                sp.optimize.NonlinearConstraint(
+                    partial(constrs, constraints=constraints, y=observation), -np.inf, 0
+                )
+            )
+
+        my_action_sqn_init = npcsd.reshape(
+            npcsd.array(self.action_sqn_init, ignore=True, array_type="SX"),
+            [self.Nactor * self.dim_input,],
+        )
+
+        cost_function, symbolic_var = npcsd.create_cost_function(
+            self._actor_cost, observation, x0=my_action_sqn_init
+        )
+
+        action_sqn = self.actor_optimizer.optimize(
+            cost_function, my_action_sqn_init, symbolic_var=symbolic_var,
+        )
+
+        # DEBUG ===================================================================
+        # ================================Interm output of model prediction quality
+        # R  = '\033[31m'
+        # Bl  = '\033[30m'
+        # my_action_sqn = np.reshape(action_sqn, [N, self.dim_input])
+        # my_action_sqn_upsampled = my_action_sqn.repeat(int(delta/self.sampling_time), axis=0)
+        # observation_sqn_upsampled, _ = dss_sim(self.my_model.A, self.my_model.B, self.my_model.C, self.my_model.D, my_action_sqn_upsampled, self.my_model.x0est, observation)
+        # observation_sqn = observation_sqn_upsampled[::int(delta/self.sampling_time)]
+        # Yt = npcsd.zeros([N, self.dim_output])
+        # Yt[0, :] = observation
+        # state = self.state_sys
+        # for k in range(1, Nactor):
+        #     state = state + delta * self.state_dyn([], state, my_action_sqn[k-1, :], [])  # Euler scheme
+        #     Yt[k, :] = self.sys_out(state)
+        # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
+        # dataRow = []
+        # for k in range(dim_output):
+        #     dataRow.append( np.mean(observation_sqn[:,k] - Yt[:,k]) )
+        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
+        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
+        # print(R+table+Bl)
+        # /DEBUG ==================================================================
+
+        return action_sqn[: self.dim_input]  # Return first action
 
     def compute_action(
-        self, t, observation, constraints=None, is_symbolic=False,
+        self,
+        t,
+        observation,
+        constraints=None,
+        line_constrs=None,
+        circ_constrs=None,
+        is_symbolic=False,
     ):
         npcsd = SymbolicHandler(is_symbolic)
         """
@@ -1181,61 +1527,85 @@ class CtrlOptPred:
 
         """
 
-        if self.ctrl_mode == "MPC":
-            # Apply control when model estimation phase is over
-            if self.is_prob_noise and self.is_est_model:
-                return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
+        time_in_sample = t - self.ctrl_clock
 
-            elif not self.is_prob_noise and self.is_est_model:
-                action = self.actor._actor_optimizer(
-                    observation, is_symbolic=is_symbolic
+        if time_in_sample >= self.sampling_time:  # New sample
+            # Update controller's internal clock
+            self.ctrl_clock = t
+
+            if self.mode == "MPC":
+
+                # Apply control when model estimation phase is over
+                if self.is_prob_noise and self.is_est_model:
+                    return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
+
+                elif not self.is_prob_noise and self.is_est_model:
+                    action = self._actor_optimizer(
+                        observation,
+                        constraints,
+                        line_constrs,
+                        circ_constrs,
+                        is_symbolic,
+                    )
+
+                elif self.mode == "MPC":
+                    action = self._actor_optimizer(
+                        observation,
+                        constraints,
+                        line_constrs,
+                        circ_constrs,
+                        is_symbolic,
+                    )
+
+            elif self.mode in ["RQL", "SQL"]:
+                # Critic
+                timeInCriticPeriod = t - self.critic_clock
+
+                # Update data buffers
+                self.action_buffer = push_vec(
+                    self.action_buffer, self.action_curr, is_symbolic=is_symbolic
                 )
 
-            elif self.ctrl_mode == "MPC":
-                action = self.actor._actor_optimizer(
-                    observation, is_symbolic=is_symbolic
+                self.observation_buffer = npcsd.push_vec(
+                    npcsd.array(self.observation_buffer), npcsd.array(observation)
                 )
 
-        elif self.ctrl_mode in ["RQL", "SQL"]:
-            # Critic
-            timeInCriticPeriod = t - self.critic_clock
+                if timeInCriticPeriod >= self.critic_period:
+                    # Update critic's internal clock
+                    self.critic_clock = t
 
-            # Update data buffers
-            self.action_buffer = push_vec(
-                self.action_buffer, self.action_curr, is_symbolic=is_symbolic
-            )
+                    self.w_critic = self.critic._critic_optimizer(
+                        is_symbolic=is_symbolic
+                    )
+                    self.w_critic_prev = self.w_critic
 
-            self.observation_buffer = npcsd.push_vec(
-                npcsd.array(self.observation_buffer), npcsd.array(observation)
-            )
+                    # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
+                    # self.w_critic_init = self.w_critic_prev
 
-            if timeInCriticPeriod >= self.critic_period:
-                # Update critic's internal clock
-                self.critic_clock = t
+                else:
+                    self.w_critic = self.w_critic_prev
 
-                self.critic.w_critic = self.critic._critic_optimizer(
-                    is_symbolic=is_symbolic
-                )
-                self.critic.w_critic_prev = self.critic.w_critic
+                # Actor. Apply control when model estimation phase is over
+                if self.is_prob_noise and self.is_est_model:
+                    action = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
+                elif not self.is_prob_noise and self.is_est_model:
+                    action = self.critic._actor_optimizer(observation)
 
-                # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
-                # self.w_critic_init = self.w_critic_prev
+                elif self.mode in ["RQL", "SQL"]:
+                    action = self.critic._actor_optimizer(
+                        observation,
+                        constraints,
+                        line_constrs,
+                        circ_constrs,
+                        is_symbolic=is_symbolic,
+                    )
 
-            else:
-                self.critic.w_critic = self.critic.w_critic_prev
+            self.action_curr = action
 
-            # Actor. Apply control when model estimation phase is over
-            if self.is_prob_noise and self.is_est_model:
-                action = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
-            elif not self.is_prob_noise and self.is_est_model:
-                action = self.actor._actor_optimizer(observation)
+            return action
 
-            elif self.ctrl_mode in ["RQL", "SQL"]:
-                action = self.actor._actor_optimizer(
-                    observation, is_symbolic=is_symbolic,
-                )
-
-        return action
+        else:
+            return self.action_curr
 
 
 class CtrlNominal3WRobot:

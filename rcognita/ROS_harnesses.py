@@ -6,7 +6,6 @@ import rcognita
 
 import numpy as np
 
-from rcognita import controllers
 from rcognita.obstacles_parser import Obstacles_parser
 from shapely.geometry import Point
 

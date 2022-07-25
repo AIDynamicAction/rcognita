@@ -1,4 +1,10 @@
 import numpy as np
+import os, sys
+
+PARENT_DIR = os.path.abspath(__file__ + "/../../")
+sys.path.insert(0, PARENT_DIR)
+CUR_DIR = os.path.abspath(__file__ + "/..")
+sys.path.insert(0, CUR_DIR)
 import casadi as csd
 import rcognita.utilities as utilities
 
@@ -14,7 +20,9 @@ class SymbolicHandler:
         return csd.sin(x) if self.is_symbolic else np.sin(x)
 
     def hstack(self, tup):
-        return csd.horzcat(tup) if self.is_symbolic else np.hstack(tup)
+        if not isinstance(tup, tuple):
+            tup = tuple(tup)
+        return csd.horzcat(*tup) if self.is_symbolic else np.hstack(tup)
 
     def push_vec(self, matrix, vec):
         return self.vstack([matrix[1:, :], vec.T])
@@ -35,7 +43,7 @@ class SymbolicHandler:
 
     def reshape(self, array, dim_params):
         if self.is_symbolic:
-            if isinstance(dim_params, list):
+            if isinstance(dim_params, list) or isinstance(dim_params, tuple):
                 if len(dim_params) > 1:
                     return self.reshape_casadi_as_np(array, dim_params)
                 else:
@@ -62,8 +70,8 @@ class SymbolicHandler:
         else:
             return np.array(array)
 
-    def symbolic_array_creation(self, *args):
-        return tuple(self.array(arg) for arg in args)
+    def symbolic_array_creation(self, *args, array_type="DM"):
+        return tuple(self.array(arg, array_type=array_type) for arg in args)
 
     def ones(self, tup):
         if isinstance(tup, int):
@@ -140,7 +148,11 @@ class SymbolicHandler:
         return csd.fmax(array) if self.is_symbolic else np.max(array)
 
     def dot(self, A, B):
-        return csd.dot(A, B) if self.is_symbolic else A @ B
+        return (
+            csd.dot(*self.symbolic_array_creation(A, B, array_type="SX"))
+            if self.is_symbolic
+            else A @ B
+        )
 
     def shape(self, array):
         return array.size() if self.is_symbolic else np.shape(array)

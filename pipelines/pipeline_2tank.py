@@ -13,6 +13,7 @@ import csv
 import rcognita
 import numpy as np
 from rcognita.utilities import rep_mat
+from rcognita.npcasadi_api import SymbolicHandler
 
 from config_blueprints import Config2Tank
 from pipeline_blueprints import AbstractPipeline
@@ -263,6 +264,8 @@ class Pipeline2Tank(AbstractPipeline):
         plt.show()
 
     def main_loop_raw(self):
+        is_symbolic = self.actor_optimizer.is_symbolic
+        npcsd = SymbolicHandler(is_symbolic)
         run_curr = 1
         datafile = self.datafiles[0]
 
@@ -274,17 +277,23 @@ class Pipeline2Tank(AbstractPipeline):
             if self.save_trajectory:
                 self.trajectory.append(state_full)
 
-            action = self.my_ctrl_benchm.compute_action(t, observation)
+            action = self.my_ctrl_benchm.compute_action(
+                t, npcsd.array(observation, array_type="SX"), is_symbolic=is_symbolic
+            )
 
             self.my_sys.receive_action(action)
             self.my_ctrl_benchm.receive_sys_state(self.my_sys._state)
-            self.my_ctrl_benchm.upd_accum_obj(observation, action)
+            self.my_ctrl_benchm.upd_accum_obj(
+                npcsd.array(observation), npcsd.array(action), is_symbolic=is_symbolic
+            )
 
             h1 = state_full[0]
             h2 = state_full[1]
             p = action
 
-            stage_obj = self.my_ctrl_benchm.stage_obj(observation, action)
+            stage_obj = self.my_ctrl_benchm.stage_obj(
+                npcsd.array(observation).T, npcsd.array(action).T, is_symbolic
+            )
             accum_obj = self.my_ctrl_benchm.accum_obj_val
 
             if not self.no_print:

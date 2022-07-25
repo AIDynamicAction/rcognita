@@ -12,12 +12,18 @@ Remarks:
 """
 
 import numpy as np
+import os, sys
+
+PARENT_DIR = os.path.abspath(__file__ + "/../../")
+sys.path.insert(0, PARENT_DIR)
+CUR_DIR = os.path.abspath(__file__ + "/..")
+sys.path.insert(0, CUR_DIR)
 from numpy.random import rand
 from numpy.matlib import repmat
 import scipy.stats as st
 from scipy import signal
 import matplotlib.pyplot as plt
-from .npcasadi_api import SymbolicHandler
+from npcasadi_api import SymbolicHandler
 
 
 def rej_sampling_rvs(dim, pdf, M):
@@ -82,7 +88,7 @@ def rep_mat(argin, n, m):
 
 def push_vec(matrix, vec, is_symbolic=False):
     npcsd = SymbolicHandler(is_symbolic)
-    return npcsd.vstack([matrix[1:, :], vec.T])
+    return npcsd.vstack([matrix[1:, :], npcsd.array(vec).T])
 
 
 def uptria2vec(mat):

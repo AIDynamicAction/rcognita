@@ -4,19 +4,7 @@ PARENT_DIR = os.path.abspath(__file__ + "/../../")
 sys.path.insert(0, PARENT_DIR)
 CUR_DIR = os.path.abspath(__file__ + "/..")
 sys.path.insert(0, CUR_DIR)
-
-import pathlib
-import warnings
-import matplotlib.animation as animation
-import matplotlib.pyplot as plt
-import csv
 import rcognita
-import numpy as np
-from rcognita.utilities import rep_mat
-from rcognita.npcasadi_api import SymbolicHandler
-
-from config_blueprints import Config3WRobotNI
-from pipeline_blueprints import AbstractPipeline
 
 if os.path.abspath(rcognita.__file__ + "/../..") == PARENT_DIR:
     info = (
@@ -35,17 +23,7 @@ else:
     )
 print("INFO:", info)
 
-from rcognita import (
-    controllers,
-    visuals,
-    simulator,
-    systems,
-    loggers,
-    state_predictors,
-    optimizers,
-)
-from datetime import datetime
-from rcognita.utilities import on_key_press
+from rcognita import optimizers
 from pipeline_3wrobot_NI import Pipeline3WRobotNI
 
 

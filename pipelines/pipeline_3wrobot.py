@@ -43,9 +43,12 @@ from rcognita import (
     loggers,
     state_predictors,
     optimizers,
+    objectives,
+    models,
 )
 from datetime import datetime
 from rcognita.utilities import on_key_press
+from rcognita.rl_tools import Actor, CriticAction, CriticActionValue
 
 
 class Pipeline3WRobot(AbstractPipeline):
@@ -72,6 +75,11 @@ class Pipeline3WRobot(AbstractPipeline):
             self.Nactor,
         )
 
+    def objectives_initialization(self):
+        self.objectives = objectives.Objectives(
+            stage_obj_model=models.ModelQuadForm(R1=self.R1, R2=self.R2)
+        )
+
     def optimizers_initialization(self):
 
         self.actor_optimizer = optimizers.RcognitaOptimizer.standard_actor_optimizer(
@@ -82,6 +90,51 @@ class Pipeline3WRobot(AbstractPipeline):
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
+        )
+
+    def rl_components_initialization(self):
+
+        self.q_critic = CriticAction(
+            Ncritic=self.Ncritic,
+            dim_input=self.dim_input,
+            dim_output=self.dim_output,
+            buffer_size=self.buffer_size,
+            stage_obj=self.objectives.stage_obj,
+            gamma=self.gamma,
+            critic_optimizer=self.critic_optimizer,
+            critic_model=models.ModelPolynomial(model_name="quad-nomix"),
+        )
+        self.v_critic = CriticActionValue(
+            Ncritic=self.Ncritic,
+            dim_input=self.dim_input,
+            dim_output=self.dim_output,
+            buffer_size=self.buffer_size,
+            stage_obj=self.objectives.stage_obj,
+            gamma=self.gamma,
+            critic_optimizer=self.critic_optimizer,
+            critic_model=models.ModelPolynomial(model_name="quad-nomix"),
+        )
+
+        self.q_actor = Actor(
+            self.Nactor,
+            self.dim_input,
+            self.dim_output,
+            self.ctrl_mode,
+            state_predictor=self.state_predictor,
+            actor_optimizer=self.actor_optimizer,
+            critic=self.q_critic,
+            stage_obj=self.objectives.stage_obj,
+        )
+
+        self.v_actor = Actor(
+            self.Nactor,
+            self.dim_input,
+            self.dim_output,
+            self.ctrl_mode,
+            state_predictor=self.state_predictor,
+            actor_optimizer=self.actor_optimizer,
+            critic=self.v_critic,
+            stage_obj=self.objectives.stage_obj,
         )
 
     def controller_initialization(self):
@@ -95,15 +148,9 @@ class Pipeline3WRobot(AbstractPipeline):
         )
 
         self.my_ctrl_opt_pred = controllers.CtrlOptPred(
-            self.dim_input,
-            self.dim_output,
-            self.ctrl_mode,
-            ctrl_bnds=self.ctrl_bnds,
             action_init=[],
             t0=self.t0,
             sampling_time=self.dt,
-            Nactor=self.Nactor,
-            actor_optimizer=self.actor_optimizer,
             pred_step_size=self.pred_step_size,
             state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
@@ -116,52 +163,42 @@ class Pipeline3WRobot(AbstractPipeline):
             buffer_size=self.buffer_size,
             model_order=self.model_order,
             model_est_checks=self.model_est_checks,
-            gamma=self.gamma,
-            Ncritic=self.Ncritic,
-            critic_optimizer=self.critic_optimizer,
             critic_period=self.critic_period,
-            critic_struct=self.critic_struct,
-            stage_obj_struct=self.stage_obj_struct,
+            actor=self.q_actor,
+            critic=self.q_critic,
             stage_obj_pars=[self.R1],
             observation_target=[],
         )
 
-        self.my_ctrl_RL_stab = controllers.CtrlRLStab(
-            self.dim_input,
-            self.dim_output,
-            self.ctrl_mode,
-            ctrl_bnds=self.ctrl_bnds,
-            action_init=self.action_init,
-            t0=self.t0,
-            sampling_time=self.dt,
-            Nactor=self.Nactor,
-            pred_step_size=self.pred_step_size,
-            state_dyn=self.my_sys._state_dyn,
-            sys_out=self.my_sys.out,
-            state_sys=self.state_init,
-            prob_noise_pow=self.prob_noise_pow,
-            is_est_model=self.is_est_model,
-            model_est_stage=self.model_est_stage,
-            model_est_period=self.model_est_period,
-            buffer_size=self.buffer_size,
-            model_order=self.model_order,
-            model_est_checks=self.model_est_checks,
-            gamma=self.gamma,
-            Ncritic=self.Ncritic,
-            critic_period=self.critic_period,
-            critic_struct=self.critic_struct,
-            actor_struct=self.actor_struct,
-            stage_obj_struct=self.stage_obj_struct,
-            stage_obj_pars=[self.R1],
-            observation_target=[],
-            safe_ctrl=self.my_ctrl_nominal,
-            safe_decay_rate=1e-4,
-        )
+        # self.my_ctrl_RL_stab = controllers.CtrlRLStab(
+        #     self.dim_input,
+        #     self.dim_output,
+        #     self.ctrl_mode,
+        #     ctrl_bnds=self.ctrl_bnds,
+        #     action_init=self.action_init,
+        #     t0=self.t0,
+        #     sampling_time=self.dt,
+        #     pred_step_size=self.pred_step_size,
+        #     state_dyn=self.my_sys._state_dyn,
+        #     sys_out=self.my_sys.out,
+        #     state_sys=self.state_init,
+        #     prob_noise_pow=self.prob_noise_pow,
+        #     is_est_model=self.is_est_model,
+        #     model_est_stage=self.model_est_stage,
+        #     model_est_period=self.model_est_period,
+        #     buffer_size=self.buffer_size,
+        #     model_order=self.model_order,
+        #     model_est_checks=self.model_est_checks,
+        #     stage_obj_struct=self.stage_obj_struct,
+        #     observation_target=[],
+        #     safe_ctrl=self.my_ctrl_nominal,
+        #     safe_decay_rate=1e-4,
+        # )
 
-        if self.ctrl_mode == "JACS":
-            self.my_ctrl_benchm = self.my_ctrl_RL_stab
-        else:
-            self.my_ctrl_benchm = self.my_ctrl_opt_pred
+        # if self.ctrl_mode == "JACS":
+        #     self.my_ctrl_benchm = self.my_ctrl_RL_stab
+        # else:
+        self.my_ctrl_benchm = self.my_ctrl_opt_pred
 
     def simulator_initialization(self):
         self.my_simulator = simulator.Simulator(
@@ -342,7 +379,7 @@ class Pipeline3WRobot(AbstractPipeline):
             if self.save_trajectory:
                 self.trajectory.append(state_full)
 
-            action = self.my_ctrl_benchm.compute_action(
+            action = self.my_ctrl_benchm.compute_action_sampled(
                 t, npcsd.array(observation, array_type="SX"), is_symbolic=is_symbolic
             )
 
@@ -416,7 +453,9 @@ class Pipeline3WRobot(AbstractPipeline):
         self.__dict__.update(kwargs)
         self.system_initialization()
         self.state_predictor_initialization()
+        self.objectives_initialization()
         self.optimizers_initialization()
+        self.rl_components_initialization()
         self.controller_initialization()
         self.simulator_initialization()
         self.logger_initialization()
