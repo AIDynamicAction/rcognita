@@ -21,7 +21,7 @@ class RcognitaArgParser(argparse.ArgumentParser):
             "--ctrl_mode",
             metavar="ctrl_mode",
             type=str,
-            choices=["manual", "nominal", "MPC", "RQL", "SQL", "JACS"],
+            choices=["manual", "nominal", "MPC", "RQL", "SQL", "RLSTAB"],
             default="MPC",
             help="Control mode. Currently available: "
             + "----manual: manual constant control specified by action_manual; "
@@ -29,7 +29,7 @@ class RcognitaArgParser(argparse.ArgumentParser):
             + "----MPC:model-predictive control; "
             + "----RQL: Q-learning actor-critic with Nactor-1 roll-outs of stage objective; "
             + "----SQL: stacked Q-learning; "
-            + "----JACS: joint actor-critic (stabilizing), system-specific, needs proper setup.",
+            + "----RLSTAB: joint actor-critic (stabilizing), system-specific, needs proper setup.",
         )
         self.add_argument(
             "--is_log",
@@ -269,6 +269,8 @@ class Config3WRobot(AbstractConfig):
         self.pred_step_size = self.dt * self.pred_step_size_multiplier
         self.model_est_period = self.dt * self.model_est_period_multiplier
         self.critic_period = self.dt * self.critic_period_multiplier
+        if self.ctrl_mode == "RLSTAB":
+            self.Nactor = 1
 
         self.R1 = np.diag(np.array(self.R1_diag))
         self.R2 = np.diag(np.array(self.R2_diag))
@@ -447,6 +449,8 @@ class Config3WRobotNI(AbstractConfig):
         self.dim_input = 2
         self.dim_output = self.dim_state
         self.dim_disturb = 2
+        if self.ctrl_mode == "RLSTAB":
+            self.Nactor = 1
 
         self.dim_R1 = self.dim_output + self.dim_input
         self.dim_R2 = self.dim_R1

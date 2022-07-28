@@ -48,7 +48,7 @@ from rcognita import (
 )
 from datetime import datetime
 from rcognita.utilities import on_key_press
-from rcognita.rl_tools import Actor, CriticAction, CriticActionValue
+from rcognita.rl_tools import Actor, CriticValue, CriticActionValue
 
 
 class Pipeline3WRobot(AbstractPipeline):
@@ -94,7 +94,7 @@ class Pipeline3WRobot(AbstractPipeline):
 
     def rl_components_initialization(self):
 
-        self.q_critic = CriticAction(
+        self.q_critic = CriticActionValue(
             Ncritic=self.Ncritic,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
@@ -102,9 +102,9 @@ class Pipeline3WRobot(AbstractPipeline):
             stage_obj=self.objectives.stage_obj,
             gamma=self.gamma,
             critic_optimizer=self.critic_optimizer,
-            critic_model=models.ModelPolynomial(model_name="quad-nomix"),
+            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
         )
-        self.v_critic = CriticActionValue(
+        self.v_critic = CriticValue(
             Ncritic=self.Ncritic,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
@@ -112,7 +112,7 @@ class Pipeline3WRobot(AbstractPipeline):
             stage_obj=self.objectives.stage_obj,
             gamma=self.gamma,
             critic_optimizer=self.critic_optimizer,
-            critic_model=models.ModelPolynomial(model_name="quad-nomix"),
+            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
         )
 
         self.q_actor = Actor(
@@ -148,14 +148,13 @@ class Pipeline3WRobot(AbstractPipeline):
         )
 
         self.my_ctrl_opt_pred = controllers.CtrlOptPred(
-            action_init=[],
+            action_init=self.action_init,
             t0=self.t0,
             sampling_time=self.dt,
             pred_step_size=self.pred_step_size,
             state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
             state_sys=self.state_init,
-            state_predictor=self.state_predictor,
             prob_noise_pow=self.prob_noise_pow,
             is_est_model=self.is_est_model,
             model_est_stage=self.model_est_stage,
@@ -170,35 +169,35 @@ class Pipeline3WRobot(AbstractPipeline):
             observation_target=[],
         )
 
-        # self.my_ctrl_RL_stab = controllers.CtrlRLStab(
-        #     self.dim_input,
-        #     self.dim_output,
-        #     self.ctrl_mode,
-        #     ctrl_bnds=self.ctrl_bnds,
-        #     action_init=self.action_init,
-        #     t0=self.t0,
-        #     sampling_time=self.dt,
-        #     pred_step_size=self.pred_step_size,
-        #     state_dyn=self.my_sys._state_dyn,
-        #     sys_out=self.my_sys.out,
-        #     state_sys=self.state_init,
-        #     prob_noise_pow=self.prob_noise_pow,
-        #     is_est_model=self.is_est_model,
-        #     model_est_stage=self.model_est_stage,
-        #     model_est_period=self.model_est_period,
-        #     buffer_size=self.buffer_size,
-        #     model_order=self.model_order,
-        #     model_est_checks=self.model_est_checks,
-        #     stage_obj_struct=self.stage_obj_struct,
-        #     observation_target=[],
-        #     safe_ctrl=self.my_ctrl_nominal,
-        #     safe_decay_rate=1e-4,
-        # )
+        self.my_ctrl_RL_stab = controllers.CtrlRLStab(
+            action_init=self.action_init,
+            t0=self.t0,
+            sampling_time=self.dt,
+            pred_step_size=self.pred_step_size,
+            state_dyn=self.my_sys._state_dyn,
+            sys_out=self.my_sys.out,
+            state_sys=self.state_init,
+            prob_noise_pow=self.prob_noise_pow,
+            is_est_model=self.is_est_model,
+            model_est_stage=self.model_est_stage,
+            model_est_period=self.model_est_period,
+            buffer_size=self.buffer_size,
+            model_order=self.model_order,
+            model_est_checks=self.model_est_checks,
+            critic_period=self.critic_period,
+            actor=self.v_actor,
+            critic=self.v_critic,
+            stage_obj_pars=[self.R1],
+            observation_target=[],
+            safe_ctrl=self.my_ctrl_nominal,
+            safe_decay_rate=1e-4,
+        )
 
-        # if self.ctrl_mode == "JACS":
-        #     self.my_ctrl_benchm = self.my_ctrl_RL_stab
-        # else:
-        self.my_ctrl_benchm = self.my_ctrl_opt_pred
+        if self.ctrl_mode == "RLSTAB":
+            self.my_ctrl_benchm = self.my_ctrl_RL_stab
+
+        else:
+            self.my_ctrl_benchm = self.my_ctrl_opt_pred
 
     def simulator_initialization(self):
         self.my_simulator = simulator.Simulator(
@@ -211,7 +210,7 @@ class Pipeline3WRobot(AbstractPipeline):
             t0=self.t0,
             t1=self.t1,
             dt=self.dt,
-            max_step=self.dt / 2,
+            max_step=self.dt / 10,
             first_step=1e-6,
             atol=self.atol,
             rtol=self.rtol,
@@ -377,11 +376,15 @@ class Pipeline3WRobot(AbstractPipeline):
             (t, _, observation, state_full,) = self.my_simulator.get_sim_step_data()
 
             if self.save_trajectory:
-                self.trajectory.append(state_full)
-
-            action = self.my_ctrl_benchm.compute_action_sampled(
-                t, npcsd.array(observation, array_type="SX"), is_symbolic=is_symbolic
-            )
+                self.trajectory.append(np.concatenate((state_full, t), axis=None))
+            if self.ctrl_mode == "nominal":
+                action = self.my_ctrl_nominal.compute_action_sampled(t, observation)
+            else:
+                action = self.my_ctrl_benchm.compute_action_sampled(
+                    t,
+                    npcsd.array(observation, array_type="SX"),
+                    is_symbolic=is_symbolic,
+                )
 
             self.my_sys.receive_action(action)
             self.my_ctrl_benchm.receive_sys_state(self.my_sys._state)

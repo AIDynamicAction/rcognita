@@ -68,9 +68,13 @@ class ModelPolynomial:
     def __call__(self, *args, **kwargs):
         return self.compute(*args, **kwargs)
 
-    def compute(self, v1, v2, is_symbolic=False):
+    def compute(self, v, v1, v2, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
 
+        if npcsd.shape(v1)[1] != 1:
+            v1 = v1.T
+        if npcsd.shape(v2)[1] != 1:
+            v2 = v2.T
         chi = npcsd.concatenate([v1, npcsd.array(v2, array_type="SX")])
         if self.model_name == "quad-lin":
             polynom = npcsd.concatenate([uptria2vec(np.outer(chi, chi)), chi])
@@ -81,7 +85,9 @@ class ModelPolynomial:
         elif self.model_name == "quad-mix":
             polynom = npcsd.concatenate([v1 ** 2, npcsd.kron(v1, v2), v2 ** 2])
 
-        return polynom
+        result = npcsd.dot(v, polynom)
+
+        return result
 
 
 class ModelQuadForm:

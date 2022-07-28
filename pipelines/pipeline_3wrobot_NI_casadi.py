@@ -33,12 +33,22 @@ class Pipeline3WRobotNICasadi(Pipeline3WRobotNI):
         self.actor_optimizer = optimizers.RcognitaOptimizer.casadi_actor_optimizer(
             actor_opt_method="ipopt", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
         )
-        self.critic_optimizer = optimizers.RcognitaOptimizer.casadi_critic_optimizer(
-            critic_opt_method="ipopt",
+        self.v_critic_optimizer = optimizers.RcognitaOptimizer.casadi_v_critic_optimizer(
+            critic_opt_method="SLSQP",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
         )
+        self.q_critic_optimizer = optimizers.RcognitaOptimizer.casadi_q_critic_optimizer(
+            critic_opt_method="SLSQP",
+            critic_struct=self.critic_struct,
+            dim_input=self.dim_input,
+            dim_output=self.dim_output,
+        )
+        if self.ctrl_mode == "RLSTAB":
+            self.critic_optimizer = self.v_critic_optimizer
+        else:
+            self.critic_optimizer = self.q_critic_optimizer
 
 
 if __name__ == "__main__":

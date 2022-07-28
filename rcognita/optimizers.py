@@ -1,11 +1,13 @@
-from .utilities import dss_sim
 from rcognita.utilities import rep_mat
 import scipy as sp
 from scipy.optimize import minimize
 import numpy as np
-from casadi import SX, cos, sin, fmin, vertcat, nlpsol
-from numpy.random import randn
+from casadi import vertcat, nlpsol, DM
 import time
+from npcasadi_api import SymbolicHandler
+from casadi import SX, Function
+
+MAX_ITER = 400
 
 
 class RcognitaOptimizer:
@@ -140,7 +142,7 @@ class RcognitaOptimizer:
             symbolic_var=None,
         ):
             result = minimize(
-                lambda w_critic: critic_cost(w_critic),
+                lambda weights: critic_cost(weights),
                 x0=x0,
                 method=opt_method,
                 bounds=bounds,
@@ -154,7 +156,7 @@ class RcognitaOptimizer:
         return RcognitaOptimizer(critic_opt_method, minimizer, bnds, critic_opt_options)
 
     @staticmethod
-    def casadi_actor_optimizer(opt_method="ipopt", max_iter=120, **kwargs):
+    def casadi_actor_optimizer(opt_method="ipopt", max_iter=MAX_ITER, **kwargs):
         ctrl_bnds = kwargs.get("ctrl_bnds")
         Nactor = kwargs.get("Nactor")
         action_min = np.array(ctrl_bnds[:, 0])
@@ -181,17 +183,37 @@ class RcognitaOptimizer:
             symbolic_var=None,
             verbose=True,
         ):
-
+            npcsd = SymbolicHandler(True)
             qp_prob = {
                 "f": cost,
                 "x": vertcat(symbolic_var),
-                "g": vertcat(*constraints),
+                "g": vertcat(constraints),
             }
 
-            solver = nlpsol("solver", opt_method, qp_prob, options)
+            if isinstance(constraints, tuple):
+                ubg = npcsd.zeros(len(constraints))
+            elif isinstance(constraints, SX):
+                ubg = npcsd.zeros(1)
+
+            if npcsd.shape(npcsd.array(constraints))[0] > 0:
+                ubg = npcsd.zeros(npcsd.shape(constraints))
+            try:
+                solver = nlpsol("solver", opt_method, qp_prob, options)
+            except Exception as e:
+                print(e)
+                return x0
             start = time.time()
-            result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1])
+            if not ubg is None:
+                result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1], ubg=ubg)
+            else:
+                result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1])
             final_time = time.time() - start
+            ##### DEBUG
+            # g1 = Function("g1", [symbolic_var], [constraints])
+
+            # print(g1(result["x"]))
+            ##### DEBUG
+
             return result["x"]
 
         return RcognitaOptimizer(
@@ -199,7 +221,7 @@ class RcognitaOptimizer:
         )
 
     @staticmethod
-    def casadi_critic_optimizer(opt_method="ipopt", max_iter=120, **kwargs):
+    def casadi_q_critic_optimizer(opt_method="ipopt", max_iter=MAX_ITER, **kwargs):
         critic_struct = kwargs.get("critic_struct")
         dim_input = kwargs.get("dim_input")
         dim_output = kwargs.get("dim_output")
@@ -248,15 +270,95 @@ class RcognitaOptimizer:
             verbose=True,
         ):
 
+            npcsd = SymbolicHandler(True)
+            if constraints is None:
+                constraints = ()
             qp_prob = {
                 "f": cost,
                 "x": vertcat(symbolic_var),
-                "g": vertcat(*constraints),
+                "g": vertcat(constraints),
             }
 
-            solver = nlpsol("solver", opt_method, qp_prob, options)
+            ubg = None
+            if npcsd.shape(npcsd.array(constraints))[0] > 0:
+                ubg = npcsd.zeros(npcsd.shape(constraints))
+            try:
+                solver = nlpsol("solver", opt_method, qp_prob, options)
+            except:
+                return x0
             start = time.time()
-            result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1])
+            if not ubg is None:
+                result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1], ubg=ubg)
+            else:
+                result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1])
+            final_time = time.time() - start
+            return result["x"]
+
+        return RcognitaOptimizer(
+            opt_method, optimizer, bounds, options, is_symbolic=True
+        )
+
+    def casadi_v_critic_optimizer(opt_method="ipopt", max_iter=MAX_ITER, **kwargs):
+        critic_struct = kwargs.get("critic_struct")
+        dim_input = kwargs.get("dim_input")
+        dim_output = kwargs.get("dim_output")
+
+        if critic_struct == "quad-lin":
+            dim_critic = int((dim_output + 1) * dim_output / 2 + dim_output)
+            Wmin = -1e3 * np.ones(dim_critic)
+            Wmax = 1e3 * np.ones(dim_critic)
+        elif critic_struct == "quadratic":
+            dim_critic = int((dim_output + 1) * dim_output / 2)
+            Wmin = np.zeros(dim_critic)
+            Wmax = 1e3 * np.ones(dim_critic)
+        elif critic_struct == "quad-nomix":
+            dim_critic = dim_output
+            Wmin = np.zeros(dim_critic)
+            Wmax = 1e3 * np.ones(dim_critic)
+
+        options = {
+            "print_time": 0,
+            "ipopt.max_iter": max_iter,
+            "ipopt.print_level": 0,
+            "ipopt.acceptable_tol": 1e-7,
+            "ipopt.acceptable_obj_change_tol": 1e-4,
+        }
+
+        bounds = [Wmin, Wmax]
+
+        def optimizer(
+            cost,
+            x0,
+            opt_method="ipopt",
+            options=options,
+            bounds=bounds,
+            constraints=(),
+            symbolic_var=None,
+            verbose=True,
+        ):
+
+            npcsd = SymbolicHandler(True)
+            if constraints is None:
+                constraints = ()
+
+            qp_prob = {
+                "f": cost,
+                "x": vertcat(symbolic_var),
+                "g": vertcat(constraints),
+            }
+
+            ubg = None
+            if npcsd.shape(npcsd.array(constraints))[0] > 0:
+                ubg = npcsd.zeros(npcsd.shape(constraints))
+            try:
+                solver = nlpsol("solver", opt_method, qp_prob, options)
+            except:
+                return x0
+            start = time.time()
+            if not ubg is None:
+                result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1], ubg=ubg)
+            else:
+                result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1])
             final_time = time.time() - start
             return result["x"]
 

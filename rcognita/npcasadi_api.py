@@ -160,19 +160,53 @@ class SymbolicHandler:
     def create_cost_function(self, cost_function, *args, x0=None):
         if not self.is_symbolic:
             return (
-                lambda my_action_sqn: cost_function(
-                    my_action_sqn, *args, self.is_symbolic
-                ),
+                lambda x_sqn: cost_function(x_sqn, *args, self.is_symbolic),
                 csd.SX.sym("x", *self.shape(x0)),
             )
         else:
-            action_sqn_symb = csd.SX.sym("x", self.shape(x0))
+            x_sqn_symb = csd.SX.sym("x", self.shape(x0))
             args = self.symbolic_array_creation(*args)
-            return (
-                cost_function(action_sqn_symb, *args, self.is_symbolic),
-                action_sqn_symb,
-            )
+            if len(args) > 0:
+                return (
+                    cost_function(x_sqn_symb, *args, is_symbolic=self.is_symbolic),
+                    x_sqn_symb,
+                )
+            else:
+                return (
+                    cost_function(x_sqn_symb, is_symbolic=self.is_symbolic),
+                    x_sqn_symb,
+                )
 
     def kron(self, A, B):
         return csd.kron(A, B) if self.is_symbolic else np.kron(A, B)
+
+    def autograd(self, func, x, *args):
+        return (
+            csd.Function("f", [x, *args], [csd.gradient(func(x, *args), x)])
+            if self.is_symbolic
+            else 0
+        )
+
+    def array_symb(self, tup, literal="x"):
+        if isinstance(tup, tuple):
+            if len(tup) > 2:
+                raise ValueError(
+                    f"Not implemented for number of dimensions grreater than 2. Passed: {len(tup)}"
+                )
+            else:
+                return csd.SX.sym(literal, *tup)
+
+        elif isinstance(tup, int):
+            return csd.SX.sym(literal, tup)
+
+        else:
+            raise TypeError(
+                f"Passed an invalide argument of type {type(tup)}. Takes either int or tuple data types"
+            )
+
+    def norm_1(self, v):
+        return csd.norm_1(v) if self.is_symbolic else np.linalg.norm(v, 1)
+
+    def norm_2(self, v):
+        return csd.norm_2(v) if self.is_symbolic else np.linalg.norm(v, 2)
 

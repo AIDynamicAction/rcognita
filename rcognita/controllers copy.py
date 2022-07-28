@@ -62,14 +62,14 @@ class CtrlRLStab:
     Critic
     -----
     
-    ``w_critic`` : weights.
+    ``weights`` : weights.
     
     Feature structure is defined via a string flag ``critic_struct``. Read more on features in class description of ``controllers.CtrlOptPred``.
     
     Attributes
     ----------
     mode : : string
-        Controller mode. Currently available only JACS, joint actor-critic (stabilizing).   
+        Controller mode. Currently available only RLSTAB, joint actor-critic (stabilizing).   
     
     Read more
     ---------
@@ -82,7 +82,7 @@ class CtrlRLStab:
         self,
         dim_input,
         dim_output,
-        mode="JACS",
+        mode="RLSTAB",
         ctrl_bnds=[],
         action_init=[],
         t0=0,
@@ -231,10 +231,10 @@ class CtrlRLStab:
         self.action_sqn_max = rep_mat(self.action_max, 1, Nactor)
 
         if len(action_init) == 0:
-            self.action_curr = self.action_min / 10
+            self.action_prev = self.action_min / 10
             self.action_sqn_init = rep_mat(self.action_min / 10, 1, self.Nactor)
         else:
-            self.action_curr = action_init
+            self.action_prev = action_init
             self.action_sqn_init = rep_mat(action_init, 1, self.Nactor)
 
         self.action_buffer = npcsd.zeros([buffer_size, dim_input])
@@ -300,8 +300,8 @@ class CtrlRLStab:
             self.Wmin = npcsd.zeros(self.dim_critic)
             self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
 
-        self.w_critic_prev = self.Wmin
-        self.w_critic_init = npcsd.ones(self.dim_critic)
+        self.weights_prev = self.Wmin
+        self.weights_init = npcsd.ones(self.dim_critic)
 
         self.lmbd_prev = 0
         self.lmbd_init = 0
@@ -335,7 +335,7 @@ class CtrlRLStab:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = self.action_min / 10
+        self.action_prev = self.action_min / 10
 
     def receive_sys_state(self, state):
         """
@@ -406,12 +406,12 @@ class CtrlRLStab:
             @ regressor_actor.T
         )
 
-    def _critic(self, observation, w_critic, lmbd, is_symbolic=False):
+    def _critic(self, observation, weights, lmbd, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
         """
         Critic: a routine that models something related to the objective, e.g., value function, Q-function, advantage etc.
         
-        The parameter ``lmbd`` is needed here specifically for joint actor-critic (stabilizing) a.k.a. JACS.
+        The parameter ``lmbd`` is needed here specifically for joint actor-critic (stabilizing) a.k.a. RLSTAB.
         
         Currently, this implementation is for linearly parametrized models.
 
@@ -429,7 +429,7 @@ class CtrlRLStab:
         elif self.critic_struct == "quad-nomix":
             regressor_critic = chi * chi
 
-        return lmbd * npcsd.dot(w_critic.T, regressor_critic) + (
+        return lmbd * npcsd.dot(weights.T, regressor_critic) + (
             1 - lmbd
         ) * self.safe_ctrl.compute_LF(observation)
 
@@ -461,13 +461,13 @@ class CtrlRLStab:
     def _actor_critic_cost(self, w_all, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
         """
-        Cost (loss) of joint actor-critic (stabilizing) a.k.a. JACS
+        Cost (loss) of joint actor-critic (stabilizing) a.k.a. RLSTAB
        
         """
 
         observation_sqn = self.observation_buffer[-self.Ncritic :, :]
 
-        w_critic = w_all[: self.dim_critic]
+        weights = w_all[: self.dim_critic]
         # lmbd = w_all[self.dim_critic+1]
         w_actor = w_all[-self.dim_actor :]
 
@@ -477,8 +477,8 @@ class CtrlRLStab:
             observation_prev = observation_sqn[k - 1, :]
             observation_next = observation_sqn[k, :]
 
-            critic_prev = self._critic(observation_prev, w_critic, 1)
-            critic_next = self._critic(observation_next, self.w_critic_prev.T, 1)
+            critic_prev = self._critic(observation_prev, weights, 1)
+            critic_next = self._critic(observation_next, self.weights_prev.T, 1)
 
             action = self._actor(observation_prev, w_actor, is_symbolic)
 
@@ -509,16 +509,16 @@ class CtrlRLStab:
         """
 
         def constr_stab_par_decay(w_all, observation):
-            w_critic = w_all[: self.dim_critic]
+            weights = w_all[: self.dim_critic]
             lmbd = w_all[self.dim_critic]
 
-            critic_curr = self._critic(observation, self.w_critic_prev, self.lmbd_prev)
-            critic_new = self._critic(observation, w_critic, lmbd)
+            critic_curr = self._critic(observation, self.weights_prev, self.lmbd_prev)
+            critic_new = self._critic(observation, weights, lmbd)
 
             return critic_new - critic_curr
 
         def constr_stab_LF_bound(w_all, observation):
-            w_critic = w_all[: self.dim_critic]
+            weights = w_all[: self.dim_critic]
             lmbd = w_all[self.dim_critic]
             w_actor = w_all[-self.dim_actor :]
 
@@ -528,12 +528,12 @@ class CtrlRLStab:
                 [], observation, action
             )  # Euler scheme
 
-            critic_next = self._critic(observation_next, w_critic, lmbd)
+            critic_next = self._critic(observation_next, weights, lmbd)
 
             return self.safe_ctrl.compute_LF(observation_next) - critic_next
 
         def constr_stab_decay(w_all, observation):
-            w_critic = w_all[: self.dim_critic]
+            weights = w_all[: self.dim_critic]
             lmbd = w_all[self.dim_critic]
             w_actor = w_all[-self.dim_actor :]
 
@@ -543,16 +543,16 @@ class CtrlRLStab:
                 [], observation, action
             )  # Euler scheme
 
-            critic_new = self._critic(observation, w_critic, lmbd)
-            critic_next = self._critic(observation_next, w_critic, lmbd)
+            critic_new = self._critic(observation, weights, lmbd)
+            critic_next = self._critic(observation_next, weights, lmbd)
 
             return critic_next - critic_new + self.safe_decay_rate
 
         def constr_stab_positive(w_all, observation):
-            w_critic = w_all[: self.dim_critic]
+            weights = w_all[: self.dim_critic]
             lmbd = w_all[self.dim_critic]
 
-            critic_new = self._critic(observation, w_critic, lmbd)
+            critic_new = self._critic(observation, weights, lmbd)
 
             return -critic_new
 
@@ -611,9 +611,9 @@ class CtrlRLStab:
         # DEBUG ===================================================================
         # ================================Constraint debugger
 
-        # w_all = npcsd.concatenate([self.w_critic_init, npcsd.rc_array([self.lmbd_init]), self.w_actor_init])
+        # w_all = npcsd.concatenate([self.weights_init, npcsd.rc_array([self.lmbd_init]), self.w_actor_init])
 
-        # w_critic = w_all[:self.dim_critic]
+        # weights = w_all[:self.dim_critic]
         # lmbd = w_all[self.dim_critic]
         # w_actor = w_all[-self.dim_actor:]
 
@@ -629,11 +629,11 @@ class CtrlRLStab:
         # Notice `bounds=bnds` is removed from arguments of minimize.
         # It is because bounds are not practically necessary for stabilizing joint actor-critic to function
         # w_all = minimize(self._actor_critic_cost,
-        #                     np.hstack([self.w_critic_init,npcsd.rc_array([self.lmbd_init]),self.w_actor_init]),
+        #                     np.hstack([self.weights_init,npcsd.rc_array([self.lmbd_init]),self.w_actor_init]),
         #                     method=opt_method, tol=1e-4, constraints=my_constraints, options=opt_options).x
         x0 = npcsd.hstack(
             [
-                npcsd.array(self.w_critic_init).T,
+                npcsd.array(self.weights_init).T,
                 npcsd.array([self.lmbd_init]),
                 npcsd.array(self.w_actor_init).T,
             ]
@@ -647,7 +647,7 @@ class CtrlRLStab:
             cost_function, x0=x0, symbolic_var=symbolic_var
         ).x
 
-        w_critic = w_all[: self.dim_critic]
+        weights = w_all[: self.dim_critic]
         lmbd = w_all[self.dim_critic]
         w_actor = w_all[-self.dim_actor :]
 
@@ -672,7 +672,7 @@ class CtrlRLStab:
             or constr_stab_positive(w_all, observation) >= eps4
         ):
 
-            w_critic = self.w_critic_init
+            weights = self.weights_init
             lmbd = self.lmbd_init
 
             action = self.safe_ctrl.compute_action_vanila(observation)
@@ -681,7 +681,7 @@ class CtrlRLStab:
 
         # DEBUG ===================================================================
         # ================================Put safe controller through
-        # w_critic = self.w_critic_init
+        # weights = self.weights_init
         # lmbd = self.lmbd_init
         # action = self.safe_ctrl.compute_action_vanila(observation)
         # /DEBUG ===================================================================
@@ -710,7 +710,7 @@ class CtrlRLStab:
 
         # /STUB ===================================================================
 
-        return w_critic, lmbd, action
+        return weights, lmbd, action
 
     def compute_action(self, t, observation, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -723,28 +723,28 @@ class CtrlRLStab:
 
             # Update data buffers
             self.action_buffer = npcsd.push_vec(
-                self.action_buffer, npcsd.array(self.action_curr)
+                self.action_buffer, npcsd.array(self.action_prev)
             )
             npcsd.push_vec(
                 npcsd.array(self.observation_buffer), npcsd.array(observation)
             )
 
-            w_critic, lmbd, action = self._actor_critic_optimizer(
+            weights, lmbd, action = self._actor_critic_optimizer(
                 observation, is_symbolic
             )
 
-            self.w_critic_prev = w_critic
+            self.weights_prev = weights
             self.lmbd_prev = lmbd
 
             for k in range(2):
                 action[k] = np.clip(action[k], self.action_min[k], self.action_max[k])
 
-            self.action_curr = action
+            self.action_prev = action
 
             return action
 
         else:
-            return self.action_curr
+            return self.action_prev
 
 
 class CtrlOptPred:
@@ -1052,10 +1052,10 @@ class CtrlOptPred:
         self.action_sqn_max = npcsd.rep_mat(self.action_max, 1, Nactor)
 
         if len(action_init) == 0:
-            self.action_curr = self.action_min / 10
+            self.action_prev = self.action_min / 10
             self.action_sqn_init = npcsd.rep_mat(self.action_min / 10, 1, self.Nactor)
         else:
-            self.action_curr = action_init
+            self.action_prev = action_init
             self.action_sqn_init = npcsd.rep_mat(action_init, 1, self.Nactor)
 
         self.action_buffer = npcsd.zeros([buffer_size, dim_input])
@@ -1133,8 +1133,8 @@ class CtrlOptPred:
             self.Wmin = -1e3 * npcsd.ones(self.dim_critic)
             self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
 
-        self.w_critic_prev = npcsd.zeros(self.dim_critic)
-        self.w_critic_init = self.w_critic_prev
+        self.weights_prev = npcsd.zeros(self.dim_critic)
+        self.weights_init = self.weights_prev
 
         # self.big_number = 1e4
 
@@ -1146,7 +1146,7 @@ class CtrlOptPred:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = self.action_min / 10
+        self.action_prev = self.action_min / 10
 
     def receive_sys_state(self, state):
         """
@@ -1356,19 +1356,19 @@ class CtrlOptPred:
                     observation_sqn[k, :], my_action_sqn[k, :], is_symbolic
                 )
             J += self._critic(
-                observation_sqn[-1, :], my_action_sqn[-1, :], self.w_critic, is_symbolic
+                observation_sqn[-1, :], my_action_sqn[-1, :], self.weights, is_symbolic
             )
         elif self.mode == "SQL":  # RL: stacked Q-learning
             for k in range(self.Nactor):
                 Q = self._critic(
                     observation_sqn[k, :],
                     my_action_sqn[k, :],
-                    self.w_critic,
+                    self.weights,
                     is_symbolic,
                 )
 
                 # With state constraints via indicator function
-                # Q = w_critic @ self._regressor_critic( observation_sqn[k, :], my_action_sqn[k, :] ) + state_constraint_indicator(observation_sqn[k, 0])
+                # Q = weights @ self._regressor_critic( observation_sqn[k, :], my_action_sqn[k, :] ) + state_constraint_indicator(observation_sqn[k, 0])
 
                 # DEBUG ===================================================================
                 # =========================================================================
@@ -1563,7 +1563,7 @@ class CtrlOptPred:
 
                 # Update data buffers
                 self.action_buffer = push_vec(
-                    self.action_buffer, self.action_curr, is_symbolic=is_symbolic
+                    self.action_buffer, self.action_prev, is_symbolic=is_symbolic
                 )
 
                 self.observation_buffer = npcsd.push_vec(
@@ -1574,16 +1574,16 @@ class CtrlOptPred:
                     # Update critic's internal clock
                     self.critic_clock = t
 
-                    self.w_critic = self.critic._critic_optimizer(
+                    self.weights = self.critic._critic_optimizer(
                         is_symbolic=is_symbolic
                     )
-                    self.w_critic_prev = self.w_critic
+                    self.weights_prev = self.weights
 
                     # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
-                    # self.w_critic_init = self.w_critic_prev
+                    # self.weights_init = self.weights_prev
 
                 else:
-                    self.w_critic = self.w_critic_prev
+                    self.weights = self.weights_prev
 
                 # Actor. Apply control when model estimation phase is over
                 if self.is_prob_noise and self.is_est_model:
@@ -1600,12 +1600,12 @@ class CtrlOptPred:
                         is_symbolic=is_symbolic,
                     )
 
-            self.action_curr = action
+            self.action_prev = action
 
             return action
 
         else:
-            return self.action_curr
+            return self.action_prev
 
 
 class CtrlNominal3WRobot:
@@ -1659,7 +1659,7 @@ class CtrlNominal3WRobot:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.action_curr = npcsd.zeros(2)
+        self.action_prev = npcsd.zeros(2)
 
     def reset(self, t0, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -1668,7 +1668,7 @@ class CtrlNominal3WRobot:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = npcsd.zeros(2)
+        self.action_prev = npcsd.zeros(2)
 
     def _zeta(self, xNI, theta, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -1888,7 +1888,7 @@ class CtrlNominal3WRobot:
                         action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
                     )
 
-            self.action_curr = action
+            self.action_prev = action
 
             # DEBUG ===================================================================
             # ================================LF debugger
@@ -1904,7 +1904,7 @@ class CtrlNominal3WRobot:
             return action
 
         else:
-            return self.action_curr
+            return self.action_prev
 
     def compute_action_vanila(self, observation):
         """
@@ -1919,7 +1919,7 @@ class CtrlNominal3WRobot:
         uNI = -self.ctrl_gain * z
         action = self._NH2ctrl_Cart(xNI, eta, uNI)
 
-        self.action_curr = action
+        self.action_prev = action
 
         return action
 
@@ -1946,7 +1946,7 @@ class CtrlNominal3WRobotNI:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.action_curr = npcsd.zeros(2)
+        self.action_prev = npcsd.zeros(2)
 
     def reset(self, t0, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -1955,7 +1955,7 @@ class CtrlNominal3WRobotNI:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = npcsd.zeros(2)
+        self.action_prev = npcsd.zeros(2)
 
     def _zeta(self, xNI, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -2147,7 +2147,7 @@ class CtrlNominal3WRobotNI:
                         action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
                     )
 
-            self.action_curr = action
+            self.action_prev = action
 
             # DEBUG ===================================================================
             # ================================LF debugger
@@ -2163,7 +2163,7 @@ class CtrlNominal3WRobotNI:
             return action
 
         else:
-            return self.action_curr
+            return self.action_prev
 
     def compute_action_vanila(self, observation):
         """
@@ -2176,7 +2176,7 @@ class CtrlNominal3WRobotNI:
         uNI = self.ctrl_gain * kappa_val
         action = self._NH2ctrl_Cart(xNI, uNI)
 
-        self.action_curr = action
+        self.action_prev = action
 
         return action
 

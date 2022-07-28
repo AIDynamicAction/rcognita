@@ -26,7 +26,10 @@ from scipy.optimize import NonlinearConstraint
 from numpy.linalg import lstsq
 from numpy import reshape
 from functools import partial
+from abc import ABC, abstractmethod
+from casadi import nlpsol
 import warnings
+from casadi import Function
 
 # For debugging purposes
 from tabulate import tabulate
@@ -44,734 +47,7 @@ except ModuleNotFoundError:
     )
 
 
-class CtrlRLStab:
-    """
-    Class of reinforcement learning agents with stabilizing constraints.
-    
-    Sampling here is similar to the predictive controller agent ``CtrlOptPred``
-    
-    Needs a nominal controller object ``safe_ctrl`` with a respective Lyapunov function.
-    
-    Actor
-    -----
-    
-    ``w_actor`` : weights.
-
-    Feature structure is defined via a string flag ``actor_struct``. Read more on features in class description of ``controllers.CtrlOptPred``.
-    
-    Critic
-    -----
-    
-    ``w_critic`` : weights.
-    
-    Feature structure is defined via a string flag ``critic_struct``. Read more on features in class description of ``controllers.CtrlOptPred``.
-    
-    Attributes
-    ----------
-    mode : : string
-        Controller mode. Currently available only JACS, joint actor-critic (stabilizing).   
-    
-    Read more
-    ---------
-
-    Osinenko, P., Beckenbach, L., Göhrt, T., & Streif, S. (2020). A reinforcement learning method with closed-loop stability guarantee. IFAC-PapersOnLine  
-    
-    """
-
-    def __init__(
-        self,
-        dim_input,
-        dim_output,
-        mode="JACS",
-        ctrl_bnds=[],
-        action_init=[],
-        t0=0,
-        sampling_time=0.1,
-        Nactor=1,
-        actor_optimizer=[],
-        pred_step_size=0.1,
-        state_dyn=[],
-        sys_out=[],
-        state_sys=[],
-        prob_noise_pow=1,
-        is_est_model=0,
-        model_est_stage=1,
-        model_est_period=0.1,
-        buffer_size=20,
-        model_order=3,
-        model_est_checks=0,
-        gamma=1,
-        Ncritic=4,
-        critic_optimizer=[],
-        critic_period=0.1,
-        critic_struct="quad-nomix",
-        actor_struct="quad-nomix",
-        stage_obj_struct="quadratic",
-        stage_obj_pars=[],
-        observation_target=[],
-        safe_ctrl=[],
-        safe_decay_rate=[],
-    ):
-
-        """
-        Parameter specification largely resembles that of ``CtrlOptPred`` class.
-        
-        Parameters
-        ----------
-        dim_input, dim_output : : integer
-            Dimension of input and output which should comply with the system-to-be-controlled.  
-    
-        ctrl_bnds : : array of shape ``[dim_input, 2]``
-            Box control constraints.
-            First element in each row is the lower bound, the second - the upper bound.
-            If empty, control is unconstrained (default).
-        action_init : : array of shape ``[dim_input, ]``   
-            Initial action to initialize optimizers.         
-        t0 : : number
-            Initial value of the controller's internal clock.
-        sampling_time : : number
-            Controller's sampling time (in seconds).
-        state_dyn, sys_out : : functions        
-            Functions that represent the right-hand side, resp., the output of the exogenously passed model.
-            The latter could be, for instance, the true model of the system.
-            In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-            Parameters ``state_dyn, sys_out, state_sys`` are used in those controller modes which rely on them.
-        prob_noise_pow : : number
-            Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
-        is_est_model : : number
-            Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model`. 
-        model_est_stage : : number
-            Initial time segment to fill the estimator's buffer before applying optimal control (in seconds).      
-        model_est_period : : number
-            Time between model estimate updates (in seconds).
-        buffer_size : : natural number
-            Size of the buffer to store data.
-        model_order : : natural number
-            Order of the state-space estimation model
-            
-            .. math::
-                \\begin{array}{ll}
-        			\\hat x^+ & = A \\hat x + B action, \\newline
-        			observation^+  & = C \\hat x + D action.
-                \\end{array}             
-            
-            See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
-            When customizing, :func:`~controllers.CtrlOptPred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
-            neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons``. 
-        model_est_checks : : natural number
-            Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
-            May improve the prediction quality somewhat.
-        gamma : : number in (0, 1]
-            Discounting factor.
-            Characterizes fading of stage objectives along horizon.
-        Ncritic : : natural number
-            Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
-            optimal infinite-horizon objective (a.k.a. the value function). The temporal errors are stacked up using the said buffer.
-        critic_period : : number
-            The same meaning as ``model_est_period`.` 
-        critic_struct, actor_struct : : string
-            Choice of the structure of the critic's and actor's features.
-            
-            Currently available:
-                
-            .. list-table:: Feature structures
-               :widths: 10 90
-               :header-rows: 1
-        
-               * - Mode
-                 - Structure
-               * - 'quad-lin'
-                 - Quadratic-linear
-               * - 'quadratic'
-                 - Quadratic
-               * - 'quad-nomix'
-                 - Quadratic, no mixed terms
-           
-            *Add your specification into the table when customizing the actor and critic*. 
-        stage_obj_struct : : string
-            Choice of the stage objective structure.
-            
-            Currently available:
-               
-            .. list-table:: Running objective structures
-               :widths: 10 90
-               :header-rows: 1
-        
-               * - Mode
-                 - Structure
-               * - 'quadratic'
-                 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars`` should be ``[R1]``
-               * - 'biquadratic'
-                 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
-                   should be ``[R1, R2]``
-        """
-
-        self.actor_optimizer = actor_optimizer
-        self.critic_optimizer = critic_optimizer
-
-        is_symbolic = self.actor_optimizer.is_symbolic
-
-        npcsd = SymbolicHandler(is_symbolic=is_symbolic)
-
-        self.dim_input = dim_input
-        self.dim_output = dim_output
-
-        self.mode = mode
-
-        self.ctrl_clock = t0
-        self.sampling_time = sampling_time
-
-        # Controller: common
-        self.Nactor = Nactor
-        self.pred_step_size = pred_step_size
-
-        self.action_min = npcsd.array(ctrl_bnds[:, 0])
-        self.action_max = npcsd.array(ctrl_bnds[:, 1])
-        self.action_sqn_min = rep_mat(self.action_min, 1, Nactor)
-        self.action_sqn_max = rep_mat(self.action_max, 1, Nactor)
-
-        if len(action_init) == 0:
-            self.action_curr = self.action_min / 10
-            self.action_sqn_init = rep_mat(self.action_min / 10, 1, self.Nactor)
-        else:
-            self.action_curr = action_init
-            self.action_sqn_init = rep_mat(action_init, 1, self.Nactor)
-
-        self.action_buffer = npcsd.zeros([buffer_size, dim_input])
-        self.observation_buffer = npcsd.zeros([buffer_size, dim_output])
-
-        # Exogeneous model's things
-        self.state_dyn = state_dyn
-        self.sys_out = sys_out
-        self.state_sys = state_sys
-
-        # Model estimator's things
-        self.est_clock = t0
-        self.is_prob_noise = 1
-        self.prob_noise_pow = prob_noise_pow
-        self.model_est_stage = model_est_stage
-        self.model_est_period = model_est_period
-        self.buffer_size = buffer_size
-        self.model_order = model_order
-        self.model_est_checks = model_est_checks
-
-        A = npcsd.zeros([self.model_order, self.model_order])
-        B = npcsd.zeros([self.model_order, self.dim_input])
-        C = npcsd.zeros([self.dim_output, self.model_order])
-        D = npcsd.zeros([self.dim_output, self.dim_input])
-        x0est = npcsd.zeros(self.model_order)
-
-        self.my_model = models.ModelSS(A, B, C, D, x0est)
-
-        self.model_stack = []
-        for k in range(self.model_est_checks):
-            self.model_stack.append(self.my_model)
-
-        # RL elements
-        self.critic_clock = t0
-        self.gamma = gamma
-        self.Ncritic = Ncritic
-        self.Ncritic = np.min(
-            [self.Ncritic, self.buffer_size - 1]
-        )  # Clip critic buffer size
-        self.critic_period = critic_period
-        self.critic_struct = critic_struct
-        self.actor_struct = actor_struct
-        self.stage_obj_struct = stage_obj_struct
-        self.stage_obj_pars = stage_obj_pars
-        self.observation_target = observation_target
-
-        self.accum_obj_val = 0
-
-        if self.critic_struct == "quad-lin":
-            self.dim_critic = int(
-                (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
-            )
-            self.Wmin = -1e3 * npcsd.ones(self.dim_critic)
-            self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
-        elif self.critic_struct == "quadratic":
-            self.dim_critic = int((self.dim_output + 1) * self.dim_output / 2).astype(
-                int
-            )
-            self.Wmin = npcsd.zeros(self.dim_critic)
-            self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
-        elif self.critic_struct == "quad-nomix":
-            self.dim_critic = self.dim_output
-            self.Wmin = npcsd.zeros(self.dim_critic)
-            self.Wmax = 1e3 * npcsd.ones(self.dim_critic)
-
-        self.w_critic_prev = self.Wmin
-        self.w_critic_init = npcsd.ones(self.dim_critic)
-
-        self.lmbd_prev = 0
-        self.lmbd_init = 0
-
-        self.lmbd_min = 0
-        self.lmbd_max = 1
-
-        if self.actor_struct == "quad-lin":
-            self.dim_actor_per_input = int(
-                (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
-            )
-        elif self.actor_struct == "quadratic":
-            self.dim_actor_per_input = int((self.dim_output + 1) * self.dim_output / 2)
-        elif self.actor_struct == "quad-nomix":
-            self.dim_actor_per_input = self.dim_output
-
-        self.dim_actor = self.dim_actor_per_input * self.dim_input
-
-        self.Hmin = -0.5e1 * npcsd.ones(self.dim_actor)
-        self.Hmax = 0.5e1 * npcsd.ones(self.dim_actor)
-
-        # Stabilizing constraint stuff
-        self.safe_ctrl = safe_ctrl  # Safe controller (agent)
-        self.safe_decay_rate = safe_decay_rate
-
-    def reset(self, t0):
-        """
-        Resets agent for use in multi-episode simulation.
-        Only internal clock and current actions are reset.
-        All the learned parameters are retained.
-        
-        """
-        self.ctrl_clock = t0
-        self.action_curr = self.action_min / 10
-
-    def receive_sys_state(self, state):
-        """
-        Fetch exogenous model state. Used in some controller modes. See class documentation.
-
-        """
-        self.state_sys = state
-
-    def stage_obj(self, observation, action, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-        """
-        Stage (equivalently, instantaneous or running) objective. Depending on the context, it is also called utility, reward, running cost etc.
-        
-        See class documentation.
-        """
-        if self.observation_target == []:
-            chi = npcsd.concatenate([observation.T, action.T])
-        else:
-            chi = npcsd.concatenate([observation - self.observation_target, action])
-
-        stage_obj = self.stage_obj_model(chi, chi, is_symbolic=is_symbolic)
-
-        return stage_obj
-
-    def upd_accum_obj(self, observation, action, is_symbolic=False):
-        """
-        Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
-        If the agent succeeded to stabilize the system, ``accum_obj`` would converge to a finite value which is the performance mark.
-        The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead).
-        
-        """
-        self.accum_obj_val += (
-            self.stage_obj(observation.T, action.T, is_symbolic) * self.sampling_time
-        )
-
-    def _w_actor_from_action(self, action, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-        """
-        Compute actor weights from a given action.
-        
-        The current implementation is for linearly parametrized models so far.
-
-        """
-        regressor_actor = self.actor(observation, observation, is_symbolic=is_symbolic)
-
-        a = np.array(npcsd.array(regressor_actor)).T
-        b = np.array(npcsd.array(action)).T
-
-        return reshape(lstsq(a, b)[0].T, self.dim_actor,)
-
-    def _actor_critic_optimizer(self, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-        """
-        This method is effectively a wrapper for an optimizer that minimizes :func:`~controllers.CtrlRLStab._actor_critic_cost`.
-        It implements the stabilizing constraints.
-        
-        The variable ``w_all`` here is a stack of actor, critic and auxiliary critic weights.
-        
-        Important remark: although the current implementation concentrates on a joint coss (loss) of actor-critic (see :func:`~controllers.CtrlRLStab._actor_critic_cost`),
-        nothing stops us from doing a usual split actor-critic training.
-        The key point of CtrlRLStab agent is its stabilizing constraints that can actually be invoked as a filter (a safety checker), that replaces the action and 
-        critic parameters for safe ones if any of the stabilizing constraints are violated.
-
-        """
-
-        def constr_stab_par_decay(w_all, observation):
-            w_critic = w_all[: self.dim_critic]
-            lmbd = w_all[self.dim_critic]
-
-            critic_curr = self._critic(observation, self.w_critic_prev, self.lmbd_prev)
-            critic_new = self._critic(observation, w_critic, lmbd)
-
-            return critic_new - critic_curr
-
-        def constr_stab_LF_bound(w_all, observation):
-            w_critic = w_all[: self.dim_critic]
-            lmbd = w_all[self.dim_critic]
-            w_actor = w_all[-self.dim_actor :]
-
-            action = self._actor(observation, w_actor)
-
-            observation_next = observation + self.pred_step_size * self.state_dyn(
-                [], observation, action
-            )  # Euler scheme
-
-            critic_next = self._critic(observation_next, w_critic, lmbd)
-
-            return self.safe_ctrl.compute_LF(observation_next) - critic_next
-
-        def constr_stab_decay(w_all, observation):
-            w_critic = w_all[: self.dim_critic]
-            lmbd = w_all[self.dim_critic]
-            w_actor = w_all[-self.dim_actor :]
-
-            action = self._actor(observation, w_actor)
-
-            observation_next = observation + self.pred_step_size * self.state_dyn(
-                [], observation, action
-            )  # Euler scheme
-
-            critic_new = self._critic(observation, w_critic, lmbd)
-            critic_next = self._critic(observation_next, w_critic, lmbd)
-
-            return critic_next - critic_new + self.safe_decay_rate
-
-        def constr_stab_positive(w_all, observation):
-            w_critic = w_all[: self.dim_critic]
-            lmbd = w_all[self.dim_critic]
-
-            critic_new = self._critic(observation, w_critic, lmbd)
-
-            return -critic_new
-
-        # Constraint violation tolerance
-        eps1 = 1e-3
-        eps2 = 1e-3
-        eps3 = 1e-3
-        eps4 = 1e-3
-
-        # my_constraints = (
-        #     NonlinearConstraint(lambda w_all: constr_stab_par_decay( w_all, observation ), -np.inf, eps1, keep_feasible=True),
-        #     NonlinearConstraint(lambda w_all: constr_stab_LF_bound( w_all, observation ), -np.inf, eps2, keep_feasible=True),
-        #     NonlinearConstraint(lambda w_all: constr_stab_decay( w_all, observation ), -np.inf, eps3, keep_feasible=True),
-        #     NonlinearConstraint(lambda w_all: constr_stab_positive( w_all, observation ), -np.inf, eps4, keep_feasible=True)
-        #     )
-
-        my_constraints = (
-            NonlinearConstraint(
-                lambda w_all: constr_stab_par_decay(w_all, observation), -np.inf, eps1
-            ),
-            NonlinearConstraint(
-                lambda w_all: constr_stab_LF_bound(w_all, observation), -np.inf, eps2
-            ),
-            NonlinearConstraint(
-                lambda w_all: constr_stab_decay(w_all, observation), -np.inf, eps3
-            ),
-            NonlinearConstraint(
-                lambda w_all: constr_stab_positive(w_all, observation), -np.inf, eps4
-            ),
-        )
-
-        # Optimization methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
-        opt_method = "SLSQP"
-        if opt_method == "trust-constr":
-            opt_options = {"maxiter": 10, "disp": False}  #'disp': True, 'verbose': 2}
-        else:
-            opt_options = {
-                "maxiter": 10,
-                "maxfev": 10,
-                "disp": False,
-                "adaptive": True,
-                "xatol": 1e-4,
-                "fatol": 1e-4,
-            }  # 'disp': True, 'verbose': 2}
-
-        # Bounds are not practically necessary for stabilizing joint actor-critic to function
-        # bnds = sp.optimize.Bounds(np.hstack([self.Wmin, self.lmbd_min, self.Hmin]),
-        #                           np.hstack([self.Wmax, self.lmbd_max, self.Hmax]),
-        #                           keep_feasible=True)
-
-        # ToDo: make a better routine to determine initial actor weights for the given action
-        self.w_actor_init = self._w_actor_from_action(
-            self.safe_ctrl.compute_action_vanila(observation), observation, is_symbolic
-        )
-
-        # DEBUG ===================================================================
-        # ================================Constraint debugger
-
-        # w_all = npcsd.concatenate([self.w_critic_init, npcsd.rc_array([self.lmbd_init]), self.w_actor_init])
-
-        # w_critic = w_all[:self.dim_critic]
-        # lmbd = w_all[self.dim_critic]
-        # w_actor = w_all[-self.dim_actor:]
-
-        # action = reshape(w_actor, (self.dim_input, self.dim_actor_per_input)) @ self._regressor_actor( observation )
-
-        # constr_stab_par_decay(w_all, observation)
-        # constr_stab_LF_bound(w_all, observation)
-        # constr_stab_decay(w_all, observation)
-        # constr_stab_positive(w_all, observation)
-
-        # /DEBUG ===================================================================
-
-        # Notice `bounds=bnds` is removed from arguments of minimize.
-        # It is because bounds are not practically necessary for stabilizing joint actor-critic to function
-        # w_all = minimize(self._actor_critic_cost,
-        #                     np.hstack([self.w_critic_init,npcsd.rc_array([self.lmbd_init]),self.w_actor_init]),
-        #                     method=opt_method, tol=1e-4, constraints=my_constraints, options=opt_options).x
-        x0 = npcsd.hstack(
-            [
-                npcsd.array(self.w_critic_init).T,
-                npcsd.array([self.lmbd_init]),
-                npcsd.array(self.w_actor_init).T,
-            ]
-        )
-
-        cost_function, symbolic_var = npcsd.create_cost_function(
-            self._actor_critic_cost, x0=x0,
-        )
-
-        w_all = self.actor_optimizer.optimize(
-            cost_function, x0=x0, symbolic_var=symbolic_var
-        ).x
-
-        w_critic = w_all[: self.dim_critic]
-        lmbd = w_all[self.dim_critic]
-        w_actor = w_all[-self.dim_actor :]
-
-        action = self._actor(observation, w_actor, is_symbolic)
-
-        # DEBUG ===================================================================
-        # ================================Constraint debugger
-        # R  = '\033[31m'
-        # Bl  = '\033[30m'
-        # headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']
-        # dataRow = [constr_stab_par_decay(w_all, observation), constr_stab_LF_bound(w_all, observation), constr_stab_decay(w_all, observation), constr_stab_positive(w_all, observation)]
-        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')
-        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
-        # print(R+table+Bl)
-        # /DEBUG ===================================================================
-
-        # Safety checker!
-        if (
-            constr_stab_par_decay(w_all, observation) >= eps1
-            or constr_stab_LF_bound(w_all, observation) >= eps2
-            or constr_stab_decay(w_all, observation) >= eps3
-            or constr_stab_positive(w_all, observation) >= eps4
-        ):
-
-            w_critic = self.w_critic_init
-            lmbd = self.lmbd_init
-
-            action = self.safe_ctrl.compute_action_vanila(observation)
-
-            w_actor = self._w_actor_from_action(action, observation)
-
-        # DEBUG ===================================================================
-        # ================================Put safe controller through
-        # w_critic = self.w_critic_init
-        # lmbd = self.lmbd_init
-        # action = self.safe_ctrl.compute_action_vanila(observation)
-        # /DEBUG ===================================================================
-
-        # DEBUG ===================================================================
-        # ================================Constraint debugger
-        # R  = '\033[31m'
-        # Bl  = '\033[30m'
-        # headerRow = ['par_decay', 'LF_bound', 'decay', 'stab_positive']
-        # dataRow = [constr_stab_par_decay(w_all, observation), constr_stab_LF_bound(w_all, observation), constr_stab_decay(w_all, observation), constr_stab_positive(w_all, observation)]
-        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f')
-        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
-        # print(R+table+Bl)
-        # /DEBUG ===================================================================
-
-        # STUB ===================================================================
-        # ================================Optimization of one stage_obj + LF_next
-        # def J_tmp(action, observation):
-        #     observation_next = observation + self.pred_step_size * self.state_dyn([], observation, action)
-        #     return self.safe_ctrl.compute_LF(observation_next) + self.stage_obj(observation_next, action)
-        #     # return self.safe_ctrl.compute_LF(observation_next)
-
-        # action = minimize(lambda action: J_tmp(action, observation),
-        #               npcsd.zeros(2),
-        #               method=opt_method, tol=1e-6, options=opt_options).x
-
-        # /STUB ===================================================================
-
-        return w_critic, lmbd, action
-
-    def compute_action_sampled(self, t, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-
-        time_in_sample = t - self.ctrl_clock
-
-        if time_in_sample >= self.sampling_time:  # New sample
-            self.ctrl_clock = t
-            # Update controller's internal clock
-            self.compute_action(t, observation, is_symbolic)
-
-        else:
-            return self.action_curr
-
-    def compute_action(self, t, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-
-        # Update data buffers
-        self.action_buffer = npcsd.push_vec(
-            self.action_buffer, npcsd.array(self.action_curr)
-        )
-        npcsd.push_vec(npcsd.array(self.observation_buffer), npcsd.array(observation))
-
-        w_critic, lmbd, action = self._actor_critic_optimizer(observation, is_symbolic)
-
-        self.w_critic_prev = w_critic
-        self.lmbd_prev = lmbd
-
-        for k in range(2):
-            action[k] = np.clip(action[k], self.action_min[k], self.action_max[k])
-
-        self.action_curr = action
-
-        return action
-
-
-class CtrlOptPred:
-    """
-    Class of predictive optimal controllers, primarily model-predictive control and predictive reinforcement learning, that optimize a finite-horizon cost.
-    
-    Currently, the actor model is trivial: an action is generated directly without additional policy parameters.
-        
-    Attributes
-    ----------
-    dim_input, dim_output : : integer
-        Dimension of input and output which should comply with the system-to-be-controlled.
-    mode : : string
-        Controller mode. Currently available (:math:`\\rho` is the stage objective, :math:`\\gamma` is the discounting factor):
-          
-        .. list-table:: Controller modes
-           :widths: 75 25
-           :header-rows: 1
-    
-           * - Mode
-             - Cost function
-           * - 'MPC' - Model-predictive control (MPC)
-             - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right)= \\sum_{k=1}^{N_a} \\gamma^{k-1} \\rho(y_k, u_k)`
-           * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`\\rho`
-             - :math:`J_a \\left( y_1, \\{action\}_{1}^{N_a}\\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\rho(y_k, u_k) + \\hat Q^{\\theta}(y_{N_a}, u_{N_a})` 
-           * - 'SQL' - RL/ADP via stacked Q-learning
-             - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\hat \\gamma^{k-1} Q^{\\theta}(y_{N_a}, u_{N_a})`               
-        
-        Here, :math:`\\theta` are the critic parameters (neural network weights, say) and :math:`y_1` is the current observation.
-        
-        *Add your specification into the table when customizing the agent*.    
-
-    ctrl_bnds : : array of shape ``[dim_input, 2]``
-        Box control constraints.
-        First element in each row is the lower bound, the second - the upper bound.
-        If empty, control is unconstrained (default).
-    action_init : : array of shape ``[dim_input, ]``   
-        Initial action to initialize optimizers.          
-    t0 : : number
-        Initial value of the controller's internal clock.
-    sampling_time : : number
-        Controller's sampling time (in seconds).
-    Nactor : : natural number
-        Size of prediction horizon :math:`N_a`. 
-    pred_step_size : : number
-        Prediction step size in :math:`J_a` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
-        convenience. Larger prediction step size leads to longer factual horizon.
-    state_dyn, sys_out : : functions        
-        Functions that represent the right-hand side, resp., the output of the exogenously passed model.
-        The latter could be, for instance, the true model of the system.
-        In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-        Parameters ``state_dyn, sys_out, state_sys`` are used in those controller modes which rely on them.
-    prob_noise_pow : : number
-        Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
-    is_est_model : : number
-        Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model`. 
-    model_est_stage : : number
-        Initial time segment to fill the estimator's buffer before applying optimal control (in seconds).      
-    model_est_period : : number
-        Time between model estimate updates (in seconds).
-    buffer_size : : natural number
-        Size of the buffer to store data.
-    model_order : : natural number
-        Order of the state-space estimation model
-        
-        .. math::
-            \\begin{array}{ll}
-    			\\hat x^+ & = A \\hat x + B action, \\newline
-    			observation^+  & = C \\hat x + D action.
-            \\end{array}             
-        
-        See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
-        When customizing, :func:`~controllers.CtrlOptPred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
-        neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons``. 
-    model_est_checks : : natural number
-        Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
-        May improve the prediction quality somewhat.
-    gamma : : number in (0, 1]
-        Discounting factor.
-        Characterizes fading of stage objectives along horizon.
-    Ncritic : : natural number
-        Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
-        optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer.
-    critic_period : : number
-        The same meaning as ``model_est_period``. 
-    critic_struct : : natural number
-        Choice of the structure of the critic's features.
-        
-        Currently available:
-            
-        .. list-table:: Critic structures
-           :widths: 10 90
-           :header-rows: 1
-    
-           * - Mode
-             - Structure
-           * - 'quad-lin'
-             - Quadratic-linear
-           * - 'quadratic'
-             - Quadratic
-           * - 'quad-nomix'
-             - Quadratic, no mixed terms
-           * - 'quad-mix'
-             - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, 
-               where :math:`w` is the critic's weight vector
-       
-        *Add your specification into the table when customizing the critic*. 
-    stage_obj_struct : : string
-        Choice of the stage objective structure.
-        
-        Currently available:
-           
-        .. list-table:: Critic structures
-           :widths: 10 90
-           :header-rows: 1
-    
-           * - Mode
-             - Structure
-           * - 'quadratic'
-             - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars`` should be ``[R1]``
-           * - 'biquadratic'
-             - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
-               should be ``[R1, R2]``   
-        
-        *Pass correct stage objective parameters in* ``stage_obj_pars`` *(as a list)*
-        
-        *When customizing the stage objective, add your specification into the table above*
-        
-    References
-    ----------
-    .. [1] Osinenko, Pavel, et al. "Stacked adaptive dynamic programming with unknown system model." IFAC-PapersOnLine 50.1 (2017): 4150-4155        
-        
-    """
-
+class OptimalController(ABC):
     def __init__(
         self,
         action_init=[],
@@ -781,7 +57,6 @@ class CtrlOptPred:
         state_dyn=[],
         sys_out=[],
         state_sys=[],
-        state_predictor=[],
         prob_noise_pow=1,
         is_est_model=0,
         model_est_stage=1,
@@ -795,123 +70,7 @@ class CtrlOptPred:
         stage_obj_pars=[],
         observation_target=[],
     ):
-        """
-        Parameters
-        ----------
-        dim_input, dim_output : : integer
-            Dimension of input and output which should comply with the system-to-be-controlled.
-        mode : : string
-            Controller mode. Currently available (:math:`\\rho` is the stage objective, :math:`\\gamma` is the discounting factor):
-              
-            .. list-table:: Controller modes
-               :widths: 75 25
-               :header-rows: 1
-        
-               * - Mode
-                 - Cost function
-               * - 'MPC' - Model-predictive control (MPC)
-                 - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right)= \\sum_{k=1}^{N_a} \\gamma^{k-1} \\rho(y_k, u_k)`
-               * - 'RQL' - RL/ADP via :math:`N_a-1` roll-outs of :math:`\\rho`
-                 - :math:`J_a \\left( y_1, \\{action\}_{1}^{N_a}\\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\rho(y_k, u_k) + \\hat Q^{\\theta}(y_{N_a}, u_{N_a})` 
-               * - 'SQL' - RL/ADP via stacked Q-learning
-                 - :math:`J_a \\left( y_1, \\{action\\}_1^{N_a} \\right) = \\sum_{k=1}^{N_a-1} \\gamma^{k-1} \\hat Q^{\\theta}(y_{N_a}, u_{N_a})`               
-            
-            Here, :math:`\\theta` are the critic parameters (neural network weights, say) and :math:`y_1` is the current observation.
-            
-            *Add your specification into the table when customizing the agent* .   
-    
-        ctrl_bnds : : array of shape ``[dim_input, 2]``
-            Box control constraints.
-            First element in each row is the lower bound, the second - the upper bound.
-            If empty, control is unconstrained (default).
-        action_init : : array of shape ``[dim_input, ]``   
-            Initial action to initialize optimizers.              
-        t0 : : number
-            Initial value of the controller's internal clock
-        sampling_time : : number
-            Controller's sampling time (in seconds)
-        Nactor : : natural number
-            Size of prediction horizon :math:`N_a` 
-        pred_step_size : : number
-            Prediction step size in :math:`J` as defined above (in seconds). Should be a multiple of ``sampling_time``. Commonly, equals it, but here left adjustable for
-            convenience. Larger prediction step size leads to longer factual horizon.
-        state_dyn, sys_out : : functions        
-            Functions that represent the right-hand side, resp., the output of the exogenously passed model.
-            The latter could be, for instance, the true model of the system.
-            In turn, ``state_sys`` represents the (true) current state of the system and should be updated accordingly.
-            Parameters ``state_dyn, sys_out, state_sys`` are used in those controller modes which rely on them.
-        prob_noise_pow : : number
-            Power of probing noise during an initial phase to fill the estimator's buffer before applying optimal control.   
-        is_est_model : : number
-            Flag whether to estimate a system model. See :func:`~controllers.CtrlOptPred._estimate_model`. 
-        model_est_stage : : number
-            Initial time segment to fill the estimator's buffer before applying optimal control (in seconds).      
-        model_est_period : : number
-            Time between model estimate updates (in seconds).
-        buffer_size : : natural number
-            Size of the buffer to store data.
-        model_order : : natural number
-            Order of the state-space estimation model
-            
-            .. math::
-                \\begin{array}{ll}
-        			\\hat x^+ & = A \\hat x + B action, \\newline
-        			observation^+  & = C \\hat x + D action.
-                \\end{array}             
-            
-            See :func:`~controllers.CtrlOptPred._estimate_model`. This is just a particular model estimator.
-            When customizing, :func:`~controllers.CtrlOptPred._estimate_model` may be changed and in turn the parameter ``model_order`` also. For instance, you might want to use an artifial
-            neural net and specify its layers and numbers of neurons, in which case ``model_order`` could be substituted for, say, ``Nlayers``, ``Nneurons`` 
-        model_est_checks : : natural number
-            Estimated model parameters can be stored in stacks and the best among the ``model_est_checks`` last ones is picked.
-            May improve the prediction quality somewhat.
-        gamma : : number in (0, 1]
-            Discounting factor.
-            Characterizes fading of stage objectives along horizon.
-        Ncritic : : natural number
-            Critic stack size :math:`N_c`. The critic optimizes the temporal error which is a measure of critic's ability to capture the
-            optimal infinite-horizon cost (a.k.a. the value function). The temporal errors are stacked up using the said buffer.
-        critic_period : : number
-            The same meaning as ``model_est_period``. 
-        critic_struct : : natural number
-            Choice of the structure of the critic's features.
-            
-            Currently available:
-                
-            .. list-table:: Critic feature structures
-               :widths: 10 90
-               :header-rows: 1
-        
-               * - Mode
-                 - Structure
-               * - 'quad-lin'
-                 - Quadratic-linear
-               * - 'quadratic'
-                 - Quadratic
-               * - 'quad-nomix'
-                 - Quadratic, no mixed terms
-               * - 'quad-mix'
-                 - Quadratic, no mixed terms in input and output, i.e., :math:`w_1 y_1^2 + \\dots w_p y_p^2 + w_{p+1} y_1 u_1 + \\dots w_{\\bullet} u_1^2 + \\dots`, 
-                   where :math:`w` is the critic's weights
-           
-            *Add your specification into the table when customizing the critic*.
-        stage_obj_struct : : string
-            Choice of the stage objective structure.
-            
-            Currently available:
-               
-            .. list-table:: Running objective structures
-               :widths: 10 90
-               :header-rows: 1
-        
-               * - Mode
-                 - Structure
-               * - 'quadratic'
-                 - Quadratic :math:`\\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars`` should be ``[R1]``
-               * - 'biquadratic'
-                 - 4th order :math:`\\left( \\chi^\\top \\right)^2 R_2 \\left( \\chi \\right)^2 + \\chi^\\top R_1 \\chi`, where :math:`\\chi = [observation, action]`, ``stage_obj_pars``
-                   should be ``[R1, R2]``
-        """
+
         self.actor = actor
         is_symbolic = self.actor.actor_optimizer.is_symbolic
 
@@ -937,12 +96,12 @@ class CtrlOptPred:
             )
 
         if len(action_init) == 0:
-            self.action_curr = self.action_min / 10
+            self.action_prev = self.action_min / 10
             self.action_sqn_init = npcsd.rep_mat(
                 self.action_min / 10, 1, self.actor.Nactor
             )
         else:
-            self.action_curr = action_init
+            self.action_prev = action_init
             self.action_sqn_init = npcsd.rep_mat(action_init, 1, self.actor.Nactor)
 
         self.action_buffer = npcsd.zeros([buffer_size, self.dim_input])
@@ -952,8 +111,7 @@ class CtrlOptPred:
         self.state_dyn = state_dyn
         self.sys_out = sys_out
         self.state_sys = state_sys
-        self.state_predictor = state_predictor
-
+        self.state_sys_prev = state_sys
         # Model estimator's things
         self.is_est_model = is_est_model
         self.est_clock = t0
@@ -999,13 +157,14 @@ class CtrlOptPred:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = self.action_min / 10
+        self.action_prev = self.action_min / 10
 
     def receive_sys_state(self, state):
         """
         Fetch exogenous model state. Used in some controller modes. See class documentation.
 
         """
+        self.state_sys_prev = self.state_sys
         self.state_sys = state
 
     def stage_obj(self, observation, action, is_symbolic=False):
@@ -1151,35 +310,190 @@ class CtrlOptPred:
     def compute_action_sampled(self, t, observation, constraints=(), is_symbolic=False):
 
         time_in_sample = t - self.ctrl_clock
+        timeInCriticPeriod = t - self.critic_clock
+        is_critic_update = timeInCriticPeriod >= self.critic_period
 
         if time_in_sample >= self.sampling_time:  # New sample
             # Update controller's internal clock
             self.ctrl_clock = t
-
+            # DEBUG ==============================
+            print(self.ctrl_clock)
+            # /DEBUG =============================
             action = self.compute_action(
-                t, observation, constraints, is_symbolic=is_symbolic
+                t,
+                observation,
+                is_critic_update=is_critic_update,
+                is_symbolic=is_symbolic,
             )
 
-            self.action_curr = action
+            self.action_prev = action
 
             return action
 
         else:
-            return self.action_curr
+            return self.action_prev
+
+    @abstractmethod
+    def compute_action(self):
+        pass
+
+
+class CtrlRLStab(OptimalController):
+    def __init__(
+        self,
+        safe_ctrl=[],
+        safe_decay_rate=[],
+        eps_action=1e-3,
+        eps_weights=1e-3,
+        eps_critic=1e-1,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        # Stabilizing constraint stuff
+        self.safe_ctrl = safe_ctrl  # Safe controller (agent)
+        self.safe_decay_rate = safe_decay_rate
+        self.eps_action = eps_action
+        self.eps_weights = eps_weights
+        self.eps_critic = eps_critic
+        self.critic_values = []
+        self.g_emergency_critic_deriv = []
+        self.g_emerency_critic_diff_weights = []
+
+    def update_critic(self, t=None):
+        npcsd = SymbolicHandler(is_symbolic=True)
+        g = lambda x: npcsd.norm_1(x - self.critic.weights_prev) - self.eps_weights
+        self.critic.weights = self.critic._critic_optimizer(
+            constraints=g, is_symbolic=True, t=t
+        )
+
+    def update_actor(self, observation, t=None):
+        npcsd = SymbolicHandler(is_symbolic=True)
+        g = lambda x: npcsd.norm_1(x - self.action_prev) - self.eps_action
+        action = self.actor._actor_optimizer(
+            observation, constraints=g, is_symbolic=True, t=t
+        )
+        self.actor.action_prev = action
+        return action
+
+    def compute_action(self, t, observation, is_critic_update=False, is_symbolic=False):
+        npcsd = SymbolicHandler(is_symbolic=True)
+
+        observation_prev = self.critic.observation_buffer[-1, :]
+
+        self.critic.action_buffer = push_vec(
+            self.critic.action_buffer, self.action_prev, is_symbolic=is_symbolic
+        )
+
+        self.critic.observation_buffer = npcsd.push_vec(
+            npcsd.array(self.critic.observation_buffer), npcsd.array(observation)
+        )
+        critic_diff_factual = self.critic(
+            self.critic.weights, observation, is_symbolic=is_symbolic
+        ) - self.critic(self.critic.weights, observation_prev, is_symbolic=is_symbolic)
+
+        # DEBUG ===================================================================
+        self.critic_values.append(
+            [
+                SymbolicHandler(is_symbolic).array(
+                    self.critic(
+                        self.critic.weights, observation, is_symbolic=is_symbolic
+                    )
+                ),
+                npcsd.array(critic_diff_factual),
+                t,
+            ]
+        )
+        # /DEBUG ===================================================================
+
+        if critic_diff_factual <= self.safe_decay_rate * self.sampling_time:
+            action = self.update_actor(observation, t=t)
+            # self.critic.weights = (
+            #     self.critic.weights + self.eps_weights
+            # )
+            self.update_critic(t=t)
+        else:
+            action = self.safe_ctrl.compute_action(observation)
+            self.critic.weights = self.emergency_search(
+                action, observation, is_symbolic=is_symbolic, t=t
+            )
+
+        self.critic.weights_prev = self.critic.weights
+
+        return action
+
+    def emergency_search(self, action, observation, is_symbolic=False, t=None):
+        print("Emergency started!!!!!!!!!!!!")
+        npcsd = SymbolicHandler(is_symbolic)
+
+        options = {
+            "print_time": 0,
+            "ipopt.max_iter": 200,
+            "ipopt.print_level": 0,
+            "ipopt.acceptable_tol": 1e-7,
+            "ipopt.acceptable_obj_change_tol": 1e-4,
+        }
+
+        state_dyn_vector = self.state_dyn([], observation, action)
+
+        critic_gradient, weights_symbolic = self.critic.grad_observation(
+            observation, is_symbolic
+        )
+        critic_deriv = npcsd.dot(critic_gradient, state_dyn_vector)
+        critic_curr = self.critic(
+            weights_symbolic, npcsd.array(observation), is_symbolic=True
+        )
+        critic_prev = self.critic(
+            self.critic.weights, observation, is_symbolic=is_symbolic
+        )
+        critic_diff_weights = critic_curr - critic_prev
+
+        nlp = {}
+        nlp["x"] = weights_symbolic
+        nlp["f"] = critic_deriv
+        nlp["g"] = npcsd.concatenate([critic_deriv, critic_diff_weights])
+        solver = nlpsol("solver", "ipopt", nlp, options)
+        result = solver(
+            x0=npcsd.array(self.critic.weights),
+            ubx=self.critic.Wmax,
+            lbx=self.critic.Wmin,
+            ubg=npcsd.array([-2 * self.safe_decay_rate, self.eps_critic]),
+        )["x"]
+
+        ##### DEBUG
+        g1 = Function("g1", [weights_symbolic], [critic_diff_weights])
+        g2 = Function(
+            "g2", [weights_symbolic], [critic_deriv + 2 * self.safe_decay_rate]
+        )
+        critic_deriv = Function("f", [weights_symbolic], [critic_deriv])
+
+        self.g_emergency_critic_deriv.append([g2(result), t])
+        self.g_emerency_critic_diff_weights.append([g1(result), t])
+
+        # row_header = ["Dg1", "Dg2", "critic_deriv"]
+        # row_data = [g1(result), g2(result), critic_deriv(result)]
+        # row_format = ("8.3f", "8.3f", "8.3f")
+        # table = tabulate(
+        #     [row_header, row_data],
+        #     floatfmt=row_format,
+        #     headers="firstrow",
+        #     tablefmt="grid",
+        # )
+
+        # print(table)
+        ##### DEBUG
+
+        return result
+
+
+class CtrlOptPred(OptimalController):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def compute_action(
-        self, t, observation, constraints=None, is_symbolic=False,
+        self, t, observation, is_critic_update=False, is_symbolic=False,
     ):
         npcsd = SymbolicHandler(is_symbolic)
-        """
-        Main method. See class documentation.
-        
-        Customization
-        -------------         
-        
-        Add your modes, that you introduced in :func:`~controllers.CtrlOptPred._actor_cost`, here.
-
-        """
 
         if self.ctrl_mode == "MPC":
             # Apply control when model estimation phase is over
@@ -1198,31 +512,30 @@ class CtrlOptPred:
 
         elif self.ctrl_mode in ["RQL", "SQL"]:
             # Critic
-            timeInCriticPeriod = t - self.critic_clock
 
             # Update data buffers
-            self.action_buffer = push_vec(
-                self.action_buffer, self.action_curr, is_symbolic=is_symbolic
+            self.critic.action_buffer = push_vec(
+                self.critic.action_buffer, self.action_prev, is_symbolic=is_symbolic
             )
 
-            self.observation_buffer = npcsd.push_vec(
-                npcsd.array(self.observation_buffer), npcsd.array(observation)
+            self.critic.observation_buffer = npcsd.push_vec(
+                npcsd.array(self.critic.observation_buffer), npcsd.array(observation)
             )
 
-            if timeInCriticPeriod >= self.critic_period:
+            if is_critic_update:
                 # Update critic's internal clock
                 self.critic_clock = t
 
-                self.critic.w_critic = self.critic._critic_optimizer(
+                self.critic.weights = self.critic._critic_optimizer(
                     is_symbolic=is_symbolic
                 )
-                self.critic.w_critic_prev = self.critic.w_critic
+                self.critic.weights_prev = self.critic.weights
 
                 # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
-                # self.w_critic_init = self.w_critic_prev
+                # self.weights_init = self.weights_prev
 
             else:
-                self.critic.w_critic = self.critic.w_critic_prev
+                self.critic.weights = self.critic.weights_prev
 
             # Actor. Apply control when model estimation phase is over
             if self.is_prob_noise and self.is_est_model:
@@ -1289,7 +602,7 @@ class CtrlNominal3WRobot:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.action_curr = npcsd.zeros(2)
+        self.action_prev = npcsd.zeros(2)
 
     def reset(self, t0, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -1298,7 +611,7 @@ class CtrlNominal3WRobot:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = npcsd.zeros(2)
+        self.action_prev = npcsd.zeros(2)
 
     def _zeta(self, xNI, theta, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -1483,7 +796,7 @@ class CtrlNominal3WRobot:
 
         return uCart
 
-    def compute_action(self, t, observation):
+    def compute_action_sampled(self, t, observation, is_symbolic=False):
         """
         See algorithm description in [[1]_], [[2]_].
         
@@ -1505,12 +818,7 @@ class CtrlNominal3WRobot:
             self.ctrl_clock = t
 
             # This controller needs full-state measurement
-            xNI, eta = self._Cart2NH(observation)
-            theta_star = self._minimizer_theta(xNI, eta)
-            kappa_val = self._kappa(xNI, theta_star)
-            z = eta - kappa_val
-            uNI = -self.ctrl_gain * z
-            action = self._NH2ctrl_Cart(xNI, eta, uNI)
+            action = self.compute_action(observation)
 
             if self.ctrl_bnds.any():
                 for k in range(2):
@@ -1518,7 +826,7 @@ class CtrlNominal3WRobot:
                         action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
                     )
 
-            self.action_curr = action
+            self.action_prev = action
 
             # DEBUG ===================================================================
             # ================================LF debugger
@@ -1534,9 +842,9 @@ class CtrlNominal3WRobot:
             return action
 
         else:
-            return self.action_curr
+            return self.action_prev
 
-    def compute_action_vanila(self, observation):
+    def compute_action(self, observation, is_symbolic=False):
         """
         Same as :func:`~CtrlNominal3WRobot.compute_action`, but without invoking the internal clock.
 
@@ -1549,7 +857,7 @@ class CtrlNominal3WRobot:
         uNI = -self.ctrl_gain * z
         action = self._NH2ctrl_Cart(xNI, eta, uNI)
 
-        self.action_curr = action
+        self.action_prev = action
 
         return action
 
@@ -1576,7 +884,7 @@ class CtrlNominal3WRobotNI:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.action_curr = npcsd.zeros(2)
+        self.action_prev = npcsd.zeros(2)
 
     def reset(self, t0, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -1585,7 +893,7 @@ class CtrlNominal3WRobotNI:
         
         """
         self.ctrl_clock = t0
-        self.action_curr = npcsd.zeros(2)
+        self.action_prev = npcsd.zeros(2)
 
     def _zeta(self, xNI, is_symbolic=False):
         npcsd = SymbolicHandler(is_symbolic)
@@ -1754,7 +1062,7 @@ class CtrlNominal3WRobotNI:
 
         return uCart
 
-    def compute_action(self, t, observation):
+    def compute_action_sampled(self, t, observation):
         """
         Compute sampled action.
         
@@ -1766,10 +1074,7 @@ class CtrlNominal3WRobotNI:
             # Update internal clock
             self.ctrl_clock = t
 
-            xNI = self._Cart2NH(observation)
-            kappa_val = self._kappa(xNI)
-            uNI = self.ctrl_gain * kappa_val
-            action = self._NH2ctrl_Cart(xNI, uNI)
+            action = self.compute_action(observation)
 
             if self.ctrl_bnds.any():
                 for k in range(2):
@@ -1777,7 +1082,7 @@ class CtrlNominal3WRobotNI:
                         action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
                     )
 
-            self.action_curr = action
+            self.action_prev = action
 
             # DEBUG ===================================================================
             # ================================LF debugger
@@ -1793,9 +1098,9 @@ class CtrlNominal3WRobotNI:
             return action
 
         else:
-            return self.action_curr
+            return self.action_prev
 
-    def compute_action_vanila(self, observation):
+    def compute_action(self, observation):
         """
         Same as :func:`~CtrlNominal3WRobotNI.compute_action`, but without invoking the internal clock.
 
@@ -1806,7 +1111,7 @@ class CtrlNominal3WRobotNI:
         uNI = self.ctrl_gain * kappa_val
         action = self._NH2ctrl_Cart(xNI, uNI)
 
-        self.action_curr = action
+        self.action_prev = action
 
         return action
 

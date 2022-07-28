@@ -284,7 +284,7 @@ Related literature
    model estimation <https://arxiv.org/abs/2007.03999>`__
 -  `More on fusion of model-predictive control and reinforcement
    learing <https://arxiv.org/abs/1906.02580>`__
--  `More on "JACS", joint actor-critic
+-  `More on "RLSTAB", joint actor-critic
    (stabilizing) <https://arxiv.org/abs/2006.14034>`__
 -  `Some comparison of model-predictive control vs. stacked
    Q-learning <https://arxiv.org/abs/2108.04802>`__

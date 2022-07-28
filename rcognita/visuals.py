@@ -368,9 +368,14 @@ class Animator3WRobot(Animator):
 
             self.ctrl_benchmarking.receive_sys_state(self.sys._state)
 
-            action = self.ctrl_benchmarking.compute_action(
-                t, npcsd.array(observation), is_symbolic=is_symbolic
-            )
+            if self.ctrl_mode == "nominal":
+                action = self.ctrl_nominal.compute_action_sampled(t, observation)
+            else:
+                action = self.ctrl_benchmarking.compute_action_sampled(
+                    t,
+                    npcsd.array(observation, array_type="SX"),
+                    is_symbolic=is_symbolic,
+                )
             if is_symbolic:
                 action = np.array(action).reshape(-1)
 
