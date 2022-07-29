@@ -13,7 +13,7 @@ import csv
 import rcognita
 import numpy as np
 from rcognita.utilities import rep_mat
-from rcognita.npcasadi_api import SymbolicHandler
+from rcognita.npCasADi_api import SymbolicHandler
 
 from config_blueprints import Config3WRobotNI
 from pipeline_blueprints import AbstractPipeline
@@ -82,10 +82,10 @@ class Pipeline3WRobotNI(AbstractPipeline):
 
     def optimizers_initialization(self):
 
-        self.actor_optimizer = optimizers.RcognitaOptimizer.standard_actor_optimizer(
+        self.actor_optimizer = optimizers.RcognitaOptimizer.create_scipy_actor_optimizer(
             actor_opt_method="SLSQP", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
         )
-        self.critic_optimizer = optimizers.RcognitaOptimizer.standard_critic_optimizer(
+        self.critic_optimizer = optimizers.RcognitaOptimizer.create_scipy_critic_optimizer(
             critic_opt_method="SLSQP",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
@@ -358,8 +358,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
         plt.show()
 
     def main_loop_raw(self):
-        is_symbolic = self.actor_optimizer.is_symbolic
-        npcsd = SymbolicHandler(is_symbolic)
+
         run_curr = 1
         datafile = self.datafiles[0]
 
@@ -368,27 +367,22 @@ class Pipeline3WRobotNI(AbstractPipeline):
             self.my_simulator.sim_step()
 
             (t, _, observation, state_full,) = self.my_simulator.get_sim_step_data()
+            # DEBUG ===================================================================
+            # if self.save_trajectory:
+            #     self.trajectory.append([state_full.extend(t)])
+            # /DEBUG ===================================================================
 
-            if self.save_trajectory:
-                self.trajectory.append([state_full.extend(t)])
-
-            action = self.my_ctrl_benchm.compute_action(
-                t, npcsd.array(observation, array_type="SX"), is_symbolic=is_symbolic
-            )
+            action = self.my_ctrl_benchm.compute_action(t, observation)
 
             self.my_sys.receive_action(action)
             self.my_ctrl_benchm.receive_sys_state(self.my_sys._state)
-            self.my_ctrl_benchm.upd_accum_obj(
-                npcsd.array(observation), npcsd.array(action), is_symbolic=is_symbolic
-            )
+            self.my_ctrl_benchm.upd_accum_obj(observation, action)
 
             xCoord = state_full[0]
             yCoord = state_full[1]
             alpha = state_full[2]
 
-            stage_obj = self.my_ctrl_benchm.stage_obj(
-                npcsd.array(observation).T, npcsd.array(action).T, is_symbolic
-            )
+            stage_obj = self.my_ctrl_benchm.stage_obj(observation, action)
             accum_obj = self.my_ctrl_benchm.accum_obj_val
 
             if not self.no_print:
@@ -441,7 +435,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
         self.controller_initialization()
         self.simulator_initialization()
         self.logger_initialization()
-        if not self.no_visual and not self.save_trajectory:
+        if not self.no_visual:  # and not self.save_trajectory:
             self.main_loop_visual()
         else:
             self.main_loop_raw()

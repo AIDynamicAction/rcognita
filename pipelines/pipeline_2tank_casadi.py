@@ -27,13 +27,13 @@ from rcognita import optimizers
 from pipeline_2tank import Pipeline2Tank
 
 
-class Pipeline2TankCasadi(Pipeline2Tank):
+class Pipeline2TankCasADi(Pipeline2Tank):
     def optimizers_initialization(self):
 
-        self.actor_optimizer = optimizers.RcognitaOptimizer.casadi_actor_optimizer(
+        self.actor_optimizer = optimizers.RcognitaOptimizer.CasADi_actor_optimizer(
             actor_opt_method="ipopt", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
         )
-        self.critic_optimizer = optimizers.RcognitaOptimizer.casadi_critic_optimizer(
+        self.critic_optimizer = optimizers.RcognitaOptimizer.CasADi_critic_optimizer(
             critic_opt_method="SLSQP",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,

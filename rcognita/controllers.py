@@ -11,25 +11,18 @@ Remarks:
 
 """
 
-from .utilities import dss_sim
-from .utilities import rep_mat
-from .utilities import uptria2vec
-from .utilities import push_vec
+from .utilities import dss_sim, push_vec, nc
 from . import models
 import numpy as np
-from .npcasadi_api import SymbolicHandler
+
 import scipy as sp
 from numpy.random import rand
 from scipy.optimize import minimize
-from scipy.optimize import basinhopping
-from scipy.optimize import NonlinearConstraint
-from numpy.linalg import lstsq
-from numpy import reshape
-from functools import partial
 from abc import ABC, abstractmethod
 from casadi import nlpsol
 import warnings
 from casadi import Function
+from optimizers import GradientOptimizer
 
 # For debugging purposes
 from tabulate import tabulate
@@ -72,10 +65,6 @@ class OptimalController(ABC):
     ):
 
         self.actor = actor
-        is_symbolic = self.actor.actor_optimizer.is_symbolic
-
-        npcsd = SymbolicHandler(is_symbolic=is_symbolic)
-        # npcsd = SymbolicHandler(is_symbolic=self.critic_optimizer.is_symbolic)
 
         self.dim_input = self.actor.dim_input
         self.dim_output = self.actor.dim_output
@@ -87,25 +76,22 @@ class OptimalController(ABC):
         self.pred_step_size = pred_step_size
 
         if isinstance(self.actor.actor_optimizer.bounds, list):
-            self.action_min = np.array(
-                self.actor.actor_optimizer.bounds[0][: self.dim_input]
-            )
+            self.action_min = self.actor.actor_optimizer.bounds[0][: self.dim_input]
+
         else:
-            self.action_min = np.array(
-                self.actor.actor_optimizer.bounds.lb[: self.dim_input]
-            )
+            self.action_min = self.actor.actor_optimizer.bounds.lb[: self.dim_input]
 
         if len(action_init) == 0:
             self.action_prev = self.action_min / 10
-            self.action_sqn_init = npcsd.rep_mat(
+            self.action_sqn_init = nc.rep_mat(
                 self.action_min / 10, 1, self.actor.Nactor
             )
         else:
             self.action_prev = action_init
-            self.action_sqn_init = npcsd.rep_mat(action_init, 1, self.actor.Nactor)
+            self.action_sqn_init = nc.rep_mat(action_init, 1, self.actor.Nactor)
 
-        self.action_buffer = npcsd.zeros([buffer_size, self.dim_input])
-        self.observation_buffer = npcsd.zeros([buffer_size, self.dim_output])
+        self.action_buffer = nc.zeros([buffer_size, self.dim_input])
+        self.observation_buffer = nc.zeros([buffer_size, self.dim_output])
 
         # Exogeneous model's things
         self.state_dyn = state_dyn
@@ -123,11 +109,11 @@ class OptimalController(ABC):
         self.model_order = model_order
         self.model_est_checks = model_est_checks
 
-        A = npcsd.zeros([self.model_order, self.model_order])
-        B = npcsd.zeros([self.model_order, self.dim_input])
-        C = npcsd.zeros([self.dim_output, self.model_order])
-        D = npcsd.zeros([self.dim_output, self.dim_input])
-        x0est = npcsd.zeros(self.model_order)
+        A = nc.zeros([self.model_order, self.model_order])
+        B = nc.zeros([self.model_order, self.dim_input])
+        C = nc.zeros([self.dim_output, self.model_order])
+        D = nc.zeros([self.dim_output, self.dim_input])
+        x0est = nc.zeros(self.model_order)
 
         self.my_model = models.ModelSS(A, B, C, D, x0est)
 
@@ -167,24 +153,24 @@ class OptimalController(ABC):
         self.state_sys_prev = self.state_sys
         self.state_sys = state
 
-    def stage_obj(self, observation, action, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def stage_obj(self, observation, action):
+
         """
         Stage (equivalently, instantaneous or running) objective. Depending on the context, it is also called utility, reward, running cost etc.
         
         See class documentation.
         """
         if self.observation_target == []:
-            chi = npcsd.concatenate([observation.T, action.T])
+            chi = nc.concatenate([observation.T, action.T])
         else:
-            chi = npcsd.concatenate([(observation - self.observation_target), action])
+            chi = nc.concatenate([(observation - self.observation_target), action])
 
-        stage_obj = self.stage_obj_model(chi, chi, is_symbolic=is_symbolic)
+        stage_obj = self.stage_obj_model(chi, chi)
 
         return stage_obj
 
-    def upd_accum_obj(self, observation, action, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def upd_accum_obj(self, observation, action):
+
         """
         Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
         If the agent succeeded to stabilize the system, ``accum_obj`` would converge to a finite value which is the performance mark.
@@ -193,7 +179,7 @@ class OptimalController(ABC):
         """
 
         self.accum_obj_val += (
-            self.stage_obj(observation.T, action.T, is_symbolic) * self.sampling_time
+            self.stage_obj(observation.T, action.T) * self.sampling_time
         )
 
     def _estimate_model(self, t, observation):
@@ -307,7 +293,7 @@ class OptimalController(ABC):
                 # Drop probing noise
                 self.is_prob_noise = 0
 
-    def compute_action_sampled(self, t, observation, constraints=(), is_symbolic=False):
+    def compute_action_sampled(self, t, observation, constraints=()):
 
         time_in_sample = t - self.ctrl_clock
         timeInCriticPeriod = t - self.critic_clock
@@ -320,10 +306,7 @@ class OptimalController(ABC):
             print(self.ctrl_clock)
             # /DEBUG =============================
             action = self.compute_action(
-                t,
-                observation,
-                is_critic_update=is_critic_update,
-                is_symbolic=is_symbolic,
+                t, observation, is_critic_update=is_critic_update
             )
 
             self.action_prev = action
@@ -343,8 +326,8 @@ class CtrlRLStab(OptimalController):
         self,
         safe_ctrl=[],
         safe_decay_rate=[],
-        eps_action=1e-3,
-        eps_weights=1e-3,
+        eps_action=1e-2,
+        eps_weights=1e-2,
         eps_critic=1e-1,
         **kwargs,
     ):
@@ -356,75 +339,95 @@ class CtrlRLStab(OptimalController):
         self.eps_action = eps_action
         self.eps_weights = eps_weights
         self.eps_critic = eps_critic
+        # DEBUG ===================================================================
         self.critic_values = []
         self.g_emergency_critic_deriv = []
         self.g_emerency_critic_diff_weights = []
+        self.g_actor_values = []
+        self.g_critic_values = []
+        # /DEBUG ===================================================================
 
-    def update_critic(self, t=None):
-        npcsd = SymbolicHandler(is_symbolic=True)
-        g = lambda x: npcsd.norm_1(x - self.critic.weights_prev) - self.eps_weights
-        self.critic.weights = self.critic._critic_optimizer(
-            constraints=g, is_symbolic=True, t=t
+    # def update_critic(self, t=None):
+    #     nc = SymbolicHandler(is_symbolic=True)
+    #     g = lambda x: nc.norm_1(x - self.critic.weights_prev) - self.eps_weights
+    #     self.critic.weights = self.critic._critic_optimizer(
+    #         constraints=g, is_symbolic=True, t=t
+    #     )
+
+    def critic_grad_step(self, weights_prev, t):
+
+        grad_optimizer = GradientOptimizer(
+            self.critic._critic_cost, 1e-2, 1, len_ub=self.eps_weights
         )
+        new_weights = grad_optimizer.optimize(weights_prev)
 
-    def update_actor(self, observation, t=None):
-        npcsd = SymbolicHandler(is_symbolic=True)
-        g = lambda x: npcsd.norm_1(x - self.action_prev) - self.eps_action
-        action = self.actor._actor_optimizer(
-            observation, constraints=g, is_symbolic=True, t=t
+        # DEBUG ===================================================================
+        self.g_critic_values.append([nc.norm_2(new_weights) - self.eps_weights, t])
+        # /DEBUG ===================================================================
+        return new_weights
+
+    def actor_grad_step(self, action_prev, observation, t):
+
+        grad_optimizer = GradientOptimizer(
+            self.actor._actor_cost, 1e-2, 1, len_ub=self.eps_action
         )
-        self.actor.action_prev = action
-        return action
+        new_action = grad_optimizer.optimize(action_prev, observation)
 
-    def compute_action(self, t, observation, is_critic_update=False, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic=True)
+        # DEBUG ===================================================================
+        self.g_actor_values.append([nc.norm_2(new_action) - self.eps_action, t])
+        # /DEBUG ===================================================================
+        return new_action
+
+    # def update_actor(self, observation, t=None):
+    #     nc = SymbolicHandler(is_symbolic=True)
+    #     g = lambda x: nc.norm_1(x - self.actor.action_prev) - self.eps_action
+    #     action = self.actor._actor_optimizer(
+    #         observation, constraints=g, is_symbolic=True, t=t
+    #     )
+    #     return action
+
+    def compute_action(self, t, observation, is_critic_update=False):
 
         observation_prev = self.critic.observation_buffer[-1, :]
+        action_prev = self.critic.action_buffer[-1, :]
+        weights_prev = self.critic.weights_prev
 
-        self.critic.action_buffer = push_vec(
-            self.critic.action_buffer, self.action_prev, is_symbolic=is_symbolic
+        critic_diff_factual = self.critic(weights_prev, observation,) - self.critic(
+            weights_prev, observation_prev
         )
-
-        self.critic.observation_buffer = npcsd.push_vec(
-            npcsd.array(self.critic.observation_buffer), npcsd.array(observation)
-        )
-        critic_diff_factual = self.critic(
-            self.critic.weights, observation, is_symbolic=is_symbolic
-        ) - self.critic(self.critic.weights, observation_prev, is_symbolic=is_symbolic)
 
         # DEBUG ===================================================================
         self.critic_values.append(
-            [
-                SymbolicHandler(is_symbolic).array(
-                    self.critic(
-                        self.critic.weights, observation, is_symbolic=is_symbolic
-                    )
-                ),
-                npcsd.array(critic_diff_factual),
-                t,
-            ]
+            [self.critic(weights_prev, observation), critic_diff_factual, t,]
         )
         # /DEBUG ===================================================================
 
         if critic_diff_factual <= self.safe_decay_rate * self.sampling_time:
-            action = self.update_actor(observation, t=t)
+            action = self.actor_grad_step(action_prev, observation, t=t)
+            weights = self.critic_grad_step(observation_prev, t=t)
             # self.critic.weights = (
             #     self.critic.weights + self.eps_weights
             # )
-            self.update_critic(t=t)
+            # self.update_critic(t=t)
         else:
             action = self.safe_ctrl.compute_action(observation)
-            self.critic.weights = self.emergency_search(
-                action, observation, is_symbolic=is_symbolic, t=t
-            )
+            weights = self.emergency_search(action, observation, t=t)
 
-        self.critic.weights_prev = self.critic.weights
+        self.critic.action_buffer = push_vec(
+            self.critic.action_buffer, self.actor.action_prev
+        )
+        self.critic.observation_buffer = nc.push_vec(
+            self.critic.observation_buffer, observation
+        )
+
+        self.actor.action_prev = action
+        self.critic.weights_prev = weights
+        self.critic.weights = weights
 
         return action
 
-    def emergency_search(self, action, observation, is_symbolic=False, t=None):
+    def emergency_search(self, action, observation, t=None):
         print("Emergency started!!!!!!!!!!!!")
-        npcsd = SymbolicHandler(is_symbolic)
 
         options = {
             "print_time": 0,
@@ -436,28 +439,23 @@ class CtrlRLStab(OptimalController):
 
         state_dyn_vector = self.state_dyn([], observation, action)
 
-        critic_gradient, weights_symbolic = self.critic.grad_observation(
-            observation, is_symbolic
-        )
-        critic_deriv = npcsd.dot(critic_gradient, state_dyn_vector)
-        critic_curr = self.critic(
-            weights_symbolic, npcsd.array(observation), is_symbolic=True
-        )
-        critic_prev = self.critic(
-            self.critic.weights, observation, is_symbolic=is_symbolic
-        )
+        critic_gradient, weights_symbolic = self.critic.grad_observation(observation)
+        critic_deriv = nc.dot(critic_gradient, state_dyn_vector)
+
+        critic_curr = self.critic(weights_symbolic, observation)
+        critic_prev = self.critic(self.critic.weights_prev, observation,)
         critic_diff_weights = critic_curr - critic_prev
 
-        nlp = {}
-        nlp["x"] = weights_symbolic
-        nlp["f"] = critic_deriv
-        nlp["g"] = npcsd.concatenate([critic_deriv, critic_diff_weights])
-        solver = nlpsol("solver", "ipopt", nlp, options)
+        optimization_problem = {}
+        optimization_problem["x"] = weights_symbolic
+        optimization_problem["f"] = critic_deriv
+        optimization_problem["g"] = nc.concatenate([critic_deriv, critic_diff_weights])
+        solver = nlpsol("solver", "ipopt", optimization_problem, options)
         result = solver(
-            x0=npcsd.array(self.critic.weights),
+            x0=self.critic.weights,
             ubx=self.critic.Wmax,
             lbx=self.critic.Wmin,
-            ubg=npcsd.array([-2 * self.safe_decay_rate, self.eps_critic]),
+            ubg=[-2 * self.safe_decay_rate, self.eps_critic],
         )["x"]
 
         ##### DEBUG
@@ -491,9 +489,8 @@ class CtrlOptPred(OptimalController):
         super().__init__(*args, **kwargs)
 
     def compute_action(
-        self, t, observation, is_critic_update=False, is_symbolic=False,
+        self, t, observation, is_critic_update=False,
     ):
-        npcsd = SymbolicHandler(is_symbolic)
 
         if self.ctrl_mode == "MPC":
             # Apply control when model estimation phase is over
@@ -501,34 +498,28 @@ class CtrlOptPred(OptimalController):
                 return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
 
             elif not self.is_prob_noise and self.is_est_model:
-                action = self.actor._actor_optimizer(
-                    observation, is_symbolic=is_symbolic
-                )
+                action = self.actor._actor_optimizer(observation)
 
             elif self.ctrl_mode == "MPC":
-                action = self.actor._actor_optimizer(
-                    observation, is_symbolic=is_symbolic
-                )
+                action = self.actor._actor_optimizer(observation)
 
         elif self.ctrl_mode in ["RQL", "SQL"]:
             # Critic
 
             # Update data buffers
             self.critic.action_buffer = push_vec(
-                self.critic.action_buffer, self.action_prev, is_symbolic=is_symbolic
+                self.critic.action_buffer, self.action_prev
             )
 
-            self.critic.observation_buffer = npcsd.push_vec(
-                npcsd.array(self.critic.observation_buffer), npcsd.array(observation)
+            self.critic.observation_buffer = nc.push_vec(
+                self.critic.observation_buffer, observation
             )
 
             if is_critic_update:
                 # Update critic's internal clock
                 self.critic_clock = t
 
-                self.critic.weights = self.critic._critic_optimizer(
-                    is_symbolic=is_symbolic
-                )
+                self.critic.weights = self.critic._critic_optimizer()
                 self.critic.weights_prev = self.critic.weights
 
                 # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
@@ -544,9 +535,7 @@ class CtrlOptPred(OptimalController):
                 action = self.actor._actor_optimizer(observation)
 
             elif self.ctrl_mode in ["RQL", "SQL"]:
-                action = self.actor._actor_optimizer(
-                    observation, is_symbolic=is_symbolic,
-                )
+                action = self.actor._actor_optimizer(observation,)
 
         return action
 
@@ -584,16 +573,8 @@ class CtrlNominal3WRobot:
     """
 
     def __init__(
-        self,
-        m,
-        I,
-        ctrl_gain=10,
-        ctrl_bnds=[],
-        t0=0,
-        sampling_time=0.1,
-        is_symbolic=False,
+        self, m, I, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1,
     ):
-        npcsd = SymbolicHandler(is_symbolic)
 
         self.m = m
         self.I = I
@@ -602,19 +583,19 @@ class CtrlNominal3WRobot:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.action_prev = npcsd.zeros(2)
+        self.action_prev = nc.zeros(2)
 
-    def reset(self, t0, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def reset(self, t0):
+
         """
         Resets controller for use in multi-episode simulation.
         
         """
         self.ctrl_clock = t0
-        self.action_prev = npcsd.zeros(2)
+        self.action_prev = nc.zeros(2)
 
-    def _zeta(self, xNI, theta, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _zeta(self, xNI, theta):
+
         """
         Generic, i.e., theta-dependent, subgradient (disassembled) of a CLF for NI (a.k.a. nonholonomic integrator, a 3wheel robot with static actuators).
 
@@ -644,73 +625,67 @@ class CtrlNominal3WRobot:
         #                                            sigma~
 
         sigma_tilde = (
-            xNI[0] * npcsd.cos(theta)
-            + xNI[1] * npcsd.sin(theta)
-            + np.sqrt(npcsd.abs(xNI[2]))
+            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + np.sqrt(nc.abs(xNI[2]))
         )
 
-        nablaF = npcsd.zeros(3)
+        nablaF = nc.zeros(3)
 
         nablaF[0] = (
-            4 * xNI[0] ** 3
-            - 2 * npcsd.abs(xNI[2]) ** 3 * npcsd.cos(theta) / sigma_tilde ** 3
+            4 * xNI[0] ** 3 - 2 * nc.abs(xNI[2]) ** 3 * nc.cos(theta) / sigma_tilde ** 3
         )
 
         nablaF[1] = (
-            4 * xNI[1] ** 3
-            - 2 * npcsd.abs(xNI[2]) ** 3 * npcsd.sin(theta) / sigma_tilde ** 3
+            4 * xNI[1] ** 3 - 2 * nc.abs(xNI[2]) ** 3 * nc.sin(theta) / sigma_tilde ** 3
         )
 
         nablaF[2] = (
             (
-                3 * xNI[0] * npcsd.cos(theta)
-                + 3 * xNI[1] * npcsd.sin(theta)
-                + 2 * np.sqrt(npcsd.abs(xNI[2]))
+                3 * xNI[0] * nc.cos(theta)
+                + 3 * xNI[1] * nc.sin(theta)
+                + 2 * np.sqrt(nc.abs(xNI[2]))
             )
             * xNI[2] ** 2
-            * npcsd.sign(xNI[2])
+            * nc.sign(xNI[2])
             / sigma_tilde ** 3
         )
 
         return nablaF
 
-    def _kappa(self, xNI, theta, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _kappa(self, xNI, theta):
+
         """
         Stabilizing controller for NI-part.
 
         """
-        kappa_val = npcsd.zeros(2)
+        kappa_val = nc.zeros(2)
 
-        G = npcsd.zeros([3, 2])
-        G[:, 0] = npcsd.array([1, 0, xNI[1]])
-        G[:, 1] = npcsd.array([0, 1, -xNI[0]])
+        G = nc.zeros([3, 2])
+        G[:, 0] = [1, 0, xNI[1]]
+        G[:, 1] = [0, 1, -xNI[0]]
 
         zeta_val = self._zeta(xNI, theta)
 
-        kappa_val[0] = -npcsd.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * npcsd.sign(
+        kappa_val[0] = -nc.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * nc.sign(
             np.dot(zeta_val, G[:, 0])
         )
-        kappa_val[1] = -npcsd.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * npcsd.sign(
+        kappa_val[1] = -nc.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * nc.sign(
             np.dot(zeta_val, G[:, 1])
         )
 
         return kappa_val
 
-    def _Fc(self, xNI, eta, theta, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _Fc(self, xNI, eta, theta):
+
         """
         Marginal function for ENDI constructed by nonsmooth backstepping. See details in the literature mentioned in the class documentation.
 
         """
 
         sigma_tilde = (
-            xNI[0] * npcsd.cos(theta)
-            + xNI[1] * npcsd.sin(theta)
-            + np.sqrt(npcsd.abs(xNI[2]))
+            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + np.sqrt(nc.abs(xNI[2]))
         )
 
-        F = xNI[0] ** 4 + xNI[1] ** 4 + npcsd.abs(xNI[2]) ** 3 / sigma_tilde ** 2
+        F = xNI[0] ** 4 + xNI[1] ** 4 + nc.abs(xNI[2]) ** 3 / sigma_tilde ** 2
 
         z = eta - self._kappa(xNI, theta)
 
@@ -734,8 +709,8 @@ class CtrlNominal3WRobot:
 
         return theta_val
 
-    def _Cart2NH(self, coords_Cart, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _Cart2NH(self, coords_Cart):
+
         """
         Transformation from Cartesian coordinates to non-holonomic (NH) coordinates.
         See Section VIII.A in [[1]_].
@@ -749,8 +724,8 @@ class CtrlNominal3WRobot:
 
         """
 
-        xNI = npcsd.zeros(3)
-        eta = npcsd.zeros(2)
+        xNI = nc.zeros(3)
+        eta = nc.zeros(2)
 
         xc = coords_Cart[0]
         yc = coords_Cart[1]
@@ -759,18 +734,18 @@ class CtrlNominal3WRobot:
         omega = coords_Cart[4]
 
         xNI[0] = alpha
-        xNI[1] = xc * npcsd.cos(alpha) + yc * npcsd.sin(alpha)
-        xNI[2] = -2 * (yc * npcsd.cos(alpha) - xc * npcsd.sin(alpha)) - alpha * (
-            xc * npcsd.cos(alpha) + yc * npcsd.sin(alpha)
+        xNI[1] = xc * nc.cos(alpha) + yc * nc.sin(alpha)
+        xNI[2] = -2 * (yc * nc.cos(alpha) - xc * nc.sin(alpha)) - alpha * (
+            xc * nc.cos(alpha) + yc * nc.sin(alpha)
         )
 
         eta[0] = omega
-        eta[1] = (yc * npcsd.cos(alpha) - xc * npcsd.sin(alpha)) * omega + v
+        eta[1] = (yc * nc.cos(alpha) - xc * nc.sin(alpha)) * omega + v
 
         return [xNI, eta]
 
-    def _NH2ctrl_Cart(self, xNI, eta, uNI, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _NH2ctrl_Cart(self, xNI, eta, uNI):
+
         """
         Get control for Cartesian NI from NH coordinates.
         See Section VIII.A in [[1]_].
@@ -785,7 +760,7 @@ class CtrlNominal3WRobot:
 
         """
 
-        uCart = npcsd.zeros(2)
+        uCart = nc.zeros(2)
 
         uCart[0] = self.m * (
             uNI[1]
@@ -796,7 +771,7 @@ class CtrlNominal3WRobot:
 
         return uCart
 
-    def compute_action_sampled(self, t, observation, is_symbolic=False):
+    def compute_action_sampled(self, t, observation):
         """
         See algorithm description in [[1]_], [[2]_].
         
@@ -844,7 +819,7 @@ class CtrlNominal3WRobot:
         else:
             return self.action_prev
 
-    def compute_action(self, observation, is_symbolic=False):
+    def compute_action(self, observation):
         """
         Same as :func:`~CtrlNominal3WRobot.compute_action`, but without invoking the internal clock.
 
@@ -875,28 +850,26 @@ class CtrlNominal3WRobotNI:
     
     """
 
-    def __init__(
-        self, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1, is_symbolic=False
-    ):
-        npcsd = SymbolicHandler(is_symbolic)
+    def __init__(self, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1):
+
         self.ctrl_gain = ctrl_gain
         self.ctrl_bnds = ctrl_bnds
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.action_prev = npcsd.zeros(2)
+        self.action_prev = nc.zeros(2)
 
-    def reset(self, t0, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def reset(self, t0):
+
         """
         Resets controller for use in multi-episode simulation.
         
         """
         self.ctrl_clock = t0
-        self.action_prev = npcsd.zeros(2)
+        self.action_prev = nc.zeros(2)
 
-    def _zeta(self, xNI, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _zeta(self, xNI):
+
         """
         Analytic disassembled subgradient, without finding minimizer theta.
 
@@ -927,11 +900,11 @@ class CtrlNominal3WRobotNI:
 
         sigma = np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) + np.sqrt(abs(xNI[2]))
 
-        nablaL = npcsd.zeros(3)
+        nablaL = nc.zeros(3)
 
         nablaL[0] = (
             4 * xNI[0] ** 3
-            + npcsd.abs(xNI[2]) ** 3
+            + nc.abs(xNI[2]) ** 3
             / sigma ** 3
             * 1
             / np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) ** 3
@@ -940,43 +913,39 @@ class CtrlNominal3WRobotNI:
         )
         nablaL[1] = (
             4 * xNI[1] ** 3
-            + npcsd.abs(xNI[2]) ** 3
+            + nc.abs(xNI[2]) ** 3
             / sigma ** 3
             * 1
             / np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) ** 3
             * 2
             * xNI[1]
         )
-        nablaL[2] = 3 * npcsd.abs(xNI[2]) ** 2 * npcsd.sign(xNI[2]) + npcsd.abs(
+        nablaL[2] = 3 * nc.abs(xNI[2]) ** 2 * nc.sign(xNI[2]) + nc.abs(
             xNI[2]
-        ) ** 3 / sigma ** 3 * 1 / np.sqrt(npcsd.abs(xNI[2])) * npcsd.sign(xNI[2])
+        ) ** 3 / sigma ** 3 * 1 / np.sqrt(nc.abs(xNI[2])) * nc.sign(xNI[2])
 
         theta = 0
 
         sigma_tilde = (
-            xNI[0] * npcsd.cos(theta)
-            + xNI[1] * npcsd.sin(theta)
-            + np.sqrt(npcsd.abs(xNI[2]))
+            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + np.sqrt(nc.abs(xNI[2]))
         )
 
-        nablaF = npcsd.zeros(3)
+        nablaF = nc.zeros(3)
 
         nablaF[0] = (
-            4 * xNI[0] ** 3
-            - 2 * npcsd.abs(xNI[2]) ** 3 * npcsd.cos(theta) / sigma_tilde ** 3
+            4 * xNI[0] ** 3 - 2 * nc.abs(xNI[2]) ** 3 * nc.cos(theta) / sigma_tilde ** 3
         )
         nablaF[1] = (
-            4 * xNI[1] ** 3
-            - 2 * npcsd.abs(xNI[2]) ** 3 * npcsd.sin(theta) / sigma_tilde ** 3
+            4 * xNI[1] ** 3 - 2 * nc.abs(xNI[2]) ** 3 * nc.sin(theta) / sigma_tilde ** 3
         )
         nablaF[2] = (
             (
-                3 * xNI[0] * npcsd.cos(theta)
-                + 3 * xNI[1] * npcsd.sin(theta)
-                + 2 * np.sqrt(npcsd.abs(xNI[2]))
+                3 * xNI[0] * nc.cos(theta)
+                + 3 * xNI[1] * nc.sin(theta)
+                + 2 * np.sqrt(nc.abs(xNI[2]))
             )
             * xNI[2] ** 2
-            * npcsd.sign(xNI[2])
+            * nc.sign(xNI[2])
             / sigma_tilde ** 3
         )
 
@@ -985,77 +954,75 @@ class CtrlNominal3WRobotNI:
         else:
             return nablaL
 
-    def _kappa(self, xNI, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _kappa(self, xNI):
+
         """
         Stabilizing controller for NI-part.
 
         """
-        kappa_val = npcsd.zeros(2)
+        kappa_val = nc.zeros(2)
 
-        G = npcsd.zeros([3, 2])
-        G[:, 0] = npcsd.rc_array([1, 0, xNI[1]])
-        G[:, 1] = npcsd.rc_array([0, 1, -xNI[0]])
+        G = nc.zeros([3, 2])
+        G[:, 0] = nc.rc_array([1, 0, xNI[1]])
+        G[:, 1] = nc.rc_array([0, 1, -xNI[0]])
 
         zeta_val = self._zeta(xNI)
 
-        kappa_val[0] = -npcsd.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * npcsd.sign(
+        kappa_val[0] = -nc.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * nc.sign(
             np.dot(zeta_val, G[:, 0])
         )
-        kappa_val[1] = -npcsd.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * npcsd.sign(
+        kappa_val[1] = -nc.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * nc.sign(
             np.dot(zeta_val, G[:, 1])
         )
 
         return kappa_val
 
-    def _F(self, xNI, eta, theta, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _F(self, xNI, eta, theta):
+
         """
         Marginal function for NI.
 
         """
 
         sigma_tilde = (
-            xNI[0] * npcsd.cos(theta)
-            + xNI[1] * npcsd.sin(theta)
-            + np.sqrt(npcsd.abs(xNI[2]))
+            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + np.sqrt(nc.abs(xNI[2]))
         )
 
-        F = xNI[0] ** 4 + xNI[1] ** 4 + npcsd.abs(xNI[2]) ** 3 / sigma_tilde ** 2
+        F = xNI[0] ** 4 + xNI[1] ** 4 + nc.abs(xNI[2]) ** 3 / sigma_tilde ** 2
 
         z = eta - self._kappa(xNI, theta)
 
         return F + 1 / 2 * np.dot(z, z)
 
-    def _Cart2NH(self, coords_Cart, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _Cart2NH(self, coords_Cart):
+
         """
         Transformation from Cartesian coordinates to non-holonomic (NH) coordinates.
 
         """
 
-        xNI = npcsd.zeros(3)
+        xNI = nc.zeros(3)
 
         xc = coords_Cart[0]
         yc = coords_Cart[1]
         alpha = coords_Cart[2]
 
         xNI[0] = alpha
-        xNI[1] = xc * npcsd.cos(alpha) + yc * npcsd.sin(alpha)
-        xNI[2] = -2 * (yc * npcsd.cos(alpha) - xc * npcsd.sin(alpha)) - alpha * (
-            xc * npcsd.cos(alpha) + yc * npcsd.sin(alpha)
+        xNI[1] = xc * nc.cos(alpha) + yc * nc.sin(alpha)
+        xNI[2] = -2 * (yc * nc.cos(alpha) - xc * nc.sin(alpha)) - alpha * (
+            xc * nc.cos(alpha) + yc * nc.sin(alpha)
         )
 
         return xNI
 
-    def _NH2ctrl_Cart(self, xNI, uNI, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _NH2ctrl_Cart(self, xNI, uNI):
+
         """
         Get control for Cartesian NI from NH coordinates.       
 
         """
 
-        uCart = npcsd.zeros(2)
+        uCart = nc.zeros(2)
 
         uCart[0] = uNI[1] + 1 / 2 * uNI[0] * (xNI[2] + xNI[0] * xNI[1])
         uCart[1] = uNI[0]
@@ -1115,11 +1082,10 @@ class CtrlNominal3WRobotNI:
 
         return action
 
-    def compute_LF(self, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def compute_LF(self, observation):
 
         xNI = self._Cart2NH(observation)
 
-        sigma = np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) + np.sqrt(npcsd.abs(xNI[2]))
+        sigma = np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) + np.sqrt(nc.abs(xNI[2]))
 
-        return xNI[0] ** 4 + xNI[1] ** 4 + npcsd.abs(xNI[2]) ** 3 / sigma ** 2
+        return xNI[0] ** 4 + xNI[1] ** 4 + nc.abs(xNI[2]) ** 3 / sigma ** 2

@@ -33,17 +33,17 @@ import matplotlib.pyplot as plt
 class Pipeline3WRobotCasadi(Pipeline3WRobot):
     def optimizers_initialization(self):
 
-        self.actor_optimizer = optimizers.RcognitaOptimizer.casadi_actor_optimizer(
-            actor_opt_method="SLSQP", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
+        self.actor_optimizer = optimizers.RcognitaOptimizer.CasADi_actor_optimizer(
+            actor_opt_method="ipopt", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
         )
-        self.v_critic_optimizer = optimizers.RcognitaOptimizer.casadi_v_critic_optimizer(
+        self.v_critic_optimizer = optimizers.RcognitaOptimizer.CasADi_v_critic_optimizer(
             critic_opt_method="ipopt",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
         )
-        self.q_critic_optimizer = optimizers.RcognitaOptimizer.casadi_q_critic_optimizer(
-            critic_opt_method="SLSQP",
+        self.q_critic_optimizer = optimizers.RcognitaOptimizer.CasADi_q_critic_optimizer(
+            critic_opt_method="ipopt",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
@@ -58,63 +58,76 @@ def main():
     pipeline = Pipeline3WRobotCasadi()
     pipeline.pipeline_execution()
     # DEBUG ===================================================================
-    # if pipeline.ctrl_mode == "RLSTAB":
-    #     plt.figure(figsize=(10, 10))
-    #     plt.subplot(2, 2, 1)
-    #     plt.plot(
-    #         np.array(pipeline.my_ctrl_benchm.critic_values, dtype="float")[:, 2],
-    #         np.array(pipeline.my_ctrl_benchm.critic_values, dtype="float")[:, 0],
-    #         "g",
-    #         label="critic values",
-    #     )
-    #     plt.plot(
-    #         np.array(pipeline.my_ctrl_benchm.critic_values, dtype="float")[:, 2],
-    #         np.array(pipeline.my_ctrl_benchm.critic_values, dtype="float")[:, 1],
-    #         "r",
-    #         label="critic_diff_factual",
-    #     )
-    #     plt.xlabel("t [s]")
-    #     plt.legend()
-    #     plt.subplot(2, 2, 3)
-    #     plt.plot(
-    #         np.array(pipeline.my_ctrl_benchm.actor.g_actor_values, dtype="float")[:, 1],
-    #         np.array(pipeline.my_ctrl_benchm.actor.g_actor_values, dtype="float")[:, 0],
-    #         label="g_actor",
-    #     )
-    #     plt.plot(
-    #         np.array(pipeline.my_ctrl_benchm.critic.g_critic_values, dtype="float")[
-    #             :, 1
-    #         ],
-    #         np.array(pipeline.my_ctrl_benchm.critic.g_critic_values, dtype="float")[
-    #             :, 0
-    #         ],
-    #         label="g_critic",
-    #     )
-    #     plt.xlabel("t [s]")
-    #     plt.legend()
+    if pipeline.ctrl_mode == "RLSTAB":
+        plt.figure(figsize=(10, 10))
+        plt.subplot(2, 2, 1)
+        plt.plot(
+            np.array(pipeline.my_ctrl_benchm.critic_values, dtype="float")[:, 2],
+            np.array(pipeline.my_ctrl_benchm.critic_values, dtype="float")[:, 0],
+            "g",
+            label="critic values",
+        )
+        plt.plot(
+            np.array(pipeline.my_ctrl_benchm.critic_values, dtype="float")[:, 2],
+            np.array(pipeline.my_ctrl_benchm.critic_values, dtype="float")[:, 1],
+            "r",
+            label="critic_diff_factual",
+        )
+        plt.xlabel("t [s]")
+        plt.legend()
+        # plt.subplot(2, 2, 3)
+        # plt.plot(
+        #     np.array(pipeline.my_ctrl_benchm.actor.g_actor_values, dtype="float")[:, 1],
+        #     np.array(pipeline.my_ctrl_benchm.actor.g_actor_values, dtype="float")[:, 0],
+        #     label="g_actor",
+        # )
+        # plt.plot(
+        #     np.array(pipeline.my_ctrl_benchm.critic.g_critic_values, dtype="float")[
+        #         :, 1
+        #     ],
+        #     np.array(pipeline.my_ctrl_benchm.critic.g_critic_values, dtype="float")[
+        #         :, 0
+        #     ],
+        #     label="g_critic",
+        # )
+        # plt.xlabel("t [s]")
+        # plt.legend()
+        plt.subplot(2, 2, 3)
+        plt.plot(
+            np.array(pipeline.my_ctrl_benchm.g_actor_values, dtype="float")[:, 1],
+            np.array(pipeline.my_ctrl_benchm.g_actor_values, dtype="float")[:, 0],
+            label="g_actor",
+        )
+        plt.plot(
+            np.array(pipeline.my_ctrl_benchm.g_critic_values, dtype="float")[:, 1],
+            np.array(pipeline.my_ctrl_benchm.g_critic_values, dtype="float")[:, 0],
+            label="g_critic",
+        )
+        plt.xlabel("t [s]")
+        plt.legend()
 
-    #     plt.subplot(2, 2, 4)
-    #     plt.plot(
-    #         np.array(pipeline.my_ctrl_benchm.g_emergency_critic_deriv, dtype="float")[
-    #             :, 1
-    #         ],
-    #         np.array(pipeline.my_ctrl_benchm.g_emergency_critic_deriv, dtype="float")[
-    #             :, 0
-    #         ],
-    #         label="g_critic_deriv",
-    #     )
-    #     plt.plot(
-    #         np.array(
-    #             pipeline.my_ctrl_benchm.g_emerency_critic_diff_weights, dtype="float"
-    #         )[:, 1],
-    #         np.array(
-    #             pipeline.my_ctrl_benchm.g_emerency_critic_diff_weights, dtype="float"
-    #         )[:, 0],
-    #         label="g_critic_diff_weights",
-    #     )
-    #     plt.xlabel("t [s]")
+        plt.subplot(2, 2, 4)
+        plt.plot(
+            np.array(pipeline.my_ctrl_benchm.g_emergency_critic_deriv, dtype="float")[
+                :, 1
+            ],
+            np.array(pipeline.my_ctrl_benchm.g_emergency_critic_deriv, dtype="float")[
+                :, 0
+            ],
+            label="g_critic_deriv",
+        )
+        plt.plot(
+            np.array(
+                pipeline.my_ctrl_benchm.g_emerency_critic_diff_weights, dtype="float"
+            )[:, 1],
+            np.array(
+                pipeline.my_ctrl_benchm.g_emerency_critic_diff_weights, dtype="float"
+            )[:, 0],
+            label="g_critic_diff_weights",
+        )
+        plt.xlabel("t [s]")
 
-    #     plt.legend()
+        plt.legend()
     # /DEBUG ===================================================================
 
     if pipeline.save_trajectory:

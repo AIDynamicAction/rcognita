@@ -23,7 +23,223 @@ from numpy.matlib import repmat
 import scipy.stats as st
 from scipy import signal
 import matplotlib.pyplot as plt
-from npcasadi_api import SymbolicHandler
+from npcasadi_api import typeInferenceDecorator
+import casadi
+
+
+class SymbolicHandler(metaclass=typeInferenceDecorator):
+    def is_any_CasADi(self, *args):
+        return any([isinstance(arg, (casadi.SX, casadi.DM, casadi.MX)) for arg in args])
+
+    def is_any_symbolic(self, *args):
+        return any([isinstance(arg, (casadi.SX, casadi.MX)) for arg in args])
+
+    def cos(cls, x, is_symbolic=False, force=None):
+        return casadi.cos(x) if is_symbolic else np.cos(x)
+
+    def sin(self, x, is_symbolic=False, force=None):
+        return casadi.sin(x) if is_symbolic else np.sin(x)
+
+    def hstack(self, tup, is_symbolic=False, force=None):
+        if not isinstance(tup, tuple):
+            tup = tuple(tup)
+        return casadi.horzcat(*tup) if is_symbolic else np.hstack(tup)
+
+    def push_vec(self, matrix, vec, is_symbolic=False, force=None):
+        return self.vstack([matrix[1:, :], vec.T])
+
+    def vstack(self, tup, is_symbolic=False, force=None):
+        if not isinstance(tup, tuple):
+            tup = tuple(tup)
+        return casadi.vertcat(*tup) if is_symbolic else np.vstack(tup)
+
+    def reshape_CasADi_as_np(self, array, dim_params, is_symbolic=False, force=None):
+        result = casadi.SX(*dim_params)
+        n_rows = dim_params[0]
+        n_cols = dim_params[1]
+        for i in range(n_rows):
+            result[i, :] = array[i * n_cols : (i + 1) * n_cols]
+
+        return result
+
+    def reshape(self, array, dim_params, is_symbolic=False, force=None):
+        if is_symbolic:
+            if isinstance(dim_params, list) or isinstance(dim_params, tuple):
+                if len(dim_params) > 1:
+                    return self.reshape_CasADi_as_np(array, dim_params)
+                else:
+                    return casadi.reshape(array, dim_params[0], 1)
+            elif isinstance(dim_params, int):
+                return casadi.reshape(array, dim_params, 1)
+            else:
+                raise TypeError(
+                    "Wrong type of dimension parameter was passed.\
+                         Possible cases are: int, [int], [int, int, ...]"
+                )
+        else:
+            return np.reshape(array, dim_params)
+
+    def array(
+        self, array, ignore=False, array_type="DM", is_symbolic=False, force=None
+    ):
+        if is_symbolic and not ignore:
+            if array_type == "DM":
+                return casadi.DM(array)
+            elif array_type == "SX":
+                return casadi.SX(array)
+            else:
+                ValueError(f"Invalid array type:{array_type}")
+
+        else:
+            return np.array(array)
+
+    def symbolic_array_creation(
+        self, *args, array_type="DM", is_symbolic=False, force=None
+    ):
+        return tuple(self.array(arg, array_type=array_type) for arg in args)
+
+    def ones(self, tup, is_symbolic=False):
+        if isinstance(tup, int):
+            return casadi.DM.ones(tup) if is_symbolic else np.ones(tup)
+        else:
+            return casadi.DM.ones(*tup) if is_symbolic else np.ones(tup)
+
+    def zeros(self, tup, array_type="DM", is_symbolic=False):
+        if isinstance(tup, int):
+            if is_symbolic:
+                if array_type == "DM":
+                    return casadi.DM.zeros(tup)
+                elif array_type == "SX":
+                    return casadi.SX.zeros(tup)
+                else:
+                    ValueError(f"Invalid array type:{array_type}")
+            else:
+                return np.zeros(tup)
+        else:
+            if is_symbolic:
+                if array_type == "DM":
+                    return casadi.DM.zeros(*tup)
+                elif array_type == "SX":
+                    return casadi.SX.zeros(*tup)
+                else:
+                    ValueError(f"Invalid array type:{array_type}")
+            else:
+                return np.zeros(tup)
+
+    def concatenate(self, tup, is_symbolic=False, force=None):
+        if len(tup) > 1:
+            if is_symbolic:
+                all_symbolic = all(
+                    [type(x) == casadi.DM or type(x) == casadi.SX for x in tup]
+                )
+                if not all_symbolic:
+                    raise TypeError(
+                        f"""
+                        Cannot perform symbolic array concatenation due to presence of numerical data. Check type-casting in your algorithm.
+                        Types are: {[type(x) for x in tup]}
+                        """
+                    )
+                else:
+                    return casadi.vertcat(*tup)
+            else:
+                return np.concatenate(tup)
+
+    def rep_mat(self, array, n, m, is_symbolic=False, force=None):
+        return casadi.repmat(array, n, m) if is_symbolic else rep_mat(array, n, m)
+
+    def matmul(self, A, B, is_symbolic=False, force=None):
+        return casadi.mtimes(A, B) if is_symbolic else np.matmul(A, B)
+
+    def inner_product(self, A, B, is_symbolic=False, force=None):
+        return casadi.dot(A, B) if is_symbolic else np.inner(A, B)
+
+    def rc_array(self, A, is_symbolic=False, force=None):
+        return casadi.DM.sym(A) if is_symbolic else np.array(A)
+
+    def sign(self, x, is_symbolic=False, force=None):
+        return casadi.sign(x) if is_symbolic else np.sign(x)
+
+    def abs(self, x, is_symbolic=False, force=None):
+        return casadi.fabs(x) if is_symbolic else np.abs(x)
+
+    def min(self, array, is_symbolic=False, force=None):
+        return casadi.fmin(*array) if is_symbolic else np.min(array)
+
+    def max(self, array, is_symbolic=False, force=None):
+        return casadi.fmax(array) if is_symbolic else np.max(array)
+
+    def to_col(self, argin, is_symbolic=False, force=None):
+        if is_symbolic:
+            if self.shape(argin)[0] < self.shape(argin)[1]:
+                return argin.T
+            else:
+                return argin
+        else:
+            return to_col_vec(argin)
+
+    def dot(self, A, B, is_symbolic=False, force=None):
+        return (
+            casadi.dot(*self.symbolic_array_creation(A, B, array_type="SX"))
+            if is_symbolic
+            else A @ B
+        )
+
+    def shape(self, array, is_symbolic=False, force=None):
+        return (
+            array.size()
+            if isinstance(array, (casadi.SX, casadi.DM, casadi.MX))
+            else np.shape(array)
+        )
+
+    def function2SX(self, func, *args, x0=None, is_symbolic=False, force=None):
+        if not is_symbolic:
+            return (
+                lambda x: func(x, *args),
+                casadi.SX.sym("x", *self.shape(x0)),
+            )
+        else:
+            try:
+                x_symb = casadi.SX.sym("x", self.shape(x0))
+            except NotImplementedError as e:
+                x_symb = casadi.SX.sym("x", *self.shape(x0), 1)
+            args = self.symbolic_array_creation(*args)
+            if len(args) > 0:
+                return func(x_symb, *args), x_symb
+            else:
+                return func(x_symb), x_symb
+
+    def kron(self, A, B, is_symbolic=False, force=None):
+        return casadi.kron(A, B) if is_symbolic else np.kron(A, B)
+
+    @staticmethod
+    def autograd(func, x, *args, is_symbolic=False, force=None):
+        return casadi.Function("f", [x, *args], [casadi.gradient(func(x, *args), x)])
+
+    def array_symb(self, tup, literal="x", is_symbolic=False, force=None):
+        if isinstance(tup, tuple):
+            if len(tup) > 2:
+                raise ValueError(
+                    f"Not implemented for number of dimensions grreater than 2. Passed: {len(tup)}"
+                )
+            else:
+                return casadi.SX.sym(literal, *tup)
+
+        elif isinstance(tup, int):
+            return casadi.SX.sym(literal, tup)
+
+        else:
+            raise TypeError(
+                f"Passed an invalide argument of type {type(tup)}. Takes either int or tuple data types"
+            )
+
+    def norm_1(self, v, is_symbolic=False, force=None):
+        return casadi.norm_1(v) if is_symbolic else np.linalg.norm(v, 1)
+
+    def norm_2(self, v, is_symbolic=False, force=None):
+        return casadi.norm_2(v) if is_symbolic else np.linalg.norm(v, 2)
+
+
+nc = SymbolicHandler()
 
 
 def rej_sampling_rvs(dim, pdf, M):
@@ -86,9 +302,8 @@ def rep_mat(argin, n, m):
     return np.squeeze(repmat(argin, n, m))
 
 
-def push_vec(matrix, vec, is_symbolic=False):
-    npcsd = SymbolicHandler(is_symbolic)
-    return npcsd.vstack([matrix[1:, :], npcsd.array(vec).T])
+def push_vec(matrix, vec):
+    return nc.vstack([matrix[1:, :], vec.T])
 
 
 def uptria2vec(mat):

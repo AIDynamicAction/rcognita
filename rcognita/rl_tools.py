@@ -4,8 +4,8 @@ PARENT_DIR = os.path.abspath(__file__ + "/../../")
 sys.path.insert(0, PARENT_DIR)
 CUR_DIR = os.path.abspath(__file__ + "/..")
 sys.path.insert(0, CUR_DIR)
-from npcasadi_api import SymbolicHandler
 import numpy as np
+from .utilities import nc
 from abc import ABC, abstractmethod
 from models import ModelPolynomial
 from casadi import Function
@@ -39,8 +39,6 @@ class Actor:
         self.gamma = gamma
         self.g_actor_values = []
 
-        npcsd = SymbolicHandler(actor_optimizer.is_symbolic)
-
         if self.actor_model.model_name == "quad-lin":
             self.dim_actor_per_input = int(
                 (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
@@ -51,7 +49,7 @@ class Actor:
             self.dim_actor_per_input = self.dim_output
 
         self.dim_actor = self.dim_actor_per_input * self.dim_input
-        self.w_actor = npcsd.zeros(self.dim_actor)
+        self.w_actor = nc.zeros(self.dim_actor)
 
         if self.ctrl_mode != "MPC" and self._critic == []:
             raise ValueError(
@@ -69,59 +67,52 @@ class Actor:
 
         if len(action_init) == 0:
             self.action_prev = self.action_min / 10
-            self.action_sqn_init = npcsd.rep_mat(self.action_min / 10, 1, self.Nactor)
+            self.action_sqn_init = nc.rep_mat(self.action_min / 10, 1, self.Nactor)
         else:
             self.action_prev = action_init
-            self.action_sqn_init = npcsd.rep_mat(action_init, 1, self.Nactor)
+            self.action_sqn_init = nc.rep_mat(action_init, 1, self.Nactor)
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
-    def compute_MPC_cost(self, observation_sqn, my_action_sqn, is_symbolic=False):
+    def compute_MPC_cost(self, observation_sqn, my_action_sqn):
         J = 0
         for k in range(self.Nactor):
             J += self.gamma ** k * self.stage_obj(
-                observation_sqn[k, :].T, my_action_sqn[k, :].T, is_symbolic=is_symbolic
+                observation_sqn[k, :].T, my_action_sqn[k, :].T
             )
         return J
 
-    def compute_RQL_cost(self, observation_sqn, my_action_sqn, is_symbolic=False):
+    def compute_RQL_cost(self, observation_sqn, my_action_sqn):
         J = 0
         for k in range(self.Nactor - 1):
             J += self.gamma ** k * self.stage_obj(
-                observation_sqn[k, :].T, my_action_sqn[k, :].T, is_symbolic=is_symbolic
+                observation_sqn[k, :].T, my_action_sqn[k, :].T
             )
         J += self._critic(
-            self._critic.weights,
-            observation_sqn[-1, :].T,
-            my_action_sqn[-1, :].T,
-            is_symbolic=is_symbolic,
+            self._critic.weights, observation_sqn[-1, :].T, my_action_sqn[-1, :].T,
         )
         return J
 
-    def compute_SQL_cost(self, observation_sqn, my_action_sqn, is_symbolic=False):
+    def compute_SQL_cost(self, observation_sqn, my_action_sqn):
         J = 0
         for k in range(self.Nactor):
             Q = self._critic(
-                self._critic.weights,
-                observation_sqn[k, :].T,
-                my_action_sqn[k, :].T,
-                is_symbolic=is_symbolic,
+                self._critic.weights, observation_sqn[k, :].T, my_action_sqn[k, :].T,
             )
 
             J += Q
         return J
 
-    def compute_VI_cost(self, observation_sqn, action, is_symbolic=False):
-        J = self.stage_obj(
-            observation_sqn[0, :].T, action.T, is_symbolic=is_symbolic
-        ) + self._critic(
-            self._critic.weights, observation_sqn[1, :].T, is_symbolic=is_symbolic,
+    def compute_VI_cost(self, observation_sqn, action):
+        J = self.stage_obj(observation_sqn[0, :].T, action.T) + self._critic(
+            self._critic.weights, observation_sqn[1, :].T,
         )
         return J
 
-    def _actor_cost(self, action_sqn, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _actor_cost(
+        self, action_sqn, observation,
+    ):
         """
         See class documentation.
         
@@ -132,53 +123,41 @@ class Actor:
 
         """
 
-        my_action_sqn = npcsd.reshape(action_sqn, [self.Nactor, self.dim_input])
+        my_action_sqn = nc.reshape(action_sqn, [self.Nactor, self.dim_input])
 
         observation_sqn = self.state_predictor.predict_state_sqn(
-            observation, my_action_sqn, is_symbolic=is_symbolic
+            observation, my_action_sqn
         )
 
         if self.ctrl_mode == "MPC":
-            J = self.compute_MPC_cost(
-                observation_sqn, my_action_sqn, is_symbolic=is_symbolic
-            )
+            J = self.compute_MPC_cost(observation_sqn, my_action_sqn)
         elif (
             self.ctrl_mode == "RQL"
         ):  # RL: Q-learning with Ncritic-1 roll-outs of stage objectives
-            J = self.compute_RQL_cost(
-                observation_sqn, my_action_sqn, is_symbolic=is_symbolic
-            )
+            J = self.compute_RQL_cost(observation_sqn, my_action_sqn)
         elif self.ctrl_mode == "SQL":  # RL: stacked Q-learning
-            J = self.compute_SQL_cost(
-                observation_sqn, my_action_sqn, is_symbolic=is_symbolic
-            )
+            J = self.compute_SQL_cost(observation_sqn, my_action_sqn)
 
         elif self.ctrl_mode == "RLSTAB":
-            J = self.compute_VI_cost(
-                observation_sqn, my_action_sqn, is_symbolic=is_symbolic
-            )
+            J = self.compute_VI_cost(observation_sqn, my_action_sqn)
             # J = self.compute_MPC_cost(
-            #     observation_sqn, my_action_sqn, is_symbolic=is_symbolic
+            #     observation_sqn, my_action_sqn
             # )
 
         return J
 
-    def _actor_optimizer(
-        self, observation, is_symbolic=False, constraints=(), return_grad=False, t=None
-    ):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _actor_optimizer(self, observation, constraints=(), return_grad=False, t=None):
 
-        my_action_sqn_init = npcsd.reshape(
-            npcsd.array(self.action_prev, ignore=True, array_type="SX"),
-            [self.Nactor * self.dim_input,],
+        my_action_sqn_init = nc.reshape(
+            self.action_prev, [self.Nactor * self.dim_input,],
         )
 
-        cost_function, symbolic_var = npcsd.create_cost_function(
+        cost_function, symbolic_var = nc.function2SX(
             self._actor_cost, observation, x0=my_action_sqn_init
         )
 
         if isinstance(constraints, tuple) and len(constraints) > 0:
-            constraints = npcsd.concatenate(
+            constraints = nc.concatenate(
                 tuple([func(symbolic_var) for func in constraints])
             )
         elif isinstance(constraints, type(lambda x: 0)):
@@ -210,21 +189,18 @@ class Actor:
         if return_grad:
             return (
                 action_sqn[: self.dim_input],
-                npcsd.autograd(cost_function, symbolic_var),
+                nc.autograd(cost_function, symbolic_var),
             )
         else:
             return action_sqn[: self.dim_input]
 
-    def forward(self, w_actor, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic=is_symbolic)
+    def forward(self, w_actor, observation):
 
-        w_actor_reshaped = npcsd.reshape(
+        w_actor_reshaped = nc.reshape(
             w_actor, (self.dim_input, self.dim_actor_per_input)
         )
 
-        result = self.actor_model(
-            w_actor_reshaped, observation, observation, is_symbolic=is_symbolic
-        )
+        result = self.actor_model(w_actor_reshaped, observation, observation)
 
         return result
 
@@ -263,10 +239,8 @@ class Critic(ABC):
     def _critic_cost(self):
         pass
 
-    def _critic_optimizer(
-        self, constraints=(), is_symbolic=False, return_grad=False, t=None
-    ):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _critic_optimizer(self, constraints=(), return_grad=False, t=None):
+
         """
         This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred._critic_cost`.
 
@@ -275,13 +249,13 @@ class Critic(ABC):
         # Optimization method of critic
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
 
-        cost_function, symbolic_var = npcsd.create_cost_function(
-            self._critic_cost, x0=npcsd.array(self.weights_prev)
+        cost_function, symbolic_var = nc.function2SX(
+            self._critic_cost, x0=self.weights_prev
         )
 
         if isinstance(constraints, tuple):
             if len(constraints) > 0:
-                constraints = npcsd.concatenate(
+                constraints = nc.concatenate(
                     tuple([func(symbolic_var) for func in constraints])
                 )
         else:
@@ -289,7 +263,7 @@ class Critic(ABC):
 
         weights = self.critic_optimizer.optimize(
             cost_function,
-            self.weights_init,
+            self.weights_prev,
             constraints=constraints,
             symbolic_var=symbolic_var,
         )
@@ -314,7 +288,7 @@ class Critic(ABC):
         #### DEBUG
 
         if return_grad:
-            return weights, npcsd.autograd(cost_function, symbolic_var)
+            return weights, nc.autograd(cost_function, symbolic_var)
         else:
             return weights
 
@@ -322,27 +296,22 @@ class Critic(ABC):
     def forward(self):
         pass
 
-    def grad_observation(self, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def grad_observation(self, observation):
 
-        observation_symbolic = npcsd.array_symb(
-            npcsd.shape(npcsd.array(observation)), literal="x"
+        observation_symbolic = nc.array_symb(
+            nc.shape(nc.array(observation)), literal="x"
         )
-        weights_symbolic = npcsd.array_symb(
-            npcsd.shape(npcsd.array(self.weights)), literal="w"
-        )
+        weights_symbolic = nc.array_symb(nc.shape(nc.array(self.weights)), literal="w")
 
-        critic_func = self.forward(
-            weights_symbolic, observation_symbolic, is_symbolic=is_symbolic
-        )
+        critic_func = self.forward(weights_symbolic, observation_symbolic)
 
         f = Function("f", [observation_symbolic, weights_symbolic], [critic_func])
 
-        gradient = npcsd.autograd(f, observation_symbolic, weights_symbolic)
+        gradient = nc.autograd(f, observation_symbolic, weights_symbolic)
 
         gradient_evaluated = gradient(observation, weights_symbolic)
 
-        # Lie_derivative = npcsd.dot(v, gradient(observation_symbolic))
+        # Lie_derivative = nc.dot(v, gradient(observation_symbolic))
         return gradient_evaluated, weights_symbolic
 
 
@@ -368,8 +337,8 @@ class CriticValue(Critic):
         self.weights_init = np.ones(self.dim_critic)
         self.weights = self.weights_init
 
-    def forward(self, weights, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def forward(self, weights, observation):
+
         """
         Critic: a routine that models something related to the objective, e.g., value function, Q-function, advantage etc.
         
@@ -380,22 +349,18 @@ class CriticValue(Critic):
         if self.observation_target == []:
             critic_res = self.critic_model(
                 weights,
-                npcsd.array(observation, array_type="SX"),
-                npcsd.array([], array_type="SX"),
-                is_symbolic=is_symbolic,
+                nc.array(observation, array_type="SX"),
+                nc.array([], array_type="SX"),
             )
         else:
             observation_new = observation - self.observation_target
             critic_res = self.critic_model(
-                weights,
-                observation_new.T,
-                npcsd.array([], array_type="SX"),
-                is_symbolic=is_symbolic,
+                weights, observation_new.T, nc.array([], array_type="SX")
             )
 
         return critic_res
 
-    def _critic_cost(self, weights, is_symbolic=False):
+    def _critic_cost(self, weights):
         """
         Cost function of the critic.
         
@@ -416,12 +381,8 @@ class CriticValue(Critic):
 
             # Temporal difference
 
-            critic_prev = self.forward(
-                weights, observation_prev, is_symbolic=is_symbolic
-            )
-            critic_next = self.forward(
-                self.weights_prev, observation_next, is_symbolic=is_symbolic
-            )
+            critic_prev = self.forward(weights, observation_prev)
+            critic_next = self.forward(self.weights_prev, observation_next)
 
             e = (
                 critic_prev
@@ -469,32 +430,24 @@ class CriticActionValue(Critic):
         self.weights_init = np.ones(self.dim_critic)
         self.weights = self.weights_init
 
-    def forward(self, weights, observation, action, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def forward(self, weights, observation, action):
+
         """
         Critic: a routine that models something related to the objective, e.g., value function, Q-function, advantage etc.
         
         Currently, this implementation is for linearly parametrized models.
 
         """
-        if npcsd.shape(observation)[0] == 1:
-            observation = npcsd.array(observation, array_type="SX").T
-            action = npcsd.array(action, array_type="SX").T
-            # self.observation_target = npcsd.array(self.observation_target).T
 
         if self.observation_target == []:
-            critic_res = self.critic_model(
-                weights, observation, action, is_symbolic=is_symbolic,
-            )
+            critic_res = self.critic_model(weights, observation, action,)
         else:
             observation_new = observation - self.observation_target
-            critic_res = self.critic_model(
-                weights, observation_new, action, is_symbolic=is_symbolic,
-            )
+            critic_res = self.critic_model(weights, observation_new, action,)
 
         return critic_res
 
-    def _critic_cost(self, weights, is_symbolic=False):
+    def _critic_cost(self, weights):
         """
         Cost function of the critic.
         
@@ -516,15 +469,8 @@ class CriticActionValue(Critic):
 
             # Temporal difference
 
-            critic_prev = self.forward(
-                weights, observation_prev.T, action_prev.T, is_symbolic=is_symbolic
-            )
-            critic_next = self.forward(
-                self.weights_prev,
-                observation_next,
-                action_next,
-                is_symbolic=is_symbolic,
-            )
+            critic_prev = self.forward(weights, observation_prev.T, action_prev.T)
+            critic_next = self.forward(self.weights_prev, observation_next, action_next)
 
             e = (
                 critic_prev

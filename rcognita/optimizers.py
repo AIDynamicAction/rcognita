@@ -1,18 +1,15 @@
-from rcognita.utilities import rep_mat
+from rcognita.utilities import rep_mat, nc
 import scipy as sp
 from scipy.optimize import minimize
 import numpy as np
-from casadi import vertcat, nlpsol, DM
+from casadi import vertcat, optimization_problemsol, DM, SX, Function
 import time
-from npcasadi_api import SymbolicHandler
-from casadi import SX, Function
 
-MAX_ITER = 400
+MAX_ITER = 250
 
 
 class RcognitaOptimizer:
-    def __init__(self, opt_method, optimizer, bounds, options, is_symbolic=False):
-        self.is_symbolic = is_symbolic
+    def __init__(self, opt_method, optimizer, bounds, options):
         self.opt_method = opt_method
         self.optimizer = optimizer
         self.bounds = bounds
@@ -46,7 +43,7 @@ class RcognitaOptimizer:
         return opt_wrapper
 
     @staticmethod
-    def standard_actor_optimizer(actor_opt_method, **kwargs):
+    def create_scipy_actor_optimizer(actor_opt_method, **kwargs):
         ctrl_bnds = kwargs.get("ctrl_bnds")
         Nactor = kwargs.get("Nactor")
         action_min = np.array(ctrl_bnds[:, 0])
@@ -86,7 +83,7 @@ class RcognitaOptimizer:
         return RcognitaOptimizer(actor_opt_method, minimizer, bnds, actor_opt_options)
 
     @staticmethod
-    def standard_critic_optimizer(critic_opt_method, **kwargs):
+    def create_scipy_critic_optimizer(critic_opt_method, **kwargs):
 
         critic_struct = kwargs.get("critic_struct")
         dim_input = kwargs.get("dim_input")
@@ -171,6 +168,8 @@ class RcognitaOptimizer:
             "ipopt.print_level": 0,
             "ipopt.acceptable_tol": 1e-7,
             "ipopt.acceptable_obj_change_tol": 1e-4,
+            "ipopt.constr_viol_tol": 1e-7,
+            "ipopt.theta_max_fact": 1e-3,
         }
 
         def optimizer(
@@ -183,22 +182,23 @@ class RcognitaOptimizer:
             symbolic_var=None,
             verbose=True,
         ):
-            npcsd = SymbolicHandler(True)
-            qp_prob = {
+            optimization_problem = {
                 "f": cost,
                 "x": vertcat(symbolic_var),
                 "g": vertcat(constraints),
             }
 
             if isinstance(constraints, tuple):
-                ubg = npcsd.zeros(len(constraints))
+                ubg = nc.zeros(len(constraints))
             elif isinstance(constraints, SX):
-                ubg = npcsd.zeros(1)
+                ubg = nc.zeros(1)
 
-            if npcsd.shape(npcsd.array(constraints))[0] > 0:
-                ubg = npcsd.zeros(npcsd.shape(constraints))
+            if nc.shape(constraints)[0] > 0:
+                ubg = nc.zeros(nc.shape(constraints))
             try:
-                solver = nlpsol("solver", opt_method, qp_prob, options)
+                solver = optimization_problemsol(
+                    "solver", opt_method, optimization_problem, options
+                )
             except Exception as e:
                 print(e)
                 return x0
@@ -216,9 +216,7 @@ class RcognitaOptimizer:
 
             return result["x"]
 
-        return RcognitaOptimizer(
-            opt_method, optimizer, bounds, options, is_symbolic=True
-        )
+        return RcognitaOptimizer(opt_method, optimizer, bounds, options)
 
     @staticmethod
     def casadi_q_critic_optimizer(opt_method="ipopt", max_iter=MAX_ITER, **kwargs):
@@ -269,21 +267,21 @@ class RcognitaOptimizer:
             symbolic_var=None,
             verbose=True,
         ):
-
-            npcsd = SymbolicHandler(True)
             if constraints is None:
                 constraints = ()
-            qp_prob = {
+            optimization_problem = {
                 "f": cost,
                 "x": vertcat(symbolic_var),
                 "g": vertcat(constraints),
             }
 
             ubg = None
-            if npcsd.shape(npcsd.array(constraints))[0] > 0:
-                ubg = npcsd.zeros(npcsd.shape(constraints))
+            if nc.shape(constraints)[0] > 0:
+                ubg = nc.zeros(constraints)
             try:
-                solver = nlpsol("solver", opt_method, qp_prob, options)
+                solver = optimization_problemsol(
+                    "solver", opt_method, optimization_problem, options
+                )
             except:
                 return x0
             start = time.time()
@@ -294,9 +292,7 @@ class RcognitaOptimizer:
             final_time = time.time() - start
             return result["x"]
 
-        return RcognitaOptimizer(
-            opt_method, optimizer, bounds, options, is_symbolic=True
-        )
+        return RcognitaOptimizer(opt_method, optimizer, bounds, options)
 
     def casadi_v_critic_optimizer(opt_method="ipopt", max_iter=MAX_ITER, **kwargs):
         critic_struct = kwargs.get("critic_struct")
@@ -313,7 +309,7 @@ class RcognitaOptimizer:
             Wmax = 1e3 * np.ones(dim_critic)
         elif critic_struct == "quad-nomix":
             dim_critic = dim_output
-            Wmin = np.zeros(dim_critic)
+            Wmin = np.ones(dim_critic) * 0.1
             Wmax = 1e3 * np.ones(dim_critic)
 
         options = {
@@ -322,6 +318,8 @@ class RcognitaOptimizer:
             "ipopt.print_level": 0,
             "ipopt.acceptable_tol": 1e-7,
             "ipopt.acceptable_obj_change_tol": 1e-4,
+            "ipopt.constr_viol_tol": 1e-6,
+            "ipopt.theta_max_fact": 1e-3,
         }
 
         bounds = [Wmin, Wmax]
@@ -336,22 +334,22 @@ class RcognitaOptimizer:
             symbolic_var=None,
             verbose=True,
         ):
-
-            npcsd = SymbolicHandler(True)
             if constraints is None:
                 constraints = ()
 
-            qp_prob = {
+            optimization_problem = {
                 "f": cost,
                 "x": vertcat(symbolic_var),
                 "g": vertcat(constraints),
             }
 
             ubg = None
-            if npcsd.shape(npcsd.array(constraints))[0] > 0:
-                ubg = npcsd.zeros(npcsd.shape(constraints))
+            if nc.shape(constraints)[0] > 0:
+                ubg = nc.zeros(nc.shape(constraints))
             try:
-                solver = nlpsol("solver", opt_method, qp_prob, options)
+                solver = optimization_problemsol(
+                    "solver", opt_method, optimization_problem, options
+                )
             except:
                 return x0
             start = time.time()
@@ -362,7 +360,38 @@ class RcognitaOptimizer:
             final_time = time.time() - start
             return result["x"]
 
-        return RcognitaOptimizer(
-            opt_method, optimizer, bounds, options, is_symbolic=True
+        return RcognitaOptimizer(opt_method, optimizer, bounds, options)
+
+
+class GradientOptimizer:
+    def __init__(self, objective, learning_rate, n_steps, len_ub=1e-2):
+        self.objective = objective
+        self.learning_rate = learning_rate
+        self.n_steps = n_steps
+        self.len_ub = len_ub
+
+    def substitute_args(self, x0, *args):
+        cost_function, symbolic_var = nc.function2SX(
+            self.objective, x0=x0, force=True, *args
         )
+
+        return cost_function, symbolic_var
+
+    def grad_step(self, x0, *args):
+        cost_function, symbolic_var = self.substitute_args(x0, *args)
+        cost_function = Function("f", [symbolic_var], [cost_function])
+        gradient = nc.autograd(cost_function, symbolic_var)
+        grad_eval = gradient(x0)
+        norm_grad = nc.norm_2(grad_eval)
+        if norm_grad > 1:
+            grad_eval = grad_eval / norm_grad * self.len_up
+
+        x0_res = x0 - self.learning_rate * grad_eval
+        return x0_res
+
+    def optimize(self, x0, *args):
+        for _ in range(self.n_steps):
+            x0 = self.grad_step(x0, *args)
+
+        return x0
 

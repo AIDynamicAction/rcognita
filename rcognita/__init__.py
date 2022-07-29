@@ -9,4 +9,3 @@ from . import visuals
 from . import utilities
 from . import models
 from . import state_predictors
-from . import npcasadi_api

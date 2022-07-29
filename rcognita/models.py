@@ -14,8 +14,7 @@ sys.path.insert(0, PARENT_DIR)
 CUR_DIR = os.path.abspath(__file__ + "/..")
 sys.path.insert(0, CUR_DIR)
 
-from npcasadi_api import SymbolicHandler
-from utilities import uptria2vec
+from utilities import uptria2vec, nc
 import numpy as np
 
 
@@ -68,24 +67,21 @@ class ModelPolynomial:
     def __call__(self, *args, **kwargs):
         return self.compute(*args, **kwargs)
 
-    def compute(self, v, v1, v2, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def compute(self, v, v1, v2):
 
-        if npcsd.shape(v1)[1] != 1:
-            v1 = v1.T
-        if npcsd.shape(v2)[1] != 1:
-            v2 = v2.T
-        chi = npcsd.concatenate([v1, npcsd.array(v2, array_type="SX")])
+        v1 = nc.to_col(v1)
+        v2 = nc.to_col(v2)
+        chi = nc.concatenate([v1, v2])
         if self.model_name == "quad-lin":
-            polynom = npcsd.concatenate([uptria2vec(np.outer(chi, chi)), chi])
+            polynom = nc.concatenate([uptria2vec(np.outer(chi, chi)), chi])
         elif self.model_name == "quadratic":
-            polynom = npcsd.concatenate([uptria2vec(np.outer(chi, chi))])
+            polynom = nc.concatenate([uptria2vec(np.outer(chi, chi))])
         elif self.model_name == "quad-nomix":
             polynom = chi * chi
         elif self.model_name == "quad-mix":
-            polynom = npcsd.concatenate([v1 ** 2, npcsd.kron(v1, v2), v2 ** 2])
+            polynom = nc.concatenate([v1 ** 2, nc.kron(v1, v2), v2 ** 2])
 
-        result = npcsd.dot(v, polynom)
+        result = nc.dot(v, polynom)
 
         return result
 
@@ -99,13 +95,12 @@ class ModelQuadForm:
     def __call__(self, *args, **kwargs):
         return self.compute(*args, **kwargs)
 
-    def compute(self, v1, v2, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def compute(self, v1, v2):
         if self.model_name == "quadratic":
-            result = npcsd.matmul(npcsd.matmul(v1.T, self.R1), v2)
+            result = nc.matmul(nc.matmul(v1.T, self.R1), v2)
         elif self.model_name == "biquadratic":
-            result = npcsd.matmul(
-                npcsd.matmul(v1.T ** 2, self.R2), v2 ** 2
-            ) + npcsd.matmul(npcsd.matmul(v1.T, self.R1), v2)
+            result = nc.matmul(nc.matmul(v1.T ** 2, self.R2), v2 ** 2) + nc.matmul(
+                nc.matmul(v1.T, self.R1), v2
+            )
 
         return result

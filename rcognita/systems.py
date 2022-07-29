@@ -14,7 +14,7 @@ Remarks:
 from calendar import c
 import numpy as np
 from numpy.random import randn
-from .npcasadi_api import SymbolicHandler
+from .utilities import nc
 
 
 class System:
@@ -172,8 +172,8 @@ class System:
         """
         pass
 
-    def _ctrl_dyn(self, t, action, observation, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _ctrl_dyn(self, t, action, observation):
+
         """
         Dynamical controller. When ``is_dyn_ctrl=0``, the controller is considered static, which is to say that the control actions are
         computed immediately from the system's output.
@@ -187,12 +187,12 @@ class System:
         | ``sys_type = "discr_prob"`` : :math:`action^+ \sim P_U(action^+|action, observation)`        
         
         """
-        Daction = npcsd.zeros(self.dim_input)
+        Daction = nc.zeros(self.dim_input)
 
         return Daction
 
-    def out(self, state, action=[], is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def out(self, state, action=[]):
+
         """
         System output.
         This is commonly associated with signals that are measured in the system.
@@ -204,7 +204,7 @@ class System:
         
         """
         # Trivial case: output identical to state
-        observation = npcsd.array(state)
+        observation = state
         return observation
 
     def receive_action(self, action):
@@ -318,14 +318,13 @@ class Sys3WRobot(System):
             self.mu_disturb = self.pars_disturb[1]
             self.tau_disturb = self.pars_disturb[2]
 
-    def _state_dyn(self, t, state, action, disturb=[], is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _state_dyn(self, t, state, action, disturb=[]):
 
         m, I = self.pars[0], self.pars[1]
 
-        Dstate = npcsd.zeros(self.dim_state, array_type="SX")
-        Dstate[0] = state[3] * npcsd.cos(state[2])
-        Dstate[1] = state[3] * npcsd.sin(state[2])
+        Dstate = nc.zeros(self.dim_state, array_type="SX")
+        Dstate[0] = state[3] * nc.cos(state[2])
+        Dstate[1] = state[3] * nc.sin(state[2])
         Dstate[2] = state[4]
 
         if self.is_disturb and (disturb != []):
@@ -337,8 +336,8 @@ class Sys3WRobot(System):
 
         return Dstate
 
-    def _disturb_dyn(self, t, disturb, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _disturb_dyn(self, t, disturb):
+
         """
         Description
         -----------
@@ -353,7 +352,7 @@ class Sys3WRobot(System):
         ``pars_disturb = [sigma_disturb, mu_disturb, tau_disturb]``, with each being an array of shape ``[dim_disturb, ]``
         
         """
-        Ddisturb = npcsd.zeros(self.dim_disturb)
+        Ddisturb = nc.zeros(self.dim_disturb)
 
         for k in range(0, self.dim_disturb):
             Ddisturb[k] = -self.tau_disturb[k] * (
@@ -362,12 +361,12 @@ class Sys3WRobot(System):
 
         return Ddisturb
 
-    def out(self, state, action=[], is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-        # observation = npcsd.zeros(self.dim_output)
+    def out(self, state, action=[]):
+
+        # observation = nc.zeros(self.dim_output)
         # observation = state[:3] + measNoise # <-- Measure only position and orientation
         # observation = state  # <-- Position, force and torque sensors on
-        return npcsd.array(state, array_type="SX")
+        return state
 
 
 class Sys3WRobotNI(System):
@@ -387,29 +386,28 @@ class Sys3WRobotNI(System):
             self.mu_disturb = self.pars_disturb[1]
             self.tau_disturb = self.pars_disturb[2]
 
-    def _state_dyn(self, t, state, action, disturb=[], is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _state_dyn(self, t, state, action, disturb=[]):
 
-        Dstate = npcsd.zeros(self.dim_state, array_type="SX")
+        Dstate = nc.zeros(self.dim_state, array_type="SX")
 
         if self.is_disturb and (disturb != []):
-            Dstate[0] = action[0] * npcsd.cos(state[2]) + disturb[0]
-            Dstate[1] = action[0] * npcsd.sin(state[2]) + disturb[0]
+            Dstate[0] = action[0] * nc.cos(state[2]) + disturb[0]
+            Dstate[1] = action[0] * nc.sin(state[2]) + disturb[0]
             Dstate[2] = action[1] + disturb[1]
         else:
-            Dstate[0] = action[0] * npcsd.cos(state[2])
-            Dstate[1] = action[0] * npcsd.sin(state[2])
+            Dstate[0] = action[0] * nc.cos(state[2])
+            Dstate[1] = action[0] * nc.sin(state[2])
             Dstate[2] = action[1]
 
         return Dstate
 
-    def _disturb_dyn(self, t, disturb, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _disturb_dyn(self, t, disturb):
+
         """
         
         
         """
-        Ddisturb = npcsd.zeros(self.dim_disturb)
+        Ddisturb = nc.zeros(self.dim_disturb)
 
         for k in range(0, self.dim_disturb):
             Ddisturb[k] = -self.tau_disturb[k] * (
@@ -418,9 +416,9 @@ class Sys3WRobotNI(System):
 
         return Ddisturb
 
-    def out(self, state, action=[], is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-        observation = npcsd.zeros(self.dim_output)
+    def out(self, state, action=[]):
+
+        observation = nc.zeros(self.dim_output)
         observation = state
         return observation
 
@@ -436,26 +434,24 @@ class Sys2Tank(System):
 
         self.name = "2tank"
 
-    def _state_dyn(self, t, state, action, disturb=[], is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _state_dyn(self, t, state, action, disturb=[]):
 
         tau1, tau2, K1, K2, K3 = self.pars
 
-        Dstate = npcsd.zeros(self.dim_state)
+        Dstate = nc.zeros(self.dim_state)
         Dstate[0] = 1 / (tau1) * (-state[0] + K1 * action)
         Dstate[1] = 1 / (tau2) * (-state[1] + K2 * state[0] + K3 * state[1] ** 2)
 
         return Dstate
 
-    def _disturb_dyn(self, t, disturb, is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
+    def _disturb_dyn(self, t, disturb):
 
-        Ddisturb = npcsd.zeros(self.dim_disturb)
+        Ddisturb = nc.zeros(self.dim_disturb)
 
         return Ddisturb
 
-    def out(self, state, action=[], is_symbolic=False):
-        npcsd = SymbolicHandler(is_symbolic)
-        observation = npcsd.zeros(self.dim_output)
+    def out(self, state, action=[]):
+
+        observation = nc.zeros(self.dim_output)
         observation = state
         return observation
