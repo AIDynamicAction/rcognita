@@ -61,7 +61,7 @@ parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
                              'RQL',
                              'SQL',
                              'JACS'],
-                    default='nominal',
+                    default='SQL',
                     help='Control mode. Currently available: ' +
                     '----manual: manual constant control specified by action_manual; ' +
                     '----nominal: nominal controller, usually used to benchmark optimal controllers;' +                    
@@ -73,7 +73,7 @@ parser.add_argument('--dt', type=float, metavar='dt',
                     default=0.01,
                     help='Controller sampling time.' )
 parser.add_argument('--t1', type=float, metavar='t1',
-                    default=10.0,
+                    default=25.0,
                     help='Final time of episode.' )
 parser.add_argument('--Nruns', type=int,
                     default=1,
@@ -86,7 +86,7 @@ parser.add_argument('--is_log_data', type=bool,
                     default=False,
                     help='Flag to log data into a data file. Data are stored in simdata folder.')
 parser.add_argument('--is_visualization', type=bool,
-                    default=True,
+                    default=False,
                     help='Flag to produce graphical output.')
 parser.add_argument('--is_print_sim_step', type=bool,
                     default=True,
@@ -110,7 +110,7 @@ parser.add_argument('--action_manual', type=float,
                     default=[-5, -3], nargs='+',
                     help='Manual control action to be fed constant, system-specific!')
 parser.add_argument('--Nactor', type=int,
-                    default=5,
+                    default=6,
                     help='Horizon length (in steps) for predictive controllers.')
 parser.add_argument('--pred_step_size_multiplier', type=float,
                     default=2.0,
