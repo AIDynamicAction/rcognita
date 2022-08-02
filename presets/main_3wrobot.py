@@ -61,7 +61,7 @@ parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
                              'RQL',
                              'SQL',
                              'JACS'],
-                    default='SQL',
+                    default='nominal',
                     help='Control mode. Currently available: ' +
                     '----manual: manual constant control specified by action_manual; ' +
                     '----nominal: nominal controller, usually used to benchmark optimal controllers;' +                    
