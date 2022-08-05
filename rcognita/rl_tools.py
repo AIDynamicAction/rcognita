@@ -83,83 +83,6 @@ class Actor:
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
-    def compute_MPC_cost(self, observation_sqn, my_action_sqn):
-        J = 0
-        for k in range(self.Nactor):
-            J += self.gamma ** k * self.stage_obj(
-                observation_sqn[k, :].T, my_action_sqn[k, :].T
-            )
-        return J
-
-    def compute_RQL_cost(self, observation_sqn, my_action_sqn):
-        J = 0
-        for k in range(self.Nactor):
-            J += self.gamma ** k * self.stage_obj(
-                observation_sqn[k, :], my_action_sqn[k, :]
-            )
-        J += self.critic(
-            observation_sqn[-1, :], my_action_sqn[-1, :], self.critic.weights
-        )
-        return J
-
-    def compute_SQL_cost(self, observation_sqn, my_action_sqn):
-        J = 0
-        for k in range(self.Nactor + 1):
-            Q = self.critic(
-                observation_sqn[k, :], my_action_sqn[k, :], self.critic.weights,
-            )
-
-            J += Q
-        return J
-
-    def compute_VI_cost(self, observation_sqn, action):
-        J = self.stage_obj(observation_sqn[0, :], action[0, :]) + self.critic(
-            observation_sqn[1, :].T, self.critic.weights
-        )
-        return J
-
-    def cost(
-        self, action_sqn, observation,
-    ):
-        """
-        See class documentation.
-        
-        Customization
-        -------------        
-        
-        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
-
-        """
-
-        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
-
-        observation_sqn = [observation]
-
-        observation_sqn_predicted = self.state_predictor.predict_state_sqn(
-            observation, my_action_sqn
-        )
-
-        observation_sqn = nc.vstack(
-            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
-        )
-
-        if self.control_mode == "MPC":
-            J = self.compute_MPC_cost(observation_sqn, my_action_sqn)
-        elif (
-            self.control_mode == "RQL"
-        ):  # RL: Q-learning with Ncritic-1 roll-outs of stage objectives
-            J = self.compute_RQL_cost(observation_sqn, my_action_sqn)
-        elif self.control_mode == "SQL":  # RL: stacked Q-learning
-            J = self.compute_SQL_cost(observation_sqn, my_action_sqn)
-
-        elif self.control_mode == "RLSTAB":
-            J = self.compute_VI_cost(observation_sqn, my_action_sqn)
-            # J = self.compute_MPC_cost(
-            #     observation_sqn, my_action_sqn
-            # )
-
-        return J
-
     def create_constraints(self, constraint_functions, my_action_sqn, observation):
         current_observation = observation
 
@@ -279,7 +202,146 @@ class Actor:
         return result
 
 
-class ActorSTAG(Actor):
+class ActorMPC(Actor):
+    def cost(
+        self, action_sqn, observation,
+    ):
+        """
+        See class documentation.
+        
+        Customization
+        -------------        
+        
+        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
+
+        """
+
+        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+
+        observation_sqn = [observation]
+
+        observation_sqn_predicted = self.state_predictor.predict_state_sqn(
+            observation, my_action_sqn
+        )
+
+        observation_sqn = nc.vstack(
+            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        )
+
+        J = 0
+        for k in range(self.Nactor):
+            J += self.gamma ** k * self.stage_obj(
+                observation_sqn[k, :].T, my_action_sqn[k, :].T
+            )
+        return J
+
+
+class ActorSQL(Actor):
+    def cost(
+        self, action_sqn, observation,
+    ):
+        """
+        See class documentation.
+        
+        Customization
+        -------------        
+        
+        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
+
+        """
+
+        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+
+        observation_sqn = [observation]
+
+        observation_sqn_predicted = self.state_predictor.predict_state_sqn(
+            observation, my_action_sqn
+        )
+
+        observation_sqn = nc.vstack(
+            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        )
+
+        J = 0
+        for k in range(self.Nactor + 1):
+            Q = self.critic(
+                observation_sqn[k, :], my_action_sqn[k, :], self.critic.weights,
+            )
+
+            J += Q
+        return J
+
+
+class ActorRQL(Actor):
+    def cost(
+        self, action_sqn, observation,
+    ):
+        """
+        See class documentation.
+        
+        Customization
+        -------------        
+        
+        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
+
+        """
+
+        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+
+        observation_sqn = [observation]
+
+        observation_sqn_predicted = self.state_predictor.predict_state_sqn(
+            observation, my_action_sqn
+        )
+
+        observation_sqn = nc.vstack(
+            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        )
+
+        J = 0
+        for k in range(self.Nactor):
+            J += self.gamma ** k * self.stage_obj(
+                observation_sqn[k, :], my_action_sqn[k, :]
+            )
+        J += self.critic(
+            observation_sqn[-1, :], my_action_sqn[-1, :], self.critic.weights
+        )
+        return J
+
+
+class ActorVI(Actor):
+    def cost(
+        self, action_sqn, observation,
+    ):
+        """
+        See class documentation.
+        
+        Customization
+        -------------        
+        
+        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
+
+        """
+
+        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+
+        observation_sqn = [observation]
+
+        observation_sqn_predicted = self.state_predictor.predict_state_sqn(
+            observation, my_action_sqn
+        )
+
+        observation_sqn = nc.vstack(
+            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        )
+
+        J = self.stage_obj(observation_sqn[0, :], my_action_sqn[0, :]) + self.critic(
+            observation_sqn[1, :].T, self.critic.weights
+        )
+        return J
+
+
+class ActorSTAG(ActorVI):
     def get_optimized_action(self, observation, constraint_functions=(), t=None):
 
         rep_action_prev = nc.rep_mat(self.action_prev / 10, 1, self.Nactor + 1)
@@ -356,6 +418,36 @@ class ActorSTAG(Actor):
             )
 
         return action_sqn_optimized[: self.dim_input]
+
+    def cost(
+        self, action_sqn, observation,
+    ):
+        """
+        See class documentation.
+        
+        Customization
+        -------------        
+        
+        Introduce your mode and the respective actor loss in this method. Don't forget to provide description in the class documentation.
+
+        """
+
+        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+
+        observation_sqn = [observation]
+
+        observation_sqn_predicted = self.state_predictor.predict_state_sqn(
+            observation, my_action_sqn
+        )
+
+        observation_sqn = nc.vstack(
+            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        )
+
+        J = self.stage_obj(observation_sqn[0, :], my_action_sqn[0, :]) + self.critic(
+            observation_sqn[1, :].T, self.critic.weights
+        )
+        return J
 
 
 class Critic(ABC):

@@ -47,7 +47,15 @@ from rcognita import (
 )
 from datetime import datetime
 from rcognita.utilities import on_key_press
-from rcognita.rl_tools import Actor, CriticActionValue, CriticSTAG, ActorSTAG
+from rcognita.rl_tools import (
+    CriticActionValue,
+    CriticSTAG,
+    ActorSTAG,
+    ActorMPC,
+    ActorRQL,
+    ActorSQL,
+    ActorVI,
+)
 
 
 class Pipeline3WRobotNI(AbstractPipeline):
@@ -114,7 +122,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             critic_model=models.ModelPolynomial(model_name=self.critic_struct),
         )
 
-        self.q_actor = Actor(
+        self.q_actor = ActorMPC(
             self.Nactor,
             self.dim_input,
             self.dim_output,
