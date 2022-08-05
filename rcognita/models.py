@@ -64,24 +64,25 @@ class ModelPolynomial:
     def __init__(self, model_name="quad-lin"):
         self.model_name = model_name
 
-    def __call__(self, *args, **kwargs):
-        return self.compute(*args, **kwargs)
+    def __call__(self, v1, v2, weights):
+        return self.compute(v1, v2, weights)
 
-    def compute(self, v, v1, v2):
+    def compute(self, v1, v2, weights):
 
         v1 = nc.to_col(v1)
         v2 = nc.to_col(v2)
         chi = nc.concatenate([v1, v2])
         if self.model_name == "quad-lin":
-            polynom = nc.concatenate([uptria2vec(np.outer(chi, chi)), chi])
+            polynom = nc.to_col(uptria2vec(nc.outer(chi, chi)))
+            polynom = nc.concatenate([polynom, chi])**2
         elif self.model_name == "quadratic":
-            polynom = nc.concatenate([uptria2vec(np.outer(chi, chi))])
+            polynom = nc.to_col(uptria2vec(nc.outer(chi, chi))) ** 2
         elif self.model_name == "quad-nomix":
             polynom = chi * chi
         elif self.model_name == "quad-mix":
             polynom = nc.concatenate([v1 ** 2, nc.kron(v1, v2), v2 ** 2])
 
-        result = nc.dot(v, polynom)
+        result = nc.dot(weights, polynom)
 
         return result
 
@@ -92,8 +93,8 @@ class ModelQuadForm:
         self.R1 = R1
         self.R2 = R2
 
-    def __call__(self, *args, **kwargs):
-        return self.compute(*args, **kwargs)
+    def __call__(self, v1, v2):
+        return self.compute(v1, v2)
 
     def compute(self, v1, v2):
         if self.model_name == "quadratic":
@@ -102,5 +103,6 @@ class ModelQuadForm:
             result = nc.matmul(nc.matmul(v1.T ** 2, self.R2), v2 ** 2) + nc.matmul(
                 nc.matmul(v1.T, self.R1), v2
             )
+        result = nc.squeeze(result)
 
         return result

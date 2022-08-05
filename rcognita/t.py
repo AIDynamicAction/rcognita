@@ -54,25 +54,106 @@
 # plt.legend()
 # plt.show()
 
-import os, sys
+# import os, sys
+# import numpy as np
+
+# PARENT_DIR = os.path.abspath(__file__ + "/../../")
+# sys.path.insert(0, PARENT_DIR)
+# CUR_DIR = os.path.abspath(__file__ + "/..")
+# sys.path.insert(0, CUR_DIR)
+
+# from utilities import nc
+
+
+# def func(x):
+#     return x ** 2
+
+
+# a = [1, 2, 3]
+
+# p = np.array([2])
+# x_sym = nc.array()
+# x_num = np.array([1, 2])
+# norm = nc.norm_1(x_num)
+# print(norm)
+
+from abc import ABC, abstractmethod
 import numpy as np
-
-PARENT_DIR = os.path.abspath(__file__ + "/../../")
-sys.path.insert(0, PARENT_DIR)
-CUR_DIR = os.path.abspath(__file__ + "/..")
-sys.path.insert(0, CUR_DIR)
-
 from utilities import nc
+from npcasadi_api import typeInferenceDecoratorFunc
+
+Nactor = 10
+dim_input = 2
+pred_step_size = 0.01
+dim_state = 5
 
 
-def func(x):
-    return x ** 2
+def sys_rhs(t, state, action, disturb=[]):
+
+    Dstate = nc.zeros(dim_state, prototype=action)
+    Dstate[0] = state[3] * nc.cos(state[2])
+    Dstate[1] = state[3] * nc.sin(state[2])
+    Dstate[2] = state[4]
+
+    Dstate[3] = 1 / action[0]
+    Dstate[4] = 1 / action[1]
+
+    return Dstate
 
 
-a = [1, 2, 3]
+g1 = lambda x: x[0] ** 2 + x[1] ** 2
 
-p = np.array([2])
-x_sym = nc.array()
-x_num = np.array([1, 2])
-norm = nc.norm_1(x_num)
-print(norm)
+g2 = lambda x: x[0] ** 2 - x[1] ** 2 + 1
+
+constraints = (g1, g2)
+
+observation = nc.array([5, 5, 0.5, 1, 1], array_type="SX")
+
+u = nc.array_symb((dim_input * Nactor, 1), literal="x")
+
+u = nc.array_symb((dim_input * Nactor, 1), literal="x")
+
+
+def create_symbolic_constraints(
+    my_action_sqn, constraint_functions, observation, is_symbolic=False
+):
+    current_observation = observation
+
+    constraint_violations_result = [0 for _ in range(Nactor - 1)]
+    constraint_violations_buffer = [0 for _ in constraint_functions]
+
+    for constraint_function in constraint_functions:
+        constraint_violations_buffer[0] = constraint_function(current_observation)
+
+    max_constraint_violation = nc.max(constraint_violations_buffer)
+    start_in_danger = max_constraint_violation > 0.0
+
+    max_constraint_violation = -1
+    action_sqn = nc.reshape(my_action_sqn, [Nactor, dim_input])
+    predicted_state = current_observation
+
+    for i in range(1, Nactor):
+
+        current_action = action_sqn[i - 1, :]
+        predicted_state = predicted_state + pred_step_size * sys_rhs(
+            [], predicted_state, current_action
+        )
+
+        constraint_violations_buffer = []
+        for constraint in constraints:
+            constraint_violations_buffer.append(constraint(predicted_state))
+
+        max_constraint_violation = nc.max(constraint_violations_buffer)
+        constraint_violations_result[i - 1] = max_constraint_violation
+
+    for i in range(2, Nactor - 1):
+        constraint_violations_result[i] = nc.if_else(
+            nc.logic_and(constraint_violations_result[i - 1] > 0, start_in_danger),
+            constraint_violations_result[i - 1],
+            constraint_violations_result[i],
+        )
+
+    return constraint_violations_result, my_action_sqn
+
+
+print(create_symbolic_constraints(u, constraints, observation))

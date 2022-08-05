@@ -34,21 +34,21 @@ class Pipeline3WRobotCasadi(Pipeline3WRobot):
     def optimizers_initialization(self):
 
         self.actor_optimizer = optimizers.RcognitaOptimizer.CasADi_actor_optimizer(
-            actor_opt_method="ipopt", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
+            opt_method="ipopt", control_bounds=self.control_bounds, Nactor=self.Nactor,
         )
         self.v_critic_optimizer = optimizers.RcognitaOptimizer.CasADi_v_critic_optimizer(
-            critic_opt_method="ipopt",
+            opt_method="ipopt",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
         )
         self.q_critic_optimizer = optimizers.RcognitaOptimizer.CasADi_q_critic_optimizer(
-            critic_opt_method="ipopt",
+            opt_method="ipopt",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
         )
-        if self.ctrl_mode == "RLSTAB":
+        if self.control_mode == "RLSTAB":
             self.critic_optimizer = self.v_critic_optimizer
         else:
             self.critic_optimizer = self.q_critic_optimizer
@@ -58,7 +58,7 @@ def main():
     pipeline = Pipeline3WRobotCasadi()
     pipeline.pipeline_execution()
     # DEBUG ===================================================================
-    if pipeline.ctrl_mode == "RLSTAB":
+    if pipeline.control_mode == "RLSTAB":
         plt.figure(figsize=(10, 10))
         plt.subplot(2, 2, 1)
         plt.plot(

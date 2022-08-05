@@ -31,10 +31,10 @@ class Pipeline2TankCasADi(Pipeline2Tank):
     def optimizers_initialization(self):
 
         self.actor_optimizer = optimizers.RcognitaOptimizer.CasADi_actor_optimizer(
-            actor_opt_method="ipopt", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
+            opt_method="ipopt", control_bounds=self.control_bounds, Nactor=self.Nactor,
         )
         self.critic_optimizer = optimizers.RcognitaOptimizer.CasADi_critic_optimizer(
-            critic_opt_method="SLSQP",
+            opt_method="SLSQP",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,

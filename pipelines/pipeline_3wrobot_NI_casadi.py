@@ -30,25 +30,20 @@ from pipeline_3wrobot_NI import Pipeline3WRobotNI
 class Pipeline3WRobotNICasadi(Pipeline3WRobotNI):
     def optimizers_initialization(self):
 
-        self.actor_optimizer = optimizers.RcognitaOptimizer.CasADi_actor_optimizer(
-            actor_opt_method="ipopt", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
+        opt_options = {
+            "print_time": 0,
+            "ipopt.max_iter": 200,
+            "ipopt.print_level": 0,
+            "ipopt.acceptable_tol": 1e-7,
+            "ipopt.acceptable_obj_change_tol": 1e-4,
+        }
+
+        self.actor_optimizer = optimizers.CasADiOptimizer(
+            opt_method="ipopt", opt_options=opt_options
         )
-        self.v_critic_optimizer = optimizers.RcognitaOptimizer.CasADi_v_critic_optimizer(
-            critic_opt_method="SLSQP",
-            critic_struct=self.critic_struct,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
+        self.critic_optimizer = optimizers.CasADiOptimizer(
+            opt_method="ipopt", opt_options=opt_options,
         )
-        self.q_critic_optimizer = optimizers.RcognitaOptimizer.CasADi_q_critic_optimizer(
-            critic_opt_method="SLSQP",
-            critic_struct=self.critic_struct,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
-        )
-        if self.ctrl_mode == "RLSTAB":
-            self.critic_optimizer = self.v_critic_optimizer
-        else:
-            self.critic_optimizer = self.q_critic_optimizer
 
 
 if __name__ == "__main__":

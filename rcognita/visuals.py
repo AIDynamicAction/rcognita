@@ -136,7 +136,7 @@ class Animator3WRobot(Animator):
             xMax,
             yMin,
             yMax,
-            ctrl_mode,
+            control_mode,
             action_manual,
             Fmin,
             Mmin,
@@ -153,7 +153,7 @@ class Animator3WRobot(Animator):
         self.t0 = t0
         self.state_full_init = state_full_init
         self.t1 = t1
-        self.ctrl_mode = ctrl_mode
+        self.control_mode = control_mode
         self.action_manual = action_manual
         self.Nruns = Nruns
         self.no_print = no_print
@@ -364,9 +364,7 @@ class Animator3WRobot(Animator):
 
             t, state, observation, state_full = self.simulator.get_sim_step_data()
 
-            self.ctrl_benchmarking.receive_sys_state(self.sys._state)
-
-            if self.ctrl_mode == "nominal":
+            if self.control_mode == "nominal":
                 action = self.ctrl_nominal.compute_action_sampled(t, observation)
             else:
                 action = self.ctrl_benchmarking.compute_action_sampled(t, observation,)
@@ -459,7 +457,7 @@ class Animator3WRobot(Animator):
             self.simulator.reset()
 
             # Reset controller
-            if self.ctrl_mode > 0:
+            if self.control_mode > 0:
                 self.ctrl_benchmarking.reset(self.t0)
             else:
                 self.ctrl_nominal.reset(self.t0)
@@ -504,7 +502,7 @@ class Animator3WRobotNI(Animator):
             self.datafiles,
             self.logger,
             self.actor_optimizer,
-            self.critic_optimizer,
+            self.optimizer,
         ) = self.objects
 
         (
@@ -517,7 +515,7 @@ class Animator3WRobotNI(Animator):
             xMax,
             yMin,
             yMax,
-            ctrl_mode,
+            control_mode,
             action_manual,
             v_min,
             omega_min,
@@ -534,7 +532,7 @@ class Animator3WRobotNI(Animator):
         self.t0 = t0
         self.state_full_init = state_full_init
         self.t1 = t1
-        self.ctrl_mode = ctrl_mode
+        self.control_mode = control_mode
         self.action_manual = action_manual
         self.Nruns = Nruns
         self.no_print = no_print
@@ -736,9 +734,11 @@ class Animator3WRobotNI(Animator):
             self.simulator.sim_step()
 
             t, state, observation, state_full = self.simulator.get_sim_step_data()
-            self.ctrl_benchmarking.receive_sys_state(self.sys._state)
 
-            action = self.ctrl_benchmarking.compute_action(t, observation)
+            if self.control_mode == "nominal":
+                action = self.ctrl_nominal.compute_action_sampled(t, observation)
+            else:
+                action = self.ctrl_benchmarking.compute_action_sampled(t, observation)
             # if is_symbolic:
             #     action = np.array(action).reshape(-1)
             self.sys.receive_action(action)
@@ -794,12 +794,12 @@ class Animator3WRobotNI(Animator):
         upd_line(self.line_stage_obj, t, stage_obj)
         upd_line(self.line_accum_obj, t, accum_obj)
         text_accum_obj = r"$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.1f}".format(
-            accum_obj=accum_obj
+            accum_obj=np.squeeze(np.array(accum_obj))
         )
         upd_text(self.text_accum_obj_handle, text_accum_obj)
 
         # Control
-        for (line, action_single) in zip(self.lines_ctrl, action):
+        for (line, action_single) in zip(self.lines_ctrl, np.array(action)):
             upd_line(line, t, action_single)
 
         # Run done
@@ -825,7 +825,7 @@ class Animator3WRobotNI(Animator):
             self.simulator.reset()
 
             # Reset controller
-            if self.ctrl_mode > 0:
+            if self.control_mode > 0:
                 self.ctrl_benchmarking.reset(self.t0)
             else:
                 self.ctrl_nominal.reset(self.t0)
@@ -877,7 +877,7 @@ class Animator2Tank(Animator):
             t0,
             t1,
             state_full_init,
-            ctrl_mode,
+            control_mode,
             action_manual,
             action_min,
             action_max,
@@ -893,7 +893,7 @@ class Animator2Tank(Animator):
         self.t0 = t0
         self.state_full_init = state_full_init
         self.t1 = t1
-        self.ctrl_mode = ctrl_mode
+        self.control_mode = control_mode
         self.action_manual = action_manual
         self.Nruns = Nruns
         self.no_print = no_print
@@ -1041,7 +1041,6 @@ class Animator2Tank(Animator):
             self.simulator.sim_step()
 
             t, state, observation, state_full = self.simulator.get_sim_step_data()
-            self.ctrl_benchmarking.receive_sys_state(self.sys._state)
 
             action = self.ctrl_benchmarking.compute_action(t, observation)
 
@@ -1101,7 +1100,7 @@ class Animator2Tank(Animator):
             self.simulator.reset()
 
             # Reset controller
-            if self.ctrl_mode > 0:
+            if self.control_mode > 0:
                 self.ctrl_benchmarking.reset(self.t0)
             else:
                 self.ctrl_nominal.reset(self.t0)

@@ -43,7 +43,7 @@ class Pipeline3WRobot(AbstractPipeline):
             buffer_size=self.buffer_size,
             stage_obj=self.objectives.stage_obj,
             gamma=self.gamma,
-            critic_optimizer=self.critic_optimizer,
+            optimizer=self.critic_optimizer,
             critic_model=models.ModelPolynomial(model_name="quad-nomix"),
         )
 
@@ -51,9 +51,9 @@ class Pipeline3WRobot(AbstractPipeline):
             self.Nactor,
             self.dim_input,
             self.dim_output,
-            self.ctrl_mode,
+            self.control_mode,
             state_predictor=self.state_predictor,
-            actor_optimizer=self.actor_optimizer,
+            optimizer=self.actor_optimizer,
             critic=self.v_critic,
             stage_obj=self.objectives.stage_obj,
         )
@@ -63,7 +63,7 @@ class Pipeline3WRobot(AbstractPipeline):
             self.m,
             self.I,
             ctrl_gain=5,
-            ctrl_bnds=self.ctrl_bnds,
+            control_bounds=self.control_bounds,
             t0=self.t0,
             sampling_time=self.dt,
         )
@@ -75,7 +75,6 @@ class Pipeline3WRobot(AbstractPipeline):
             pred_step_size=self.pred_step_size,
             state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
-            state_sys=self.state_init,
             state_predictor=self.state_predictor,
             prob_noise_pow=self.prob_noise_pow,
             is_est_model=self.is_est_model,

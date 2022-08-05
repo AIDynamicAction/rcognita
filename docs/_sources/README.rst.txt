@@ -143,10 +143,10 @@ as shown in `this
 flowchart <./flowcharts/rcognita-flowchart-CtrlOptPred.pdf>`__. Notice
 it contains an explicit specification of the sampling time ``dt``.
 
-The method ``_critic`` computes a model of something related to the
+The method ``critic`` computes a model of something related to the
 value, e.g., value function, Q-function or advantage. In turn,
-``_critic_cost`` defines a cost (loss) function to fir the critic
-(commonly based on temporal errors). The method ``_critic_optimizer``
+``cost`` defines a cost (loss) function to fir the critic
+(commonly based on temporal errors). The method ``get_optimized_weights``
 actually optimizes the critic cost. The principle is analogous with the
 actor, except that it optimizes an objective along a prediction horizon.
 The details can be found in the code documentation. The method
@@ -193,7 +193,7 @@ Some key settings are described below (full description is available via
 +-------------------------+-----------+--------------------------------------------------------+
 | Parameter               | Type      | Description                                            |
 +=========================+===========+========================================================+
-| ``ctrl_mode``           | string    | Controller mode                                        |
+| ``control_mode``           | string    | Controller mode                                        |
 +-------------------------+-----------+--------------------------------------------------------+
 | ``dt``                  | number    | Controller sampling time                               |
 +-------------------------+-----------+--------------------------------------------------------+
@@ -232,8 +232,8 @@ Advanced customization
    well as an animator, a logger etc.
 -  **Custom running cost**: adjust ``rcost`` in controllers
 -  **Custom AC method**: simplest way -- by adding a new mode and
-   updating ``_actor_cost``, ``_critic_cost`` and, possibly, ``_actor``,
-   ``_critic``. For deep net AC structures, use, say,
+   updating ``cost``, ``cost`` and, possibly, ``_actor``,
+   ``critic``. For deep net AC structures, use, say,
    `PyTorch <https://pytorch.org/>`__
 -  **Custom model estimator**: so far, the framework offers a
    state-space model structure. You may use any other one. In case of

@@ -30,12 +30,13 @@ class EulerStatePredictor(BaseStatePredictor):
 
     def predict_state_sqn(self, observation, my_action_sqn):
 
-        observation_sqn = nc.zeros([self.Nsteps + 1, self.dim_output], array_type="SX")
-        observation_sqn[0, :] = observation
+        observation_sqn = nc.zeros(
+            [self.Nsteps, self.dim_output], prototype=my_action_sqn
+        )
         current_observation = observation
 
-        for k in range(1, self.Nsteps + 1):
-            current_action = my_action_sqn[k - 1, :]
+        for k in range(self.Nsteps):
+            current_action = my_action_sqn[k, :]
             next_observation = self.predict_state(current_observation, current_action)
             observation_sqn[k, :] = self.sys_out(next_observation)
             current_observation = next_observation

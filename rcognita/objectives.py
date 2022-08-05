@@ -12,6 +12,8 @@ class Objectives:
         
         See class documentation.
         """
+        observation = nc.to_col(observation)
+        action = nc.to_col(action)
 
         if self.observation_target == []:
             chi = nc.concatenate([observation, action])

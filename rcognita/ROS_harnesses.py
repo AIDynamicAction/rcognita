@@ -29,7 +29,7 @@ from scipy.signal import medfilt
 class ROSHarness:
     def __init__(
         self,
-        ctrl_mode,
+        control_mode,
         state_init,
         state_goal,
         my_ctrl_nominal,
@@ -82,7 +82,7 @@ class ROSHarness:
 
         self.datafiles = datafiles
         self.logger = my_logger
-        self.ctrl_mode = ctrl_mode
+        self.control_mode = control_mode
 
         self.rotation_counter = 0
         self.prev_theta = 0
@@ -238,7 +238,6 @@ class ROSHarness:
             )
 
             self.system.receive_action(action)
-            self.ctrl_benchm.receive_sys_state(self.system._state)
             self.ctrl_benchm.upd_accum_obj(self.new_state, action)
 
             xCoord = self.new_state[0]
@@ -264,8 +263,6 @@ class ROSHarness:
                     accum_obj,
                     action,
                 )
-
-            self.ctrl_benchm.receive_sys_state(self.new_state)
 
             velocity.linear.x = action[0]
             velocity.angular.z = action[1]

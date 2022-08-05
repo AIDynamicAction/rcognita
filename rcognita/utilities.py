@@ -23,37 +23,29 @@ from numpy.matlib import repmat
 import scipy.stats as st
 from scipy import signal
 import matplotlib.pyplot as plt
-from npcasadi_api import typeInferenceDecorator
+from npcasadi_api import typeInferenceDecorator, is_CasADi_typecheck
 import casadi
 
 
 class SymbolicHandler(metaclass=typeInferenceDecorator):
-    def is_any_CasADi(self, *args):
-        return any([isinstance(arg, (casadi.SX, casadi.DM, casadi.MX)) for arg in args])
-
-    def is_any_symbolic(self, *args):
-        return any([isinstance(arg, (casadi.SX, casadi.MX)) for arg in args])
-
-    def cos(cls, x, is_symbolic=False, force=None):
+    def cos(self, x, is_symbolic=False):
         return casadi.cos(x) if is_symbolic else np.cos(x)
 
-    def sin(self, x, is_symbolic=False, force=None):
+    def sin(self, x, is_symbolic=False):
         return casadi.sin(x) if is_symbolic else np.sin(x)
 
-    def hstack(self, tup, is_symbolic=False, force=None):
-        if not isinstance(tup, tuple):
-            tup = tuple(tup)
+    def hstack(self, tup, is_symbolic=False):
+        is_symbolic = is_CasADi_typecheck(*tup)
         return casadi.horzcat(*tup) if is_symbolic else np.hstack(tup)
 
-    def push_vec(self, matrix, vec, is_symbolic=False, force=None):
+    def push_vec(self, matrix, vec, is_symbolic=False):
         return self.vstack([matrix[1:, :], vec.T])
 
-    def vstack(self, tup, is_symbolic=False, force=None):
-        if not isinstance(tup, tuple):
-            tup = tuple(tup)
+    def vstack(self, tup, is_symbolic=False):
+        is_symbolic = is_CasADi_typecheck(*tup)
         return casadi.vertcat(*tup) if is_symbolic else np.vstack(tup)
 
-    def reshape_CasADi_as_np(self, array, dim_params, is_symbolic=False, force=None):
+    def reshape_CasADi_as_np(self, array, dim_params, is_symbolic=False):
         result = casadi.SX(*dim_params)
         n_rows = dim_params[0]
         n_cols = dim_params[1]
@@ -62,7 +54,7 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
 
         return result
 
-    def reshape(self, array, dim_params, is_symbolic=False, force=None):
+    def reshape(self, array, dim_params, is_symbolic=False):
         if is_symbolic:
             if isinstance(dim_params, list) or isinstance(dim_params, tuple):
                 if len(dim_params) > 1:
@@ -79,24 +71,9 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
         else:
             return np.reshape(array, dim_params)
 
-    def array(
-        self, array, ignore=False, array_type="DM", is_symbolic=False, force=None
-    ):
-        if is_symbolic and not ignore:
-            if array_type == "DM":
-                return casadi.DM(array)
-            elif array_type == "SX":
-                return casadi.SX(array)
-            else:
-                ValueError(f"Invalid array type:{array_type}")
-
-        else:
-            return np.array(array)
-
-    def symbolic_array_creation(
-        self, *args, array_type="DM", is_symbolic=False, force=None
-    ):
-        return tuple(self.array(arg, array_type=array_type) for arg in args)
+    def array(self, array, prototype=None, is_symbolic=False):
+        array_type = type(prototype)
+        return array_type(array) if is_CasADi_typecheck(array_type) else np.array(array)
 
     def ones(self, tup, is_symbolic=False):
         if isinstance(tup, int):
@@ -104,71 +81,73 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
         else:
             return casadi.DM.ones(*tup) if is_symbolic else np.ones(tup)
 
-    def zeros(self, tup, array_type="DM", is_symbolic=False):
+    def zeros(self, tup, prototype=None, is_symbolic=False):
         if isinstance(tup, int):
             if is_symbolic:
-                if array_type == "DM":
-                    return casadi.DM.zeros(tup)
-                elif array_type == "SX":
-                    return casadi.SX.zeros(tup)
-                else:
+                array_type = type(prototype)
+                try:
+                    return array_type.zeros(tup)
+                except:
                     ValueError(f"Invalid array type:{array_type}")
             else:
                 return np.zeros(tup)
         else:
             if is_symbolic:
-                if array_type == "DM":
-                    return casadi.DM.zeros(*tup)
-                elif array_type == "SX":
-                    return casadi.SX.zeros(*tup)
-                else:
+                array_type = type(prototype)
+                try:
+                    return array_type.zeros(*tup)
+                except:
                     ValueError(f"Invalid array type:{array_type}")
             else:
                 return np.zeros(tup)
 
-    def concatenate(self, tup, is_symbolic=False, force=None):
+    def concatenate(self, tup, is_symbolic=False):
         if len(tup) > 1:
+            is_symbolic = is_CasADi_typecheck(*tup)
             if is_symbolic:
-                all_symbolic = all(
-                    [type(x) == casadi.DM or type(x) == casadi.SX for x in tup]
-                )
-                if not all_symbolic:
-                    raise TypeError(
-                        f"""
-                        Cannot perform symbolic array concatenation due to presence of numerical data. Check type-casting in your algorithm.
-                        Types are: {[type(x) for x in tup]}
-                        """
-                    )
-                else:
-                    return casadi.vertcat(*tup)
+                return casadi.vertcat(*tup)
             else:
                 return np.concatenate(tup)
 
-    def rep_mat(self, array, n, m, is_symbolic=False, force=None):
+    def rep_mat(self, array, n, m, is_symbolic=False):
         return casadi.repmat(array, n, m) if is_symbolic else rep_mat(array, n, m)
 
-    def matmul(self, A, B, is_symbolic=False, force=None):
+    def matmul(self, A, B, is_symbolic=False):
         return casadi.mtimes(A, B) if is_symbolic else np.matmul(A, B)
 
-    def inner_product(self, A, B, is_symbolic=False, force=None):
+    def inner_product(self, A, B, is_symbolic=False):
         return casadi.dot(A, B) if is_symbolic else np.inner(A, B)
 
-    def rc_array(self, A, is_symbolic=False, force=None):
-        return casadi.DM.sym(A) if is_symbolic else np.array(A)
+    def casadi_outer(self, v1, v2, is_symbolic=False):
+        if not is_CasADi_typecheck(v1):
+            v1 = self.array_symb(v1)
 
-    def sign(self, x, is_symbolic=False, force=None):
+        return casadi.horzcat(*[v1 * v2_i for v2_i in v2.nz])
+
+    def outer(self, v1, v2, is_symbolic=False):
+        return self.casadi_outer(v1, v2) if is_symbolic else np.outer(v1, v2)
+
+    def sign(self, x, is_symbolic=False):
         return casadi.sign(x) if is_symbolic else np.sign(x)
 
-    def abs(self, x, is_symbolic=False, force=None):
+    def abs(self, x, is_symbolic=False):
         return casadi.fabs(x) if is_symbolic else np.abs(x)
 
-    def min(self, array, is_symbolic=False, force=None):
+    def min(self, array, is_symbolic=False):
         return casadi.fmin(*array) if is_symbolic else np.min(array)
 
-    def max(self, array, is_symbolic=False, force=None):
-        return casadi.fmax(array) if is_symbolic else np.max(array)
+    def max(self, array, is_symbolic=False):
+        is_symbolic = is_CasADi_typecheck(*array)
+        if is_symbolic:
+            if isinstance(array, list):
+                array = self.vstack(tuple(array), is_symbolic=True)
+            elif isinstance(array, tuple):
+                array = self.vstack(array, is_symbolic=True)
+            return casadi.mmax(array)
+        else:
+            return np.max(array)
 
-    def to_col(self, argin, is_symbolic=False, force=None):
+    def to_col(self, argin, is_symbolic=False):
         if is_symbolic:
             if self.shape(argin)[0] < self.shape(argin)[1]:
                 return argin.T
@@ -177,45 +156,48 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
         else:
             return to_col_vec(argin)
 
-    def dot(self, A, B, is_symbolic=False, force=None):
-        return (
-            casadi.dot(*self.symbolic_array_creation(A, B, array_type="SX"))
-            if is_symbolic
-            else A @ B
-        )
+    def dot(self, A, B, is_symbolic=False):
+        return casadi.dot(A, B) if is_symbolic else A @ B
 
-    def shape(self, array, is_symbolic=False, force=None):
+    def shape(self, array, is_symbolic=False):
         return (
             array.size()
             if isinstance(array, (casadi.SX, casadi.DM, casadi.MX))
             else np.shape(array)
         )
 
-    def function2SX(self, func, *args, x0=None, is_symbolic=False, force=None):
+    def func_to_lambda_with_params(self, func, *params, x0=None, is_symbolic=False):
+
         if not is_symbolic:
-            return (
-                lambda x: func(x, *args),
-                casadi.SX.sym("x", *self.shape(x0)),
-            )
+            return lambda x: func(x, *params)
         else:
             try:
                 x_symb = casadi.SX.sym("x", self.shape(x0))
-            except NotImplementedError as e:
+            except NotImplementedError as e:  #####
                 x_symb = casadi.SX.sym("x", *self.shape(x0), 1)
-            args = self.symbolic_array_creation(*args)
-            if len(args) > 0:
-                return func(x_symb, *args), x_symb
+
+            if params:
+                return func(x_symb, *params), x_symb
             else:
                 return func(x_symb), x_symb
 
-    def kron(self, A, B, is_symbolic=False, force=None):
+    def if_else(self, c, x, y, is_symbolic=False):
+        if is_symbolic:
+            res = casadi.if_else(c, x, y)
+            return res
+        else:
+            return x if c else y
+
+    def kron(self, A, B, is_symbolic=False):
         return casadi.kron(A, B) if is_symbolic else np.kron(A, B)
 
     @staticmethod
-    def autograd(func, x, *args, is_symbolic=False, force=None):
+    def autograd(func, x, *args, is_symbolic=False):
         return casadi.Function("f", [x, *args], [casadi.gradient(func(x, *args), x)])
 
-    def array_symb(self, tup, literal="x", is_symbolic=False, force=None):
+    def array_symb(self, tup=None, literal="x", is_symbolic=False, prototype=None):
+        if not prototype is None:
+            tup = self.shape(prototype)
         if isinstance(tup, tuple):
             if len(tup) > 2:
                 raise ValueError(
@@ -232,11 +214,17 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
                 f"Passed an invalide argument of type {type(tup)}. Takes either int or tuple data types"
             )
 
-    def norm_1(self, v, is_symbolic=False, force=None):
+    def norm_1(self, v, is_symbolic=False):
         return casadi.norm_1(v) if is_symbolic else np.linalg.norm(v, 1)
 
-    def norm_2(self, v, is_symbolic=False, force=None):
+    def norm_2(self, v, is_symbolic=False):
         return casadi.norm_2(v) if is_symbolic else np.linalg.norm(v, 2)
+
+    def logic_and(self, a, b, is_symbolic=False):
+        return casadi.logic_and(a, b) if is_symbolic else (a and b)
+
+    def squeeze(self, v, is_symbolic=False):
+        return v if is_symbolic else np.squeeze(v)
 
 
 nc = SymbolicHandler()
@@ -313,7 +301,7 @@ def uptria2vec(mat):
     """
     n = mat.shape[0]
 
-    vec = np.zeros((int(n * (n + 1) / 2)))
+    vec = nc.zeros((int(n * (n + 1) / 2)), prototype=mat)
 
     k = 0
     for i in range(n):

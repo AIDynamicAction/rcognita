@@ -55,7 +55,7 @@ class System:
         System dimensions 
     pars : : list
         List of fixed parameters of the system
-    ctrl_bnds : : array of shape ``[dim_input, 2]``
+    control_bounds : : array of shape ``[dim_input, 2]``
         Box control constraints.
         First element in each row is the lower bound, the second - the upper bound.
         If empty, control is unconstrained (default)
@@ -78,7 +78,7 @@ class System:
         dim_output,
         dim_disturb,
         pars=[],
-        ctrl_bnds=[],
+        control_bounds=[],
         is_dyn_ctrl=0,
         is_disturb=0,
         pars_disturb=[],
@@ -109,7 +109,7 @@ class System:
             System dimensions 
         pars : : list
             List of fixed parameters of the system
-        ctrl_bnds : : array of shape ``[dim_input, 2]``
+        control_bounds : : array of shape ``[dim_input, 2]``
             Box control constraints.
             First element in each row is the lower bound, the second - the upper bound.
             If empty, control is unconstrained (default)
@@ -128,7 +128,7 @@ class System:
         self.dim_output = dim_output
         self.dim_disturb = dim_disturb
         self.pars = pars
-        self.ctrl_bnds = ctrl_bnds
+        self.control_bounds = control_bounds
         self.is_dyn_ctrl = is_dyn_ctrl
         self.is_disturb = is_disturb
         self.pars_disturb = pars_disturb
@@ -248,13 +248,15 @@ class System:
             # Fetch the control action stored in the system
             action = self.action
 
-        if self.ctrl_bnds.any():
+        if self.control_bounds.any():
             for k in range(self.dim_input):
                 action[k] = np.clip(
-                    action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
+                    action[k], self.control_bounds[k, 0], self.control_bounds[k, 1]
                 )
 
-        rhs_full_state[0 : self.dim_state] = self._state_dyn(t, state, action, disturb)
+        rhs_full_state[0 : self.dim_state] = self._state_dyn(
+            t, state, action, disturb
+        ).T
 
         if self.is_disturb:
             rhs_full_state[self.dim_state :] = self._disturb_dyn(t, disturb)
@@ -322,7 +324,7 @@ class Sys3WRobot(System):
 
         m, I = self.pars[0], self.pars[1]
 
-        Dstate = nc.zeros(self.dim_state, array_type="SX")
+        Dstate = nc.zeros(self.dim_state, prototype=action)
         Dstate[0] = state[3] * nc.cos(state[2])
         Dstate[1] = state[3] * nc.sin(state[2])
         Dstate[2] = state[4]
@@ -388,7 +390,7 @@ class Sys3WRobotNI(System):
 
     def _state_dyn(self, t, state, action, disturb=[]):
 
-        Dstate = nc.zeros(self.dim_state, array_type="SX")
+        Dstate = nc.zeros(self.dim_state, prototype=action)
 
         if self.is_disturb and (disturb != []):
             Dstate[0] = action[0] * nc.cos(state[2]) + disturb[0]

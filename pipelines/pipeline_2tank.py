@@ -56,7 +56,7 @@ class Pipeline2Tank(AbstractPipeline):
             dim_output=self.dim_output,
             dim_disturb=self.dim_disturb,
             pars=[self.tau1, self.tau2, self.K1, self.K2, self.K3],
-            ctrl_bnds=self.ctrl_bnds,
+            control_bounds=self.control_bounds,
         )
 
     def state_predictor_initialization(self):
@@ -71,10 +71,10 @@ class Pipeline2Tank(AbstractPipeline):
     def optimizers_initialization(self):
 
         self.actor_optimizer = optimizers.RcognitaOptimizer.create_scipy_actor_optimizer(
-            actor_opt_method="SLSQP", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
+            opt_method="SLSQP", control_bounds=self.control_bounds, Nactor=self.Nactor,
         )
         self.critic_optimizer = optimizers.RcognitaOptimizer.create_scipy_critic_optimizer(
-            critic_opt_method="SLSQP",
+            opt_method="SLSQP",
             critic_struct=self.critic_struct,
             dim_input=self.dim_input,
             dim_output=self.dim_output,
@@ -84,17 +84,16 @@ class Pipeline2Tank(AbstractPipeline):
         self.my_ctrl_opt_pred = controllers.CtrlOptPred(
             self.dim_input,
             self.dim_output,
-            self.ctrl_mode,
-            ctrl_bnds=self.ctrl_bnds,
+            self.control_mode,
+            control_bounds=self.control_bounds,
             action_init=self.action_init,
             t0=self.t0,
             sampling_time=self.dt,
             Nactor=self.Nactor,
-            actor_optimizer=self.actor_optimizer,
+            optimizer=self.actor_optimizer,
             pred_step_size=self.pred_step_size,
             state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
-            state_sys=self.state_init,
             state_predictor=self.state_predictor,
             prob_noise_pow=self.prob_noise_pow,
             is_est_model=self.is_est_model,
@@ -105,7 +104,7 @@ class Pipeline2Tank(AbstractPipeline):
             model_est_checks=self.model_est_checks,
             gamma=self.gamma,
             Ncritic=self.Ncritic,
-            critic_optimizer=self.critic_optimizer,
+            optimizer=self.critic_optimizer,
             critic_period=self.critic_period,
             critic_struct=self.critic_struct,
             stage_obj_struct=self.stage_obj_struct,
@@ -155,7 +154,7 @@ class Pipeline2Tank(AbstractPipeline):
                 + "/"
                 + self.my_sys.name
                 + "__"
-                + self.ctrl_mode
+                + self.control_mode
                 + "__"
                 + date
                 + "__"
@@ -169,7 +168,7 @@ class Pipeline2Tank(AbstractPipeline):
                 with open(self.datafiles[k], "w", newline="") as outfile:
                     writer = csv.writer(outfile)
                     writer.writerow(["System", self.my_sys.name])
-                    writer.writerow(["Controller", self.ctrl_mode])
+                    writer.writerow(["Controller", self.control_mode])
                     writer.writerow(["dt", str(self.dt)])
                     writer.writerow(["state_init", str(self.state_init)])
                     writer.writerow(["is_est_model", str(self.is_est_model)])
@@ -228,7 +227,7 @@ class Pipeline2Tank(AbstractPipeline):
                 self.t0,
                 self.t1,
                 self.state_full_init,
-                self.ctrl_mode,
+                self.control_mode,
                 self.action_manual,
                 self.action_min,
                 self.action_max,
@@ -277,7 +276,6 @@ class Pipeline2Tank(AbstractPipeline):
             action = self.my_ctrl_benchm.compute_action(t, observation)
 
             self.my_sys.receive_action(action)
-            self.my_ctrl_benchm.receive_sys_state(self.my_sys._state)
             self.my_ctrl_benchm.upd_accum_obj(observation, action)
 
             h1 = state_full[0]
@@ -316,7 +314,7 @@ class Pipeline2Tank(AbstractPipeline):
                 self.my_simulator.t = self.t0
                 self.my_simulator.observation = self.state_full_init
 
-                if self.ctrl_mode != "nominal":
+                if self.control_mode != "nominal":
                     self.my_ctrl_benchm.reset(self.t0)
                 else:
                     self.my_ctrl_nominal.reset(self.t0)

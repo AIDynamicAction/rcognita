@@ -1,141 +1,159 @@
-
-
 <!DOCTYPE html>
 <!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
-<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<!--[if gt IE 8]><!-->
+<html class="no-js" lang="en">
+<!--<![endif]-->
+
 <head>
   <meta charset="utf-8">
   <meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
+
   <title>rcognita.systems.System &mdash; rcognita v0.1.2 documentation</title>
-  
 
-  
-  
-  
-  
 
-  
+
+
+
+
+
+
   <script type="text/javascript" src="../../_static/js/modernizr.min.js"></script>
-  
-    
-      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
-        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
-        <script src="../../_static/jquery.js"></script>
-        <script src="../../_static/underscore.js"></script>
-        <script src="../../_static/doctools.js"></script>
-        <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    
-    <script type="text/javascript" src="../../_static/js/theme.js"></script>
 
-    
 
-  
+  <script type="text/javascript" id="documentation_options" data-url_root="../../"
+    src="../../_static/documentation_options.js"></script>
+  <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+  <script src="../../_static/jquery.js"></script>
+  <script src="../../_static/underscore.js"></script>
+  <script src="../../_static/doctools.js"></script>
+  <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+
+
+
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
   <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
-    <link rel="index" title="Index" href="../../genindex.html" />
-    <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="rcognita.utilities" href="../rcognita.utilities.html" />
-    <link rel="prev" title="rcognita.systems.Sys3WRobotNI" href="rcognita.systems.Sys3WRobotNI.html" /> 
+  <link rel="index" title="Index" href="../../genindex.html" />
+  <link rel="search" title="Search" href="../../search.html" />
+  <link rel="next" title="rcognita.utilities" href="../rcognita.utilities.html" />
+  <link rel="prev" title="rcognita.systems.Sys3WRobotNI" href="rcognita.systems.Sys3WRobotNI.html" />
 </head>
 
 <body class="wy-body-for-nav">
 
-   
+
   <div class="wy-grid-for-nav">
-    
+
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
-          
+        <div class="wy-side-nav-search">
 
-          
-            <a href="../../index.html" class="icon icon-home"> rcognita
-          
 
-          
-            
-            <img src="../../_static/logo.png" class="logo" alt="Logo"/>
-          
+
+          <a href="../../index.html" class="icon icon-home"> rcognita
+
+
+
+
+            <img src="../../_static/logo.png" class="logo" alt="Logo" />
+
           </a>
 
-          
-            
-            
-          
 
-          
-<div role="search">
-  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
-    <input type="hidden" name="check_keywords" value="yes" />
-    <input type="hidden" name="area" value="default" />
-  </form>
-</div>
 
-          
+
+
+
+
+          <div role="search">
+            <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+              <input type="text" name="q" placeholder="Search docs" />
+              <input type="hidden" name="check_keywords" value="yes" />
+              <input type="hidden" name="area" value="default" />
+            </form>
+          </div>
+
+
         </div>
 
         <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
-          
-            
-            
-              
-            
-            
-              <ul>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html">About</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#installation">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#general-description">General description</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#usage">Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#related-literature">Related literature</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#closing-remarks">Closing remarks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#getting-started">Getting started</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../introduction.html#for-developers">For developers</a></li>
-</ul>
-<p class="caption"><span class="caption-text">API Documentation</span></p>
-<ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="../rcognita.controllers.html"><code class="docutils literal notranslate"><span class="pre">rcognita.controllers</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../rcognita.loggers.html"><code class="docutils literal notranslate"><span class="pre">rcognita.loggers</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../rcognita.models.html"><code class="docutils literal notranslate"><span class="pre">rcognita.models</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../rcognita.simulator.html"><code class="docutils literal notranslate"><span class="pre">rcognita.simulator</span></code></a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="../rcognita.systems.html"><code class="docutils literal notranslate"><span class="pre">rcognita.systems</span></code></a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="rcognita.systems.Sys2Tank.html">rcognita.systems.Sys2Tank</a></li>
-<li class="toctree-l2"><a class="reference internal" href="rcognita.systems.Sys3WRobot.html">rcognita.systems.Sys3WRobot</a></li>
-<li class="toctree-l2"><a class="reference internal" href="rcognita.systems.Sys3WRobotNI.html">rcognita.systems.Sys3WRobotNI</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">rcognita.systems.System</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="../rcognita.utilities.html"><code class="docutils literal notranslate"><span class="pre">rcognita.utilities</span></code></a></li>
-<li class="toctree-l1"><a class="reference internal" href="../rcognita.visuals.html"><code class="docutils literal notranslate"><span class="pre">rcognita.visuals</span></code></a></li>
-</ul>
 
-            
-          
+
+
+
+
+
+          <ul>
+            <li class="toctree-l1"><a class="reference internal" href="../../introduction.html">About</a></li>
+            <li class="toctree-l1"><a class="reference internal"
+                href="../../introduction.html#installation">Installation</a></li>
+            <li class="toctree-l1"><a class="reference internal"
+                href="../../introduction.html#general-description">General description</a></li>
+            <li class="toctree-l1"><a class="reference internal" href="../../introduction.html#usage">Usage</a></li>
+            <li class="toctree-l1"><a class="reference internal"
+                href="../../introduction.html#related-literature">Related literature</a></li>
+            <li class="toctree-l1"><a class="reference internal" href="../../introduction.html#closing-remarks">Closing
+                remarks</a></li>
+            <li class="toctree-l1"><a class="reference internal" href="../../introduction.html#getting-started">Getting
+                started</a></li>
+            <li class="toctree-l1"><a class="reference internal" href="../../introduction.html#for-developers">For
+                developers</a></li>
+          </ul>
+          <p class="caption"><span class="caption-text">API Documentation</span></p>
+          <ul class="current">
+            <li class="toctree-l1"><a class="reference internal" href="../rcognita.controllers.html"><code
+                  class="docutils literal notranslate"><span class="pre">rcognita.controllers</span></code></a></li>
+            <li class="toctree-l1"><a class="reference internal" href="../rcognita.loggers.html"><code
+                  class="docutils literal notranslate"><span class="pre">rcognita.loggers</span></code></a></li>
+            <li class="toctree-l1"><a class="reference internal" href="../rcognita.models.html"><code
+                  class="docutils literal notranslate"><span class="pre">rcognita.models</span></code></a></li>
+            <li class="toctree-l1"><a class="reference internal" href="../rcognita.simulator.html"><code
+                  class="docutils literal notranslate"><span class="pre">rcognita.simulator</span></code></a></li>
+            <li class="toctree-l1 current"><a class="reference internal" href="../rcognita.systems.html"><code
+                  class="docutils literal notranslate"><span class="pre">rcognita.systems</span></code></a>
+              <ul class="current">
+                <li class="toctree-l2"><a class="reference internal"
+                    href="rcognita.systems.Sys2Tank.html">rcognita.systems.Sys2Tank</a></li>
+                <li class="toctree-l2"><a class="reference internal"
+                    href="rcognita.systems.Sys3WRobot.html">rcognita.systems.Sys3WRobot</a></li>
+                <li class="toctree-l2"><a class="reference internal"
+                    href="rcognita.systems.Sys3WRobotNI.html">rcognita.systems.Sys3WRobotNI</a></li>
+                <li class="toctree-l2 current"><a class="current reference internal"
+                    href="#">rcognita.systems.System</a></li>
+              </ul>
+            </li>
+            <li class="toctree-l1"><a class="reference internal" href="../rcognita.utilities.html"><code
+                  class="docutils literal notranslate"><span class="pre">rcognita.utilities</span></code></a></li>
+            <li class="toctree-l1"><a class="reference internal" href="../rcognita.visuals.html"><code
+                  class="docutils literal notranslate"><span class="pre">rcognita.visuals</span></code></a></li>
+          </ul>
+
+
+
         </div>
       </div>
     </nav>
 
     <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
 
-      
+
       <nav class="wy-nav-top" aria-label="top navigation">
-        
-          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="../../index.html">rcognita</a>
-        
+
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="../../index.html">rcognita</a>
+
       </nav>
 
 
       <div class="wy-nav-content">
-        
+
         <div class="rst-content">
-        
-          
 
 
 
@@ -151,189 +169,386 @@
 
 
 
-<div role="navigation" aria-label="breadcrumbs navigation">
 
-  <ul class="wy-breadcrumbs">
-    
-      <li><a href="../../index.html">Docs</a> &raquo;</li>
-        
-          <li><a href="../rcognita.systems.html"><code class="docutils literal notranslate"><span class="pre">rcognita.systems</span></code></a> &raquo;</li>
-        
-      <li>rcognita.systems.System</li>
-    
-    
-      <li class="wy-breadcrumbs-aside">
-        
-            
-        
-      </li>
-    
-  </ul>
 
-  
-  <hr/>
-</div>
+          <div role="navigation" aria-label="breadcrumbs navigation">
+
+            <ul class="wy-breadcrumbs">
+
+              <li><a href="../../index.html">Docs</a> &raquo;</li>
+
+              <li><a href="../rcognita.systems.html"><code
+                    class="docutils literal notranslate"><span class="pre">rcognita.systems</span></code></a> &raquo;
+              </li>
+
+              <li>rcognita.systems.System</li>
+
+
+              <li class="wy-breadcrumbs-aside">
+
+
+
+              </li>
+
+            </ul>
+
+
+            <hr />
+          </div>
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
-           <div itemprop="articleBody">
-            
-  <section id="rcognita-systems-system">
-<h1>rcognita.systems.System<a class="headerlink" href="#rcognita-systems-system" title="Permalink to this headline">¶</a></h1>
-<dl class="py class">
-<dt class="sig sig-object py" id="rcognita.systems.System">
-<em class="property"><span class="pre">class</span> </em><span class="sig-prename descclassname"><span class="pre">rcognita.systems.</span></span><span class="sig-name descname"><span class="pre">System</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_disturb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctrl_bnds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.systems.System" title="Permalink to this definition">¶</a></dt>
-<dd><blockquote>
-<div><p>Interface class of dynamical systems a.k.a. environments.
-Concrete systems should be built upon this class.
-To design a concrete system: inherit this class, override:</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line"><code class="xref py py-func docutils literal notranslate"><span class="pre">_state_dyn()</span></code> :</div>
-<div class="line">right-hand side of system description (required)</div>
-<div class="line"><code class="xref py py-func docutils literal notranslate"><span class="pre">_disturb_dyn()</span></code> :</div>
-<div class="line">right-hand side of disturbance model (if necessary)</div>
-<div class="line"><code class="xref py py-func docutils literal notranslate"><span class="pre">_ctrl_dyn()</span></code> :</div>
-<div class="line">right-hand side of controller dynamical model (if necessary)</div>
-<div class="line"><code class="xref py py-func docutils literal notranslate"><span class="pre">out()</span></code> :</div>
-<div class="line">system out (if not overridden, output is identical to state)</div>
-</div>
-</div></blockquote>
-<dl>
-<dt>sys_type<span class="classifier">: string</span></dt><dd><p>Type of system by description:</p>
-<div class="line-block">
-<div class="line"><code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code> : differential equation <span class="math notranslate nohighlight">\(\mathcal D state = f(state, action, disturb)\)</span></div>
-<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_fnc</span></code> : difference equation <span class="math notranslate nohighlight">\(state^+ = f(state, action, disturb)\)</span></div>
-<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_prob</span></code> :  by probability distribution <span class="math notranslate nohighlight">\(X^+ \sim P_X(state^+| state, action, disturb)\)</span></div>
-</div>
-</dd>
-</dl>
-<p>where:</p>
-<blockquote>
-<div><div class="line-block">
-<div class="line"><span class="math notranslate nohighlight">\(state\)</span> : state</div>
-<div class="line"><span class="math notranslate nohighlight">\(action\)</span> : input</div>
-<div class="line"><span class="math notranslate nohighlight">\(disturb\)</span> : disturbance</div>
-</div>
-</div></blockquote>
-<p>The time variable <code class="docutils literal notranslate"><span class="pre">t</span></code> is commonly used by ODE solvers, and you shouldn’t have it explicitly referenced in the definition, unless your system is non-autonomous.
-For the latter case, however, you already have the input and disturbance at your disposal.</p>
-<p>Parameters of the system are contained in <code class="docutils literal notranslate"><span class="pre">pars</span></code> attribute.</p>
-<dl>
-<dt>dim_state, dim_input, dim_output, dim_disturb<span class="classifier">: integer</span></dt><dd><p>System dimensions</p>
-</dd>
-<dt>pars<span class="classifier">: list</span></dt><dd><p>List of fixed parameters of the system</p>
-</dd>
-<dt>ctrl_bnds<span class="classifier">: array of shape <code class="docutils literal notranslate"><span class="pre">[dim_input,</span> <span class="pre">2]</span></code></span></dt><dd><p>Box control constraints.
-First element in each row is the lower bound, the second - the upper bound.
-If empty, control is unconstrained (default)</p>
-</dd>
-<dt>is_dyn_ctrl<span class="classifier">: 0 or 1</span></dt><dd><p>If 1, the controller (a.k.a. agent) is considered as a part of the full state vector</p>
-</dd>
-<dt>is_disturb<span class="classifier">: 0 or 1</span></dt><dd><p>If 0, no disturbance is fed into the system</p>
-</dd>
-<dt>pars_disturb<span class="classifier">: list</span></dt><dd><p>Parameters of the disturbance model</p>
-</dd>
-</dl>
-</div></blockquote>
-<p>Each concrete system must realize <code class="docutils literal notranslate"><span class="pre">System</span></code> and define <code class="docutils literal notranslate"><span class="pre">name</span></code> attribute.</p>
-<dl class="py method">
-<dt class="sig sig-object py" id="rcognita.systems.System.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_output</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dim_disturb</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ctrl_bnds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pars_disturb</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#rcognita.systems.System.__init__" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>sys_type</strong> (<em>: string</em>) – <p>Type of system by description:</p>
-<div class="line-block">
-<div class="line"><code class="docutils literal notranslate"><span class="pre">diff_eqn</span></code> : differential equation <span class="math notranslate nohighlight">\(\mathcal D state = f(state, action, disturb)\)</span></div>
-<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_fnc</span></code> : difference equation <span class="math notranslate nohighlight">\(state^+ = f(state, action, disturb)\)</span></div>
-<div class="line"><code class="docutils literal notranslate"><span class="pre">discr_prob</span></code> :  by probability distribution <span class="math notranslate nohighlight">\(X^+ \sim P_X(state^+| state, action, disturb)\)</span></div>
-</div>
-</p></li>
-<li><p><strong>where</strong> – <div class="line-block">
-<div class="line"><span class="math notranslate nohighlight">\(state\)</span> : state</div>
-<div class="line"><span class="math notranslate nohighlight">\(action\)</span> : input</div>
-<div class="line"><span class="math notranslate nohighlight">\(disturb\)</span> : disturbance</div>
-</div>
-</p></li>
-<li><p><strong>time variable t is commonly used by ODE solvers</strong> (<em>The</em>) – </p></li>
-<li><p><strong>you shouldn't have it explicitly referenced in the definition</strong> (<em>and</em>) – </p></li>
-<li><p><strong>your system is non-autonomous.</strong> (<em>unless</em>) – </p></li>
-<li><p><strong>the latter case</strong> (<em>For</em>) – </p></li>
-<li><p><strong>however</strong> – </p></li>
-<li><p><strong>already have the input and disturbance at your disposal.</strong> (<em>you</em>) – </p></li>
-<li><p><strong>of the system are contained in pars attribute.</strong> (<em>Parameters</em>) – </p></li>
-<li><p><strong>dim_state</strong> (<em>: integer</em>) – System dimensions</p></li>
-<li><p><strong>dim_input</strong> (<em>: integer</em>) – System dimensions</p></li>
-<li><p><strong>dim_output</strong> (<em>: integer</em>) – System dimensions</p></li>
-<li><p><strong>dim_disturb</strong> (<em>: integer</em>) – System dimensions</p></li>
-<li><p><strong>pars</strong> (<em>: list</em>) – List of fixed parameters of the system</p></li>
-<li><p><strong>ctrl_bnds</strong> (: array of shape <code class="docutils literal notranslate"><span class="pre">[dim_input,</span> <span class="pre">2]</span></code>) – Box control constraints.
-First element in each row is the lower bound, the second - the upper bound.
-If empty, control is unconstrained (default)</p></li>
-<li><p><strong>is_dyn_ctrl</strong> (<em>: 0</em><em> or </em><em>1</em>) – If 1, the controller (a.k.a. agent) is considered as a part of the full state vector</p></li>
-<li><p><strong>is_disturb</strong> (<em>: 0</em><em> or </em><em>1</em>) – If 0, no disturbance is fed into the system</p></li>
-<li><p><strong>pars_disturb</strong> (<em>: list</em>) – Parameters of the disturbance model</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
+            <div itemprop="articleBody">
 
-<p class="rubric">Methods</p>
-<table class="longtable docutils align-default">
-<colgroup>
-<col style="width: 10%" />
-<col style="width: 90%" />
-</colgroup>
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#rcognita.systems.System.__init__" title="rcognita.systems.System.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(sys_type, dim_state, dim_input, …)</p></td>
-<td><p><dl class="field-list simple">
-<dt class="field-odd">param sys_type</dt>
-<dd class="field-odd"><p>Type of system by description:</p>
-</dd>
-</dl>
-</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">closed_loop_rhs</span></code>(t, state_full)</p></td>
-<td><p>Right-hand side of the closed-loop system description.</p></td>
-</tr>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">out</span></code>(state[, action])</p></td>
-<td><p>System output.</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">receive_action</span></code>(action)</p></td>
-<td><p>Receive exogeneous control action to be fed into the system.</p></td>
-</tr>
-</tbody>
-</table>
-</dd></dl>
+              <section id="rcognita-systems-system">
+                <h1>rcognita.systems.System<a class="headerlink" href="#rcognita-systems-system"
+                    title="Permalink to this headline">¶</a></h1>
+                <dl class="py class">
+                  <dt class="sig sig-object py" id="rcognita.systems.System">
+                    <em class="property"><span class="pre">class</span> </em><span
+                      class="sig-prename descclassname"><span class="pre">rcognita.systems.</span></span><span
+                      class="sig-name descname"><span class="pre">System</span></span><span
+                      class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                          class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span
+                          class="pre">dim_state</span></span></em>, <em class="sig-param"><span class="n"><span
+                          class="pre">dim_input</span></span></em>, <em class="sig-param"><span class="n"><span
+                          class="pre">dim_output</span></span></em>, <em class="sig-param"><span class="n"><span
+                          class="pre">dim_disturb</span></span></em>, <em class="sig-param"><span class="n"><span
+                          class="pre">pars</span></span><span class="o"><span class="pre">=</span></span><span
+                        class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span
+                        class="n"><span class="pre">control_bounds</span></span><span class="o"><span
+                          class="pre">=</span></span><span class="default_value"><span
+                          class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span
+                          class="pre">is_dyn_ctrl</span></span><span class="o"><span class="pre">=</span></span><span
+                        class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span
+                        class="n"><span class="pre">is_disturb</span></span><span class="o"><span
+                          class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>,
+                    <em class="sig-param"><span class="n"><span class="pre">pars_disturb</span></span><span
+                        class="o"><span class="pre">=</span></span><span class="default_value"><span
+                          class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink"
+                      href="#rcognita.systems.System" title="Permalink to this definition">¶</a>
+                  </dt>
+                  <dd>
+                    <blockquote>
+                      <div>
+                        <p>Interface class of dynamical systems a.k.a. environments.
+                          Concrete systems should be built upon this class.
+                          To design a concrete system: inherit this class, override:</p>
+                        <blockquote>
+                          <div>
+                            <div class="line-block">
+                              <div class="line"><code
+                                  class="xref py py-func docutils literal notranslate"><span class="pre">_state_dyn()</span></code>
+                                :</div>
+                              <div class="line">right-hand side of system description (required)</div>
+                              <div class="line"><code
+                                  class="xref py py-func docutils literal notranslate"><span class="pre">_disturb_dyn()</span></code>
+                                :</div>
+                              <div class="line">right-hand side of disturbance model (if necessary)</div>
+                              <div class="line"><code
+                                  class="xref py py-func docutils literal notranslate"><span class="pre">_ctrl_dyn()</span></code>
+                                :</div>
+                              <div class="line">right-hand side of controller dynamical model (if necessary)</div>
+                              <div class="line"><code
+                                  class="xref py py-func docutils literal notranslate"><span class="pre">out()</span></code>
+                                :</div>
+                              <div class="line">system out (if not overridden, output is identical to state)</div>
+                            </div>
+                          </div>
+                        </blockquote>
+                        <dl>
+                          <dt>sys_type<span class="classifier">: string</span></dt>
+                          <dd>
+                            <p>Type of system by description:</p>
+                            <div class="line-block">
+                              <div class="line"><code
+                                  class="docutils literal notranslate"><span class="pre">diff_eqn</span></code> :
+                                differential equation <span class="math notranslate nohighlight">\(\mathcal D state =
+                                  f(state, action, disturb)\)</span></div>
+                              <div class="line"><code
+                                  class="docutils literal notranslate"><span class="pre">discr_fnc</span></code> :
+                                difference equation <span class="math notranslate nohighlight">\(state^+ = f(state,
+                                  action, disturb)\)</span></div>
+                              <div class="line"><code
+                                  class="docutils literal notranslate"><span class="pre">discr_prob</span></code> : by
+                                probability distribution <span class="math notranslate nohighlight">\(X^+ \sim
+                                  P_X(state^+| state, action, disturb)\)</span></div>
+                            </div>
+                          </dd>
+                        </dl>
+                        <p>where:</p>
+                        <blockquote>
+                          <div>
+                            <div class="line-block">
+                              <div class="line"><span class="math notranslate nohighlight">\(state\)</span> : state
+                              </div>
+                              <div class="line"><span class="math notranslate nohighlight">\(action\)</span> : input
+                              </div>
+                              <div class="line"><span class="math notranslate nohighlight">\(disturb\)</span> :
+                                disturbance</div>
+                            </div>
+                          </div>
+                        </blockquote>
+                        <p>The time variable <code
+                            class="docutils literal notranslate"><span class="pre">t</span></code> is commonly used by
+                          ODE solvers, and you shouldn’t have it explicitly referenced in the definition, unless your
+                          system is non-autonomous.
+                          For the latter case, however, you already have the input and disturbance at your disposal.</p>
+                        <p>Parameters of the system are contained in <code
+                            class="docutils literal notranslate"><span class="pre">pars</span></code> attribute.</p>
+                        <dl>
+                          <dt>dim_state, dim_input, dim_output, dim_disturb<span class="classifier">: integer</span>
+                          </dt>
+                          <dd>
+                            <p>System dimensions</p>
+                          </dd>
+                          <dt>pars<span class="classifier">: list</span></dt>
+                          <dd>
+                            <p>List of fixed parameters of the system</p>
+                          </dd>
+                          <dt>control_bounds<span class="classifier">: array of shape <code
+                                class="docutils literal notranslate"><span class="pre">[dim_input,</span> <span class="pre">2]</span></code></span>
+                          </dt>
+                          <dd>
+                            <p>Box control constraints.
+                              First element in each row is the lower bound, the second - the upper bound.
+                              If empty, control is unconstrained (default)</p>
+                          </dd>
+                          <dt>is_dyn_ctrl<span class="classifier">: 0 or 1</span></dt>
+                          <dd>
+                            <p>If 1, the controller (a.k.a. agent) is considered as a part of the full state vector</p>
+                          </dd>
+                          <dt>is_disturb<span class="classifier">: 0 or 1</span></dt>
+                          <dd>
+                            <p>If 0, no disturbance is fed into the system</p>
+                          </dd>
+                          <dt>pars_disturb<span class="classifier">: list</span></dt>
+                          <dd>
+                            <p>Parameters of the disturbance model</p>
+                          </dd>
+                        </dl>
+                      </div>
+                    </blockquote>
+                    <p>Each concrete system must realize <code
+                        class="docutils literal notranslate"><span class="pre">System</span></code> and define <code
+                        class="docutils literal notranslate"><span class="pre">name</span></code> attribute.</p>
+                    <dl class="py method">
+                      <dt class="sig sig-object py" id="rcognita.systems.System.__init__">
+                        <span class="sig-name descname"><span class="pre">__init__</span></span><span
+                          class="sig-paren">(</span><em class="sig-param"><span class="n"><span
+                              class="pre">sys_type</span></span></em>, <em class="sig-param"><span class="n"><span
+                              class="pre">dim_state</span></span></em>, <em class="sig-param"><span class="n"><span
+                              class="pre">dim_input</span></span></em>, <em class="sig-param"><span class="n"><span
+                              class="pre">dim_output</span></span></em>, <em class="sig-param"><span class="n"><span
+                              class="pre">dim_disturb</span></span></em>, <em class="sig-param"><span class="n"><span
+                              class="pre">pars</span></span><span class="o"><span class="pre">=</span></span><span
+                            class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span
+                            class="n"><span class="pre">control_bounds</span></span><span class="o"><span
+                              class="pre">=</span></span><span class="default_value"><span
+                              class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span
+                              class="pre">is_dyn_ctrl</span></span><span class="o"><span
+                              class="pre">=</span></span><span class="default_value"><span
+                              class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span
+                              class="pre">is_disturb</span></span><span class="o"><span class="pre">=</span></span><span
+                            class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span
+                            class="n"><span class="pre">pars_disturb</span></span><span class="o"><span
+                              class="pre">=</span></span><span class="default_value"><span
+                              class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink"
+                          href="#rcognita.systems.System.__init__" title="Permalink to this definition">¶</a>
+                      </dt>
+                      <dd>
+                        <dl class="field-list simple">
+                          <dt class="field-odd">Parameters</dt>
+                          <dd class="field-odd">
+                            <ul class="simple">
+                              <li>
+                                <p><strong>sys_type</strong> (<em>: string</em>) –
+                                <p>Type of system by description:</p>
+                                <div class="line-block">
+                                  <div class="line"><code
+                                      class="docutils literal notranslate"><span class="pre">diff_eqn</span></code> :
+                                    differential equation <span class="math notranslate nohighlight">\(\mathcal D state
+                                      = f(state, action, disturb)\)</span></div>
+                                  <div class="line"><code
+                                      class="docutils literal notranslate"><span class="pre">discr_fnc</span></code> :
+                                    difference equation <span class="math notranslate nohighlight">\(state^+ = f(state,
+                                      action, disturb)\)</span></div>
+                                  <div class="line"><code
+                                      class="docutils literal notranslate"><span class="pre">discr_prob</span></code> :
+                                    by probability distribution <span class="math notranslate nohighlight">\(X^+ \sim
+                                      P_X(state^+| state, action, disturb)\)</span></div>
+                                </div>
+                                </p>
+                              </li>
+                              <li>
+                                <p><strong>where</strong> –
+                                <div class="line-block">
+                                  <div class="line"><span class="math notranslate nohighlight">\(state\)</span> : state
+                                  </div>
+                                  <div class="line"><span class="math notranslate nohighlight">\(action\)</span> : input
+                                  </div>
+                                  <div class="line"><span class="math notranslate nohighlight">\(disturb\)</span> :
+                                    disturbance</div>
+                                </div>
+                                </p>
+                              </li>
+                              <li>
+                                <p><strong>time variable t is commonly used by ODE solvers</strong> (<em>The</em>) –
+                                </p>
+                              </li>
+                              <li>
+                                <p><strong>you shouldn't have it explicitly referenced in the definition</strong>
+                                  (<em>and</em>) – </p>
+                              </li>
+                              <li>
+                                <p><strong>your system is non-autonomous.</strong> (<em>unless</em>) – </p>
+                              </li>
+                              <li>
+                                <p><strong>the latter case</strong> (<em>For</em>) – </p>
+                              </li>
+                              <li>
+                                <p><strong>however</strong> – </p>
+                              </li>
+                              <li>
+                                <p><strong>already have the input and disturbance at your disposal.</strong>
+                                  (<em>you</em>) – </p>
+                              </li>
+                              <li>
+                                <p><strong>of the system are contained in pars attribute.</strong> (<em>Parameters</em>)
+                                  – </p>
+                              </li>
+                              <li>
+                                <p><strong>dim_state</strong> (<em>: integer</em>) – System dimensions</p>
+                              </li>
+                              <li>
+                                <p><strong>dim_input</strong> (<em>: integer</em>) – System dimensions</p>
+                              </li>
+                              <li>
+                                <p><strong>dim_output</strong> (<em>: integer</em>) – System dimensions</p>
+                              </li>
+                              <li>
+                                <p><strong>dim_disturb</strong> (<em>: integer</em>) – System dimensions</p>
+                              </li>
+                              <li>
+                                <p><strong>pars</strong> (<em>: list</em>) – List of fixed parameters of the system</p>
+                              </li>
+                              <li>
+                                <p><strong>control_bounds</strong> (: array of shape <code
+                                    class="docutils literal notranslate"><span class="pre">[dim_input,</span> <span class="pre">2]</span></code>)
+                                  – Box control constraints.
+                                  First element in each row is the lower bound, the second - the upper bound.
+                                  If empty, control is unconstrained (default)</p>
+                              </li>
+                              <li>
+                                <p><strong>is_dyn_ctrl</strong> (<em>: 0</em><em> or </em><em>1</em>) – If 1, the
+                                  controller (a.k.a. agent) is considered as a part of the full state vector</p>
+                              </li>
+                              <li>
+                                <p><strong>is_disturb</strong> (<em>: 0</em><em> or </em><em>1</em>) – If 0, no
+                                  disturbance is fed into the system</p>
+                              </li>
+                              <li>
+                                <p><strong>pars_disturb</strong> (<em>: list</em>) – Parameters of the disturbance model
+                                </p>
+                              </li>
+                            </ul>
+                          </dd>
+                        </dl>
+                      </dd>
+                    </dl>
 
-</section>
+                    <p class="rubric">Methods</p>
+                    <table class="longtable docutils align-default">
+                      <colgroup>
+                        <col style="width: 10%" />
+                        <col style="width: 90%" />
+                      </colgroup>
+                      <tbody>
+                        <tr class="row-odd">
+                          <td>
+                            <p><a class="reference internal" href="#rcognita.systems.System.__init__"
+                                title="rcognita.systems.System.__init__"><code
+                                  class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(sys_type, dim_state, dim_input, …)
+                            </p>
+                          </td>
+                          <td>
+                            <p>
+                            <dl class="field-list simple">
+                              <dt class="field-odd">param sys_type</dt>
+                              <dd class="field-odd">
+                                <p>Type of system by description:</p>
+                              </dd>
+                            </dl>
+                            </p>
+                          </td>
+                        </tr>
+                        <tr class="row-even">
+                          <td>
+                            <p><code
+                                class="xref py py-obj docutils literal notranslate"><span class="pre">closed_loop_rhs</span></code>(t, state_full)
+                            </p>
+                          </td>
+                          <td>
+                            <p>Right-hand side of the closed-loop system description.</p>
+                          </td>
+                        </tr>
+                        <tr class="row-odd">
+                          <td>
+                            <p><code
+                                class="xref py py-obj docutils literal notranslate"><span class="pre">out</span></code>(state[, action])
+                            </p>
+                          </td>
+                          <td>
+                            <p>System output.</p>
+                          </td>
+                        </tr>
+                        <tr class="row-even">
+                          <td>
+                            <p><code
+                                class="xref py py-obj docutils literal notranslate"><span class="pre">receive_action</span></code>(action)
+                            </p>
+                          </td>
+                          <td>
+                            <p>Receive exogeneous control action to be fed into the system.</p>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </dd>
+                </dl>
+
+              </section>
 
 
-           </div>
-           
+            </div>
+
           </div>
           <footer>
-  
-    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
-      
-        <a href="../rcognita.utilities.html" class="btn btn-neutral float-right" title="rcognita.utilities" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
-      
-      
-        <a href="rcognita.systems.Sys3WRobotNI.html" class="btn btn-neutral float-left" title="rcognita.systems.Sys3WRobotNI" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
-      
-    </div>
-  
 
-  <hr/>
+            <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
 
-  <div role="contentinfo">
-    <p>
-        &copy; Copyright 2021, AIDA Lab
+              <a href="../rcognita.utilities.html" class="btn btn-neutral float-right" title="rcognita.utilities"
+                accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
 
-    </p>
-  </div>
-  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
 
-</footer>
+              <a href="rcognita.systems.Sys3WRobotNI.html" class="btn btn-neutral float-left"
+                title="rcognita.systems.Sys3WRobotNI" accesskey="p" rel="prev"><span
+                  class="fa fa-arrow-circle-left"></span> Previous</a>
+
+            </div>
+
+
+            <hr />
+
+            <div role="contentinfo">
+              <p>
+                &copy; Copyright 2021, AIDA Lab
+
+              </p>
+            </div>
+            Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a
+              href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a
+              href="https://readthedocs.org">Read the Docs</a>.
+
+          </footer>
 
         </div>
       </div>
@@ -341,19 +556,20 @@ If empty, control is unconstrained (default)</p></li>
     </section>
 
   </div>
-  
+
 
 
   <script type="text/javascript">
-      jQuery(function () {
-          SphinxRtdTheme.Navigation.enable(true);
-      });
+    jQuery(function () {
+      SphinxRtdTheme.Navigation.enable(true);
+    });
   </script>
 
-  
-  
-    
-   
+
+
+
+
 
 </body>
+
 </html>

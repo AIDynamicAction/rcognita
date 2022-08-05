@@ -18,8 +18,8 @@ class RcognitaArgParser(argparse.ArgumentParser):
 
         super().__init__(description=description)
         self.add_argument(
-            "--ctrl_mode",
-            metavar="ctrl_mode",
+            "--control_mode",
+            metavar="control_mode",
             type=str,
             choices=["manual", "nominal", "MPC", "RQL", "SQL", "RLSTAB"],
             default="MPC",
@@ -269,7 +269,7 @@ class Config3WRobot(AbstractConfig):
         self.pred_step_size = self.dt * self.pred_step_size_multiplier
         self.model_est_period = self.dt * self.model_est_period_multiplier
         self.critic_period = self.dt * self.critic_period_multiplier
-        if self.ctrl_mode == "RLSTAB":
+        if self.control_mode == "RLSTAB":
             self.Nactor = 1
 
         self.R1 = np.diag(np.array(self.R1_diag))
@@ -300,7 +300,7 @@ class Config3WRobot(AbstractConfig):
         self.Fmax = 300
         self.Mmin = -100
         self.Mmax = 100
-        self.ctrl_bnds = np.array([[self.Fmin, self.Fmax], [self.Mmin, self.Mmax]])
+        self.control_bounds = np.array([[self.Fmin, self.Fmax], [self.Mmin, self.Mmax]])
 
         # System parameters
         self.m = 10  # [kg]
@@ -449,7 +449,7 @@ class Config3WRobotNI(AbstractConfig):
         self.dim_input = 2
         self.dim_output = self.dim_state
         self.dim_disturb = 2
-        if self.ctrl_mode == "RLSTAB":
+        if self.control_mode == "RLSTAB":
             self.Nactor = 1
 
         self.dim_R1 = self.dim_output + self.dim_input
@@ -498,7 +498,7 @@ class Config3WRobotNI(AbstractConfig):
         self.v_max = 25
         self.omega_min = -5
         self.omega_max = 5
-        self.ctrl_bnds = np.array(
+        self.control_bounds = np.array(
             [[self.v_min, self.v_max], [self.omega_min, self.omega_max]]
         )
 
@@ -516,7 +516,7 @@ class ConfigROS3WRobotNI(Config3WRobotNI):
         self.v_max = 0.22
         self.omega_min = -2.84
         self.omega_max = 2.84
-        self.ctrl_bnds = np.array(
+        self.control_bounds = np.array(
             [[self.v_min, self.v_max], [self.omega_min, self.omega_max]]
         )
         return self.__dict__
@@ -706,7 +706,7 @@ class Config2Tank(AbstractConfig):
         # Control constraints
         self.action_min = 0
         self.action_max = 1
-        self.ctrl_bnds = np.array([[self.action_min], [self.action_max]]).T
+        self.control_bounds = np.array([[self.action_min], [self.action_max]]).T
 
         # System parameters
         self.tau1 = 18.4

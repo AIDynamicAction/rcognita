@@ -45,7 +45,7 @@ import os
 class PipelineROS3wrobotNI(Pipeline3WRobotNI):
     def ros_harness_initialization(self):
         self.ros_preset_task = ROSHarness(
-            self.ctrl_mode,
+            self.control_mode,
             [0, 0, 0],
             self.state_init,
             self.my_ctrl_nominal,

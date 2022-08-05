@@ -49,7 +49,6 @@ class OptimalController(ABC):
         pred_step_size=0.1,
         state_dyn=[],
         sys_out=[],
-        state_sys=[],
         prob_noise_pow=1,
         is_est_model=0,
         model_est_stage=1,
@@ -75,11 +74,11 @@ class OptimalController(ABC):
         # Controller: common
         self.pred_step_size = pred_step_size
 
-        if isinstance(self.actor.actor_optimizer.bounds, list):
-            self.action_min = self.actor.actor_optimizer.bounds[0][: self.dim_input]
+        if isinstance(self.actor.control_bounds, (list, np.ndarray)):
+            self.action_min = self.actor.control_bounds[0][: self.dim_input]
 
         else:
-            self.action_min = self.actor.actor_optimizer.bounds.lb[: self.dim_input]
+            self.action_min = self.actor.control_bounds.lb[: self.dim_input]
 
         if len(action_init) == 0:
             self.action_prev = self.action_min / 10
@@ -96,8 +95,6 @@ class OptimalController(ABC):
         # Exogeneous model's things
         self.state_dyn = state_dyn
         self.sys_out = sys_out
-        self.state_sys = state_sys
-        self.state_sys_prev = state_sys
         # Model estimator's things
         self.is_est_model = is_est_model
         self.est_clock = t0
@@ -133,7 +130,7 @@ class OptimalController(ABC):
 
         self.accum_obj_val = 0
 
-        self.ctrl_mode = self.actor.ctrl_mode
+        self.control_mode = self.actor.control_mode
 
     def reset(self, t0):
         """
@@ -145,14 +142,6 @@ class OptimalController(ABC):
         self.ctrl_clock = t0
         self.action_prev = self.action_min / 10
 
-    def receive_sys_state(self, state):
-        """
-        Fetch exogenous model state. Used in some controller modes. See class documentation.
-
-        """
-        self.state_sys_prev = self.state_sys
-        self.state_sys = state
-
     def stage_obj(self, observation, action):
 
         """
@@ -160,8 +149,11 @@ class OptimalController(ABC):
         
         See class documentation.
         """
+        observation = nc.to_col(observation)
+        action = nc.to_col(action)
+
         if self.observation_target == []:
-            chi = nc.concatenate([observation.T, action.T])
+            chi = nc.concatenate([observation, action])
         else:
             chi = nc.concatenate([(observation - self.observation_target), action])
 
@@ -178,9 +170,7 @@ class OptimalController(ABC):
         
         """
 
-        self.accum_obj_val += (
-            self.stage_obj(observation.T, action.T) * self.sampling_time
-        )
+        self.accum_obj_val += self.stage_obj(observation, action) * self.sampling_time
 
     def _estimate_model(self, t, observation):
         """
@@ -303,185 +293,20 @@ class OptimalController(ABC):
             # Update controller's internal clock
             self.ctrl_clock = t
             # DEBUG ==============================
-            print(self.ctrl_clock)
+            # print(self.ctrl_clock)
             # /DEBUG =============================
             action = self.compute_action(
                 t, observation, is_critic_update=is_critic_update
             )
 
-            self.action_prev = action
-
             return action
 
         else:
-            return self.action_prev
+            return self.actor.action_prev
 
     @abstractmethod
     def compute_action(self):
         pass
-
-
-class CtrlRLStab(OptimalController):
-    def __init__(
-        self,
-        safe_ctrl=[],
-        safe_decay_rate=[],
-        eps_action=1e-2,
-        eps_weights=1e-2,
-        eps_critic=1e-1,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-
-        # Stabilizing constraint stuff
-        self.safe_ctrl = safe_ctrl  # Safe controller (agent)
-        self.safe_decay_rate = safe_decay_rate
-        self.eps_action = eps_action
-        self.eps_weights = eps_weights
-        self.eps_critic = eps_critic
-        # DEBUG ===================================================================
-        self.critic_values = []
-        self.g_emergency_critic_deriv = []
-        self.g_emerency_critic_diff_weights = []
-        self.g_actor_values = []
-        self.g_critic_values = []
-        # /DEBUG ===================================================================
-
-    # def update_critic(self, t=None):
-    #     nc = SymbolicHandler(is_symbolic=True)
-    #     g = lambda x: nc.norm_1(x - self.critic.weights_prev) - self.eps_weights
-    #     self.critic.weights = self.critic._critic_optimizer(
-    #         constraints=g, is_symbolic=True, t=t
-    #     )
-
-    def critic_grad_step(self, weights_prev, t):
-
-        grad_optimizer = GradientOptimizer(
-            self.critic._critic_cost, 1e-2, 1, len_ub=self.eps_weights
-        )
-        new_weights = grad_optimizer.optimize(weights_prev)
-
-        # DEBUG ===================================================================
-        self.g_critic_values.append([nc.norm_2(new_weights) - self.eps_weights, t])
-        # /DEBUG ===================================================================
-        return new_weights
-
-    def actor_grad_step(self, action_prev, observation, t):
-
-        grad_optimizer = GradientOptimizer(
-            self.actor._actor_cost, 1e-2, 1, len_ub=self.eps_action
-        )
-        new_action = grad_optimizer.optimize(action_prev, observation)
-
-        # DEBUG ===================================================================
-        self.g_actor_values.append([nc.norm_2(new_action) - self.eps_action, t])
-        # /DEBUG ===================================================================
-        return new_action
-
-    # def update_actor(self, observation, t=None):
-    #     nc = SymbolicHandler(is_symbolic=True)
-    #     g = lambda x: nc.norm_1(x - self.actor.action_prev) - self.eps_action
-    #     action = self.actor._actor_optimizer(
-    #         observation, constraints=g, is_symbolic=True, t=t
-    #     )
-    #     return action
-
-    def compute_action(self, t, observation, is_critic_update=False):
-
-        observation_prev = self.critic.observation_buffer[-1, :]
-        action_prev = self.critic.action_buffer[-1, :]
-        weights_prev = self.critic.weights_prev
-
-        critic_diff_factual = self.critic(weights_prev, observation,) - self.critic(
-            weights_prev, observation_prev
-        )
-
-        # DEBUG ===================================================================
-        self.critic_values.append(
-            [self.critic(weights_prev, observation), critic_diff_factual, t,]
-        )
-        # /DEBUG ===================================================================
-
-        if critic_diff_factual <= self.safe_decay_rate * self.sampling_time:
-            action = self.actor_grad_step(action_prev, observation, t=t)
-            weights = self.critic_grad_step(observation_prev, t=t)
-            # self.critic.weights = (
-            #     self.critic.weights + self.eps_weights
-            # )
-            # self.update_critic(t=t)
-        else:
-            action = self.safe_ctrl.compute_action(observation)
-            weights = self.emergency_search(action, observation, t=t)
-
-        self.critic.action_buffer = push_vec(
-            self.critic.action_buffer, self.actor.action_prev
-        )
-        self.critic.observation_buffer = nc.push_vec(
-            self.critic.observation_buffer, observation
-        )
-
-        self.actor.action_prev = action
-        self.critic.weights_prev = weights
-        self.critic.weights = weights
-
-        return action
-
-    def emergency_search(self, action, observation, t=None):
-        print("Emergency started!!!!!!!!!!!!")
-
-        options = {
-            "print_time": 0,
-            "ipopt.max_iter": 200,
-            "ipopt.print_level": 0,
-            "ipopt.acceptable_tol": 1e-7,
-            "ipopt.acceptable_obj_change_tol": 1e-4,
-        }
-
-        state_dyn_vector = self.state_dyn([], observation, action)
-
-        critic_gradient, weights_symbolic = self.critic.grad_observation(observation)
-        critic_deriv = nc.dot(critic_gradient, state_dyn_vector)
-
-        critic_curr = self.critic(weights_symbolic, observation)
-        critic_prev = self.critic(self.critic.weights_prev, observation,)
-        critic_diff_weights = critic_curr - critic_prev
-
-        optimization_problem = {}
-        optimization_problem["x"] = weights_symbolic
-        optimization_problem["f"] = critic_deriv
-        optimization_problem["g"] = nc.concatenate([critic_deriv, critic_diff_weights])
-        solver = nlpsol("solver", "ipopt", optimization_problem, options)
-        result = solver(
-            x0=self.critic.weights,
-            ubx=self.critic.Wmax,
-            lbx=self.critic.Wmin,
-            ubg=[-2 * self.safe_decay_rate, self.eps_critic],
-        )["x"]
-
-        ##### DEBUG
-        g1 = Function("g1", [weights_symbolic], [critic_diff_weights])
-        g2 = Function(
-            "g2", [weights_symbolic], [critic_deriv + 2 * self.safe_decay_rate]
-        )
-        critic_deriv = Function("f", [weights_symbolic], [critic_deriv])
-
-        self.g_emergency_critic_deriv.append([g2(result), t])
-        self.g_emerency_critic_diff_weights.append([g1(result), t])
-
-        # row_header = ["Dg1", "Dg2", "critic_deriv"]
-        # row_data = [g1(result), g2(result), critic_deriv(result)]
-        # row_format = ("8.3f", "8.3f", "8.3f")
-        # table = tabulate(
-        #     [row_header, row_data],
-        #     floatfmt=row_format,
-        #     headers="firstrow",
-        #     tablefmt="grid",
-        # )
-
-        # print(table)
-        ##### DEBUG
-
-        return result
 
 
 class CtrlOptPred(OptimalController):
@@ -492,23 +317,12 @@ class CtrlOptPred(OptimalController):
         self, t, observation, is_critic_update=False,
     ):
 
-        if self.ctrl_mode == "MPC":
-            # Apply control when model estimation phase is over
-            if self.is_prob_noise and self.is_est_model:
-                return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
-
-            elif not self.is_prob_noise and self.is_est_model:
-                action = self.actor._actor_optimizer(observation)
-
-            elif self.ctrl_mode == "MPC":
-                action = self.actor._actor_optimizer(observation)
-
-        elif self.ctrl_mode in ["RQL", "SQL"]:
+        if self.control_mode != "MPC":
             # Critic
 
             # Update data buffers
             self.critic.action_buffer = push_vec(
-                self.critic.action_buffer, self.action_prev
+                self.critic.action_buffer, self.actor.action_prev
             )
 
             self.critic.observation_buffer = nc.push_vec(
@@ -519,8 +333,7 @@ class CtrlOptPred(OptimalController):
                 # Update critic's internal clock
                 self.critic_clock = t
 
-                self.critic.weights = self.critic._critic_optimizer()
-                self.critic.weights_prev = self.critic.weights
+                self.critic.weights = self.critic.get_optimized_weights()
 
                 # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
                 # self.weights_init = self.weights_prev
@@ -529,13 +342,13 @@ class CtrlOptPred(OptimalController):
                 self.critic.weights = self.critic.weights_prev
 
             # Actor. Apply control when model estimation phase is over
-            if self.is_prob_noise and self.is_est_model:
-                action = self.prob_noise_pow * (rand(self.dim_input) - 0.5)
-            elif not self.is_prob_noise and self.is_est_model:
-                action = self.actor._actor_optimizer(observation)
+            if self.is_est_model and self.is_prob_noise:
+                return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
 
-            elif self.ctrl_mode in ["RQL", "SQL"]:
-                action = self.actor._actor_optimizer(observation,)
+        action = self.actor.get_optimized_action(observation)
+
+        self.critic.weights_prev = self.critic.weights
+        self.actor.action_prev = action
 
         return action
 
@@ -573,13 +386,13 @@ class CtrlNominal3WRobot:
     """
 
     def __init__(
-        self, m, I, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1,
+        self, m, I, ctrl_gain=10, control_bounds=[], t0=0, sampling_time=0.1,
     ):
 
         self.m = m
         self.I = I
         self.ctrl_gain = ctrl_gain
-        self.ctrl_bnds = ctrl_bnds
+        self.control_bounds = control_bounds
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
@@ -795,10 +608,10 @@ class CtrlNominal3WRobot:
             # This controller needs full-state measurement
             action = self.compute_action(observation)
 
-            if self.ctrl_bnds.any():
+            if self.control_bounds.any():
                 for k in range(2):
                     action[k] = np.clip(
-                        action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
+                        action[k], self.control_bounds[k, 0], self.control_bounds[k, 1]
                     )
 
             self.action_prev = action
@@ -850,10 +663,10 @@ class CtrlNominal3WRobotNI:
     
     """
 
-    def __init__(self, ctrl_gain=10, ctrl_bnds=[], t0=0, sampling_time=0.1):
+    def __init__(self, ctrl_gain=10, control_bounds=[], t0=0, sampling_time=0.1):
 
         self.ctrl_gain = ctrl_gain
-        self.ctrl_bnds = ctrl_bnds
+        self.control_bounds = control_bounds
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
@@ -963,16 +776,16 @@ class CtrlNominal3WRobotNI:
         kappa_val = nc.zeros(2)
 
         G = nc.zeros([3, 2])
-        G[:, 0] = nc.rc_array([1, 0, xNI[1]])
-        G[:, 1] = nc.rc_array([0, 1, -xNI[0]])
+        G[:, 0] = nc.array([1, 0, xNI[1]], prototype=G)
+        G[:, 1] = nc.array([0, 1, -xNI[0]], prototype=G)
 
         zeta_val = self._zeta(xNI)
 
         kappa_val[0] = -nc.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * nc.sign(
-            np.dot(zeta_val, G[:, 0])
+            nc.dot(zeta_val, G[:, 0])
         )
         kappa_val[1] = -nc.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * nc.sign(
-            np.dot(zeta_val, G[:, 1])
+            nc.dot(zeta_val, G[:, 1])
         )
 
         return kappa_val
@@ -1043,10 +856,10 @@ class CtrlNominal3WRobotNI:
 
             action = self.compute_action(observation)
 
-            if self.ctrl_bnds.any():
+            if self.control_bounds.any():
                 for k in range(2):
                     action[k] = np.clip(
-                        action[k], self.ctrl_bnds[k, 0], self.ctrl_bnds[k, 1]
+                        action[k], self.control_bounds[k, 0], self.control_bounds[k, 1]
                     )
 
             self.action_prev = action

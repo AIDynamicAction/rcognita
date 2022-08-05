@@ -13,7 +13,6 @@ import csv
 import rcognita
 import numpy as np
 from rcognita.utilities import rep_mat
-from rcognita.npCasADi_api import SymbolicHandler
 
 from config_blueprints import Config3WRobotNI
 from pipeline_blueprints import AbstractPipeline
@@ -48,7 +47,7 @@ from rcognita import (
 )
 from datetime import datetime
 from rcognita.utilities import on_key_press
-from rcognita.rl_tools import Actor, CriticValue, CriticActionValue
+from rcognita.rl_tools import Actor, CriticActionValue, CriticSTAG, ActorSTAG
 
 
 class Pipeline3WRobotNI(AbstractPipeline):
@@ -60,7 +59,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             dim_output=self.dim_output,
             dim_disturb=self.dim_disturb,
             pars=[],
-            ctrl_bnds=self.ctrl_bnds,
+            control_bounds=self.control_bounds,
             is_dyn_ctrl=self.is_dyn_ctrl,
             is_disturb=self.is_disturb,
             pars_disturb=np.array([[200 * self.dt, 200 * self.dt], [0, 0], [0.3, 0.3]]),
@@ -81,18 +80,28 @@ class Pipeline3WRobotNI(AbstractPipeline):
         )
 
     def optimizers_initialization(self):
-
-        self.actor_optimizer = optimizers.RcognitaOptimizer.create_scipy_actor_optimizer(
-            actor_opt_method="SLSQP", ctrl_bnds=self.ctrl_bnds, Nactor=self.Nactor
+        opt_options = {
+            "maxiter": 200,
+            "maxfev": 5000,
+            "disp": False,
+            "adaptive": True,
+            "xatol": 1e-7,
+            "fatol": 1e-7,
+        }
+        self.actor_optimizer = optimizers.SciPyOptimizer(
+            opt_method="SLSQP", opt_options=opt_options
         )
-        self.critic_optimizer = optimizers.RcognitaOptimizer.create_scipy_critic_optimizer(
-            critic_opt_method="SLSQP",
-            critic_struct=self.critic_struct,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
+        self.critic_optimizer = optimizers.SciPyOptimizer(
+            opt_method="SLSQP", opt_options=opt_options,
         )
 
     def rl_components_initialization(self):
+        self.my_ctrl_nominal = controllers.CtrlNominal3WRobotNI(
+            ctrl_gain=0.5,
+            control_bounds=self.control_bounds,
+            t0=self.t0,
+            sampling_time=self.dt,
+        )
 
         self.q_critic = CriticActionValue(
             Ncritic=self.Ncritic,
@@ -101,17 +110,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             buffer_size=self.buffer_size,
             stage_obj=self.objectives.stage_obj,
             gamma=self.gamma,
-            critic_optimizer=self.critic_optimizer,
-            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
-        )
-        self.v_critic = CriticValue(
-            Ncritic=self.Ncritic,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
-            buffer_size=self.buffer_size,
-            stage_obj=self.objectives.stage_obj,
-            gamma=self.gamma,
-            critic_optimizer=self.critic_optimizer,
+            optimizer=self.critic_optimizer,
             critic_model=models.ModelPolynomial(model_name=self.critic_struct),
         )
 
@@ -119,28 +118,40 @@ class Pipeline3WRobotNI(AbstractPipeline):
             self.Nactor,
             self.dim_input,
             self.dim_output,
-            self.ctrl_mode,
+            self.control_mode,
+            self.control_bounds,
             state_predictor=self.state_predictor,
-            actor_optimizer=self.actor_optimizer,
+            optimizer=self.actor_optimizer,
             critic=self.q_critic,
             stage_obj=self.objectives.stage_obj,
         )
 
-        self.v_actor = Actor(
+        self.critic_STAG = CriticSTAG(
+            Ncritic=self.Ncritic,
+            dim_input=self.dim_input,
+            dim_output=self.dim_output,
+            buffer_size=self.buffer_size,
+            stage_obj=self.objectives.stage_obj,
+            gamma=self.gamma,
+            optimizer=self.critic_optimizer,
+            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
+            safe_ctrl=self.my_ctrl_nominal,
+            state_predictor=self.state_predictor,
+        )
+
+        self.actor_STAG = ActorSTAG(
             self.Nactor,
             self.dim_input,
             self.dim_output,
-            self.ctrl_mode,
+            self.control_mode,
+            self.control_bounds,
             state_predictor=self.state_predictor,
-            actor_optimizer=self.actor_optimizer,
-            critic=self.v_critic,
+            optimizer=self.actor_optimizer,
+            critic=self.critic_STAG,
             stage_obj=self.objectives.stage_obj,
         )
 
     def controller_initialization(self):
-        self.my_ctrl_nominal = controllers.CtrlNominal3WRobotNI(
-            ctrl_gain=0.5, ctrl_bnds=self.ctrl_bnds, t0=self.t0, sampling_time=self.dt,
-        )
 
         self.my_ctrl_opt_pred = controllers.CtrlOptPred(
             action_init=self.action_init,
@@ -149,7 +160,6 @@ class Pipeline3WRobotNI(AbstractPipeline):
             pred_step_size=self.pred_step_size,
             state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
-            state_sys=self.state_init,
             prob_noise_pow=self.prob_noise_pow,
             is_est_model=self.is_est_model,
             model_est_stage=self.model_est_stage,
@@ -164,14 +174,13 @@ class Pipeline3WRobotNI(AbstractPipeline):
             observation_target=[],
         )
 
-        self.my_ctrl_RL_stab = controllers.CtrlRLStab(
+        self.my_ctrl_RL_stab = controllers.CtrlOptPred(
             action_init=self.action_init,
             t0=self.t0,
             sampling_time=self.dt,
             pred_step_size=self.pred_step_size,
             state_dyn=self.my_sys._state_dyn,
             sys_out=self.my_sys.out,
-            state_sys=self.state_init,
             prob_noise_pow=self.prob_noise_pow,
             is_est_model=self.is_est_model,
             model_est_stage=self.model_est_stage,
@@ -180,15 +189,13 @@ class Pipeline3WRobotNI(AbstractPipeline):
             model_order=self.model_order,
             model_est_checks=self.model_est_checks,
             critic_period=self.critic_period,
-            actor=self.v_actor,
-            critic=self.v_critic,
+            actor=self.actor_STAG,
+            critic=self.critic_STAG,
             stage_obj_pars=[self.R1],
             observation_target=[],
-            safe_ctrl=self.my_ctrl_nominal,
-            safe_decay_rate=1e-4,
         )
 
-        if self.ctrl_mode == "RLSTAB":
+        if self.control_mode == "RLSTAB":
             self.my_ctrl_benchm = self.my_ctrl_RL_stab
 
         else:
@@ -234,7 +241,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
                 + "/"
                 + self.my_sys.name
                 + "__"
-                + self.ctrl_mode
+                + self.control_mode
                 + "__"
                 + date
                 + "__"
@@ -248,7 +255,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
                 with open(self.datafiles[k], "w", newline="") as outfile:
                     writer = csv.writer(outfile)
                     writer.writerow(["System", self.my_sys.name])
-                    writer.writerow(["Controller", self.ctrl_mode])
+                    writer.writerow(["Controller", self.control_mode])
                     writer.writerow(["dt", str(self.dt)])
                     writer.writerow(["state_init", str(self.state_init)])
                     writer.writerow(["is_est_model", str(self.is_est_model)])
@@ -322,7 +329,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
                 self.xMax,
                 self.yMin,
                 self.yMax,
-                self.ctrl_mode,
+                self.control_mode,
                 self.action_manual,
                 self.v_min,
                 self.omega_min,
@@ -372,10 +379,13 @@ class Pipeline3WRobotNI(AbstractPipeline):
             #     self.trajectory.append([state_full.extend(t)])
             # /DEBUG ===================================================================
 
-            action = self.my_ctrl_benchm.compute_action(t, observation)
+            if self.control_mode == "nominal":
+                action = self.my_ctrl_nominal.compute_action_sampled(t, observation)
+            else:
+                action = self.my_ctrl_benchm.compute_action_sampled(t, observation)
 
             self.my_sys.receive_action(action)
-            self.my_ctrl_benchm.receive_sys_state(self.my_sys._state)
+
             self.my_ctrl_benchm.upd_accum_obj(observation, action)
 
             xCoord = state_full[0]
@@ -416,7 +426,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
                 self.my_simulator.t = self.t0
                 self.my_simulator.observation = self.state_full_init
 
-                if self.ctrl_mode != "nominal":
+                if self.control_mode != "nominal":
                     self.my_ctrl_benchm.reset(self.t0)
                 else:
                     self.my_ctrl_nominal.reset(self.t0)
