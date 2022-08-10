@@ -304,12 +304,19 @@ class CriticActionValue(Critic):
 
 class CriticSTAG(CriticValue):
     def __init__(
-        self, safe_decay_rate=1e-4, safe_ctrl=[], state_predictor=[], *args, **kwargs
+        self,
+        safe_decay_rate=1e-4,
+        safe_ctrl=[],
+        state_predictor=[],
+        *args,
+        eps=0.01,
+        **kwargs
     ):
         super().__init__(*args, **kwargs)
         self.safe_decay_rate = safe_decay_rate
         self.safe_ctrl = safe_ctrl
         self.state_predictor = state_predictor
+        self.eps = eps
 
     def get_optimized_weights(self, constraint_functions=(), t=None):
 
@@ -345,8 +352,6 @@ class CriticSTAG(CriticValue):
                 + self.state_predictor.pred_step_size * self.safe_decay_rate
             )
 
-        eps = 0.01
-
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
                 self.cost, x0=weights_init, is_symbolic=True
@@ -356,6 +361,12 @@ class CriticSTAG(CriticValue):
                 constraints = self.create_constraints(
                     constraint_functions, symbolic_var
                 )
+
+            lambda_constr = (
+                lambda weights: constr_stab_decay_w(weights, observation) - self.eps
+            )
+
+            constraints += (nc.lambda2symb(lambda_constr, symbolic_var),)
 
             optimized_weights = self.optimizer.optimize(
                 cost_function,
@@ -379,7 +390,9 @@ class CriticSTAG(CriticValue):
                 )
 
             my_constraints = sp.optimize.NonlinearConstraint(
-                lambda weights: constr_stab_decay_w(weights, observation), -np.inf, eps,
+                lambda weights: constr_stab_decay_w(weights, observation),
+                -np.inf,
+                self.eps,
             )
 
             # my_constraints = ()

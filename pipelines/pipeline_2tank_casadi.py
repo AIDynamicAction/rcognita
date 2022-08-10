@@ -30,17 +30,22 @@ from pipeline_2tank import Pipeline2Tank
 class Pipeline2TankCasADi(Pipeline2Tank):
     def optimizers_initialization(self):
 
-        self.actor_optimizer = optimizers.RcognitaOptimizer.CasADi_actor_optimizer(
-            opt_method="ipopt", control_bounds=self.control_bounds, Nactor=self.Nactor,
+        opt_options = {
+            "print_time": 0,
+            "ipopt.max_iter": 200,
+            "ipopt.print_level": 0,
+            "ipopt.acceptable_tol": 1e-7,
+            "ipopt.acceptable_obj_change_tol": 1e-4,
+        }
+
+        self.actor_optimizer = optimizers.CasADiOptimizer(
+            opt_method="ipopt", opt_options=opt_options
         )
-        self.critic_optimizer = optimizers.RcognitaOptimizer.CasADi_critic_optimizer(
-            opt_method="SLSQP",
-            critic_struct=self.critic_struct,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
+        self.critic_optimizer = optimizers.CasADiOptimizer(
+            opt_method="ipopt", opt_options=opt_options,
         )
 
 
 if __name__ == "__main__":
 
-    Pipeline2TankCasadi().pipeline_execution()
+    Pipeline2TankCasADi().pipeline_execution()

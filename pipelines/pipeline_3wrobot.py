@@ -47,7 +47,17 @@ from rcognita import (
 )
 from datetime import datetime
 from rcognita.utilities import on_key_press
-from rcognita.rl_tools import Actor, CriticValue, CriticActionValue
+from rcognita.actors import (
+    ActorSTAG,
+    ActorMPC,
+    ActorRQL,
+    ActorSQL,
+)
+
+from rcognita.critics import (
+    CriticActionValue,
+    CriticSTAG,
+)
 
 
 class Pipeline3WRobot(AbstractPipeline):
@@ -80,121 +90,126 @@ class Pipeline3WRobot(AbstractPipeline):
         )
 
     def optimizers_initialization(self):
-
-        self.actor_optimizer = optimizers.RcognitaOptimizer.create_scipy_actor_optimizer(
-            opt_method="SLSQP", control_bounds=self.control_bounds, Nactor=self.Nactor,
+        opt_options = {
+            "maxiter": 200,
+            "maxfev": 5000,
+            "disp": False,
+            "adaptive": True,
+            "xatol": 1e-7,
+            "fatol": 1e-7,
+        }
+        self.actor_optimizer = optimizers.SciPyOptimizer(
+            opt_method="SLSQP", opt_options=opt_options
         )
-        self.critic_optimizer = optimizers.RcognitaOptimizer.create_scipy_critic_optimizer(
-            opt_method="SLSQP",
-            critic_struct=self.critic_struct,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
-        )
-
-    def rl_components_initialization(self):
-
-        self.q_critic = CriticActionValue(
-            Ncritic=self.Ncritic,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
-            buffer_size=self.buffer_size,
-            stage_obj=self.objectives.stage_obj,
-            gamma=self.gamma,
-            optimizer=self.critic_optimizer,
-            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
-        )
-        self.v_critic = CriticValue(
-            Ncritic=self.Ncritic,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
-            buffer_size=self.buffer_size,
-            stage_obj=self.objectives.stage_obj,
-            gamma=self.gamma,
-            optimizer=self.critic_optimizer,
-            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
+        self.critic_optimizer = optimizers.SciPyOptimizer(
+            opt_method="SLSQP", opt_options=opt_options,
         )
 
-        self.q_actor = Actor(
-            self.Nactor,
-            self.dim_input,
-            self.dim_output,
-            self.control_mode,
-            state_predictor=self.state_predictor,
-            optimizer=self.actor_optimizer,
-            critic=self.q_critic,
-            stage_obj=self.objectives.stage_obj,
-        )
-
-        self.v_actor = Actor(
-            self.Nactor,
-            self.dim_input,
-            self.dim_output,
-            self.control_mode,
-            state_predictor=self.state_predictor,
-            optimizer=self.actor_optimizer,
-            critic=self.v_critic,
-            stage_obj=self.objectives.stage_obj,
-        )
-
-    def controller_initialization(self):
-        self.my_ctrl_nominal = controllers.CtrlNominal3WRobot(
-            self.m,
-            self.I,
-            ctrl_gain=5,
+    def actor_critic_initialization(self):
+        self.my_ctrl_nominal = controllers.CtrlNominal3WRobotNI(
+            ctrl_gain=0.5,
             control_bounds=self.control_bounds,
             t0=self.t0,
             sampling_time=self.dt,
         )
 
-        self.my_ctrl_opt_pred = controllers.CtrlOptPred(
-            action_init=self.action_init,
-            t0=self.t0,
-            sampling_time=self.dt,
-            pred_step_size=self.pred_step_size,
-            state_dyn=self.my_sys._state_dyn,
-            sys_out=self.my_sys.out,
-            prob_noise_pow=self.prob_noise_pow,
-            is_est_model=self.is_est_model,
-            model_est_stage=self.model_est_stage,
-            model_est_period=self.model_est_period,
-            buffer_size=self.buffer_size,
-            model_order=self.model_order,
-            model_est_checks=self.model_est_checks,
-            critic_period=self.critic_period,
-            actor=self.q_actor,
-            critic=self.q_critic,
-            stage_obj_pars=[self.R1],
-            observation_target=[],
-        )
-
-        self.my_ctrl_RL_stab = controllers.CtrlRLStab(
-            action_init=self.action_init,
-            t0=self.t0,
-            sampling_time=self.dt,
-            pred_step_size=self.pred_step_size,
-            state_dyn=self.my_sys._state_dyn,
-            sys_out=self.my_sys.out,
-            prob_noise_pow=self.prob_noise_pow,
-            is_est_model=self.is_est_model,
-            model_est_stage=self.model_est_stage,
-            model_est_period=self.model_est_period,
-            buffer_size=self.buffer_size,
-            model_order=self.model_order,
-            model_est_checks=self.model_est_checks,
-            critic_period=self.critic_period,
-            actor=self.v_actor,
-            critic=self.v_critic,
-            stage_obj_pars=[self.R1],
-            observation_target=[],
-            safe_ctrl=self.my_ctrl_nominal,
-            safe_decay_rate=1e-4,
-        )
-
         if self.control_mode == "RLSTAB":
-            self.my_ctrl_benchm = self.my_ctrl_RL_stab
+            self.critic = CriticSTAG(
+                Ncritic=self.Ncritic,
+                dim_input=self.dim_input,
+                dim_output=self.dim_output,
+                buffer_size=self.buffer_size,
+                stage_obj=self.objectives.stage_obj,
+                gamma=self.gamma,
+                optimizer=self.critic_optimizer,
+                critic_model=models.ModelPolynomial(model_name=self.critic_struct),
+                safe_ctrl=self.my_ctrl_nominal,
+                state_predictor=self.state_predictor,
+                eps=100,
+            )
 
+            self.actor = ActorSTAG(
+                self.Nactor,
+                self.dim_input,
+                self.dim_output,
+                self.control_mode,
+                self.control_bounds,
+                state_predictor=self.state_predictor,
+                optimizer=self.actor_optimizer,
+                critic=self.critic,
+                stage_obj=self.objectives.stage_obj,
+                eps=100,
+            )
         else:
-            self.my_ctrl_benchm = self.my_ctrl_opt_pred
+            self.critic = CriticActionValue(
+                Ncritic=self.Ncritic,
+                dim_input=self.dim_input,
+                dim_output=self.dim_output,
+                buffer_size=self.buffer_size,
+                stage_obj=self.objectives.stage_obj,
+                gamma=self.gamma,
+                optimizer=self.critic_optimizer,
+                critic_model=models.ModelPolynomial(model_name=self.critic_struct),
+            )
+
+            if self.control_mode == "MPC":
+                self.actor = ActorMPC(
+                    self.Nactor,
+                    self.dim_input,
+                    self.dim_output,
+                    self.control_mode,
+                    self.control_bounds,
+                    state_predictor=self.state_predictor,
+                    optimizer=self.actor_optimizer,
+                    critic=self.critic,
+                    stage_obj=self.objectives.stage_obj,
+                )
+            elif self.control_mode == "RQL":
+                self.actor = ActorRQL(
+                    self.Nactor,
+                    self.dim_input,
+                    self.dim_output,
+                    self.control_mode,
+                    self.control_bounds,
+                    state_predictor=self.state_predictor,
+                    optimizer=self.actor_optimizer,
+                    critic=self.critic,
+                    stage_obj=self.objectives.stage_obj,
+                )
+            elif self.control_mode == "SQL":
+                self.actor = ActorSQL(
+                    self.Nactor,
+                    self.dim_input,
+                    self.dim_output,
+                    self.control_mode,
+                    self.control_bounds,
+                    state_predictor=self.state_predictor,
+                    optimizer=self.actor_optimizer,
+                    critic=self.critic,
+                    stage_obj=self.objectives.stage_obj,
+                )
+
+    def controller_initialization(self):
+        self.my_ctrl_benchm = controllers.CtrlOptPred(
+            action_init=self.action_init,
+            t0=self.t0,
+            sampling_time=self.dt,
+            pred_step_size=self.pred_step_size,
+            state_dyn=self.my_sys._state_dyn,
+            sys_out=self.my_sys.out,
+            prob_noise_pow=self.prob_noise_pow,
+            is_est_model=self.is_est_model,
+            model_est_stage=self.model_est_stage,
+            model_est_period=self.model_est_period,
+            buffer_size=self.buffer_size,
+            model_order=self.model_order,
+            model_est_checks=self.model_est_checks,
+            critic_period=self.critic_period,
+            actor=self.actor,
+            critic=self.critic,
+            stage_obj_pars=[self.R1],
+            observation_target=[],
+        )
 
     def simulator_initialization(self):
         self.my_simulator = simulator.Simulator(
@@ -445,7 +460,7 @@ class Pipeline3WRobot(AbstractPipeline):
         self.state_predictor_initialization()
         self.objectives_initialization()
         self.optimizers_initialization()
-        self.rl_components_initialization()
+        self.actor_critic_initialization()
         self.controller_initialization()
         self.simulator_initialization()
         self.logger_initialization()

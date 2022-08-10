@@ -181,6 +181,9 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
             else:
                 return func(x_symb), x_symb
 
+    def lambda2symb(self, lambda_func, x_symb, is_symbolic=False):
+        return lambda_func(x_symb)
+
     def if_else(self, c, x, y, is_symbolic=False):
         if is_symbolic:
             res = casadi.if_else(c, x, y)

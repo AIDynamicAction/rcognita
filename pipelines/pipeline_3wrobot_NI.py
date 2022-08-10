@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import csv
 import rcognita
 import numpy as np
-from rcognita.utilities import rep_mat
 
 from config_blueprints import Config3WRobotNI
 from pipeline_blueprints import AbstractPipeline
@@ -47,14 +46,16 @@ from rcognita import (
 )
 from datetime import datetime
 from rcognita.utilities import on_key_press
-from rcognita.rl_tools import (
-    CriticActionValue,
-    CriticSTAG,
+from rcognita.actors import (
     ActorSTAG,
     ActorMPC,
     ActorRQL,
     ActorSQL,
-    ActorVI,
+)
+
+from rcognita.critics import (
+    CriticActionValue,
+    CriticSTAG,
 )
 
 
@@ -103,7 +104,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             opt_method="SLSQP", opt_options=opt_options,
         )
 
-    def rl_components_initialization(self):
+    def actor_critic_initialization(self):
         self.my_ctrl_nominal = controllers.CtrlNominal3WRobotNI(
             ctrl_gain=0.5,
             control_bounds=self.control_bounds,
@@ -111,57 +112,82 @@ class Pipeline3WRobotNI(AbstractPipeline):
             sampling_time=self.dt,
         )
 
-        self.q_critic = CriticActionValue(
-            Ncritic=self.Ncritic,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
-            buffer_size=self.buffer_size,
-            stage_obj=self.objectives.stage_obj,
-            gamma=self.gamma,
-            optimizer=self.critic_optimizer,
-            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
-        )
+        if self.control_mode == "RLSTAB":
+            self.critic = CriticSTAG(
+                Ncritic=self.Ncritic,
+                dim_input=self.dim_input,
+                dim_output=self.dim_output,
+                buffer_size=self.buffer_size,
+                stage_obj=self.objectives.stage_obj,
+                gamma=self.gamma,
+                optimizer=self.critic_optimizer,
+                critic_model=models.ModelPolynomial(model_name=self.critic_struct),
+                safe_ctrl=self.my_ctrl_nominal,
+                state_predictor=self.state_predictor,
+            )
 
-        self.q_actor = ActorMPC(
-            self.Nactor,
-            self.dim_input,
-            self.dim_output,
-            self.control_mode,
-            self.control_bounds,
-            state_predictor=self.state_predictor,
-            optimizer=self.actor_optimizer,
-            critic=self.q_critic,
-            stage_obj=self.objectives.stage_obj,
-        )
+            self.actor = ActorSTAG(
+                self.Nactor,
+                self.dim_input,
+                self.dim_output,
+                self.control_mode,
+                self.control_bounds,
+                state_predictor=self.state_predictor,
+                optimizer=self.actor_optimizer,
+                critic=self.critic,
+                stage_obj=self.objectives.stage_obj,
+            )
+        else:
+            self.critic = CriticActionValue(
+                Ncritic=self.Ncritic,
+                dim_input=self.dim_input,
+                dim_output=self.dim_output,
+                buffer_size=self.buffer_size,
+                stage_obj=self.objectives.stage_obj,
+                gamma=self.gamma,
+                optimizer=self.critic_optimizer,
+                critic_model=models.ModelPolynomial(model_name=self.critic_struct),
+            )
 
-        self.critic_STAG = CriticSTAG(
-            Ncritic=self.Ncritic,
-            dim_input=self.dim_input,
-            dim_output=self.dim_output,
-            buffer_size=self.buffer_size,
-            stage_obj=self.objectives.stage_obj,
-            gamma=self.gamma,
-            optimizer=self.critic_optimizer,
-            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
-            safe_ctrl=self.my_ctrl_nominal,
-            state_predictor=self.state_predictor,
-        )
-
-        self.actor_STAG = ActorSTAG(
-            self.Nactor,
-            self.dim_input,
-            self.dim_output,
-            self.control_mode,
-            self.control_bounds,
-            state_predictor=self.state_predictor,
-            optimizer=self.actor_optimizer,
-            critic=self.critic_STAG,
-            stage_obj=self.objectives.stage_obj,
-        )
+            if self.control_mode == "MPC":
+                self.actor = ActorMPC(
+                    self.Nactor,
+                    self.dim_input,
+                    self.dim_output,
+                    self.control_mode,
+                    self.control_bounds,
+                    state_predictor=self.state_predictor,
+                    optimizer=self.actor_optimizer,
+                    critic=self.critic,
+                    stage_obj=self.objectives.stage_obj,
+                )
+            elif self.control_mode == "RQL":
+                self.actor = ActorRQL(
+                    self.Nactor,
+                    self.dim_input,
+                    self.dim_output,
+                    self.control_mode,
+                    self.control_bounds,
+                    state_predictor=self.state_predictor,
+                    optimizer=self.actor_optimizer,
+                    critic=self.critic,
+                    stage_obj=self.objectives.stage_obj,
+                )
+            elif self.control_mode == "SQL":
+                self.actor = ActorSQL(
+                    self.Nactor,
+                    self.dim_input,
+                    self.dim_output,
+                    self.control_mode,
+                    self.control_bounds,
+                    state_predictor=self.state_predictor,
+                    optimizer=self.actor_optimizer,
+                    critic=self.critic,
+                    stage_obj=self.objectives.stage_obj,
+                )
 
     def controller_initialization(self):
-
-        self.my_ctrl_opt_pred = controllers.CtrlOptPred(
+        self.my_ctrl_benchm = controllers.CtrlOptPred(
             action_init=self.action_init,
             t0=self.t0,
             sampling_time=self.dt,
@@ -176,38 +202,11 @@ class Pipeline3WRobotNI(AbstractPipeline):
             model_order=self.model_order,
             model_est_checks=self.model_est_checks,
             critic_period=self.critic_period,
-            actor=self.q_actor,
-            critic=self.q_critic,
+            actor=self.actor,
+            critic=self.critic,
             stage_obj_pars=[self.R1],
             observation_target=[],
         )
-
-        self.my_ctrl_RL_stab = controllers.CtrlOptPred(
-            action_init=self.action_init,
-            t0=self.t0,
-            sampling_time=self.dt,
-            pred_step_size=self.pred_step_size,
-            state_dyn=self.my_sys._state_dyn,
-            sys_out=self.my_sys.out,
-            prob_noise_pow=self.prob_noise_pow,
-            is_est_model=self.is_est_model,
-            model_est_stage=self.model_est_stage,
-            model_est_period=self.model_est_period,
-            buffer_size=self.buffer_size,
-            model_order=self.model_order,
-            model_est_checks=self.model_est_checks,
-            critic_period=self.critic_period,
-            actor=self.actor_STAG,
-            critic=self.critic_STAG,
-            stage_obj_pars=[self.R1],
-            observation_target=[],
-        )
-
-        if self.control_mode == "RLSTAB":
-            self.my_ctrl_benchm = self.my_ctrl_RL_stab
-
-        else:
-            self.my_ctrl_benchm = self.my_ctrl_opt_pred
 
     def simulator_initialization(self):
         self.my_simulator = simulator.Simulator(
@@ -220,7 +219,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
             t0=self.t0,
             t1=self.t1,
             dt=self.dt,
-            max_step=self.dt / 2,
+            max_step=self.dt / 10,
             first_step=1e-6,
             atol=self.atol,
             rtol=self.rtol,
@@ -449,7 +448,7 @@ class Pipeline3WRobotNI(AbstractPipeline):
         self.state_predictor_initialization()
         self.objectives_initialization()
         self.optimizers_initialization()
-        self.rl_components_initialization()
+        self.actor_critic_initialization()
         self.controller_initialization()
         self.simulator_initialization()
         self.logger_initialization()

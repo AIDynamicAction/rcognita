@@ -426,12 +426,12 @@ class Animator3WRobot(Animator):
         upd_line(self.line_stage_obj, t, stage_obj)
         upd_line(self.line_accum_obj, t, accum_obj)
         text_accum_obj = r"$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.1f}".format(
-            accum_obj=accum_obj
+            accum_obj=np.squeeze(np.array(accum_obj))
         )
         upd_text(self.text_accum_obj_handle, text_accum_obj)
 
         # Control
-        for (line, action_single) in zip(self.lines_ctrl, action):
+        for (line, action_single) in zip(self.lines_ctrl, np.array(action)):
             upd_line(line, t, action_single)
 
         # Run done
@@ -1070,7 +1070,7 @@ class Animator2Tank(Animator):
         upd_line(self.line_stage_obj, t, stage_obj)
         upd_line(self.line_accum_obj, t, accum_obj)
         text_accum_obj = r"$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.1f}".format(
-            accum_obj=accum_obj
+            accum_obj=np.squeeze(np.array(accum_obj))
         )
         upd_text(self.text_accum_obj_handle, text_accum_obj)
 

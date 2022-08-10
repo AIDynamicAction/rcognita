@@ -63,7 +63,7 @@ class CasADiOptimizer(BaseOptimizer):
         optimization_problem = {
             "f": objective,
             "x": vertcat(symbolic_var),
-            "g": vertcat(constraints),
+            "g": vertcat(*constraints),
         }
 
         if isinstance(constraints, tuple):

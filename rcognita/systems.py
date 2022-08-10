@@ -420,9 +420,7 @@ class Sys3WRobotNI(System):
 
     def out(self, state, action=[]):
 
-        observation = nc.zeros(self.dim_output)
-        observation = state
-        return observation
+        return state
 
 
 class Sys2Tank(System):
@@ -440,7 +438,7 @@ class Sys2Tank(System):
 
         tau1, tau2, K1, K2, K3 = self.pars
 
-        Dstate = nc.zeros(self.dim_state)
+        Dstate = nc.zeros(self.dim_state, prototype=action)
         Dstate[0] = 1 / (tau1) * (-state[0] + K1 * action)
         Dstate[1] = 1 / (tau2) * (-state[1] + K2 * state[0] + K3 * state[1] ** 2)
 
@@ -454,6 +452,4 @@ class Sys2Tank(System):
 
     def out(self, state, action=[]):
 
-        observation = nc.zeros(self.dim_output)
-        observation = state
-        return observation
+        return state

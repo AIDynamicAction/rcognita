@@ -342,6 +342,10 @@ class ActorVI(Actor):
 
 
 class ActorSTAG(ActorVI):
+    def __init__(self, *args, eps=0.01, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.eps = eps
+
     def get_optimized_action(self, observation, constraint_functions=(), t=None):
 
         rep_action_prev = nc.rep_mat(self.action_prev / 10, 1, self.Nactor + 1)
@@ -367,8 +371,6 @@ class ActorSTAG(ActorVI):
                 + self.state_predictor.pred_step_size * self.critic.safe_decay_rate
             )
 
-        eps = 0.01
-
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
                 self.cost, observation, x0=my_action_sqn_init, is_symbolic=True
@@ -378,6 +380,12 @@ class ActorSTAG(ActorVI):
                 constraints = self.create_constraints(
                     constraint_functions, symbolic_var, observation
                 )
+
+            lambda_constr = (
+                lambda action: constr_stab_decay_action(action, observation) - self.eps
+            )
+
+            constraints += (nc.lambda2symb(lambda_constr, symbolic_var),)
 
             action_sqn_optimized = self.optimizer.optimize(
                 cost_function,
@@ -405,7 +413,7 @@ class ActorSTAG(ActorVI):
             my_constraints = sp.optimize.NonlinearConstraint(
                 lambda action: constr_stab_decay_action(action, observation),
                 -np.inf,
-                eps,
+                self.eps,
             )
 
             # my_constraints = ()
