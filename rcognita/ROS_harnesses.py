@@ -36,11 +36,14 @@ class ROSHarness:
         my_sys,
         my_ctrl_benchm,
         action_manual,
+        stage_objective,
         my_logger=None,
         datafiles=None,
         dt=0.05,
         pred_step_size=1.0,
     ):
+        self.accum_obj_val = 0
+        self.stage_objective = stage_objective
         self.action_manual = action_manual
         self.RATE = rospy.get_param("/rate", 1.0 / dt)
 
@@ -99,6 +102,17 @@ class ROSHarness:
         )
 
         self.obstacles_parser = Obstacles_parser(safe_margin_mult=1.5)
+
+    def upd_accum_obj(self, observation, action, delta):
+
+        """
+        Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
+        If the agent succeeded to stabilize the system, ``accum_obj`` would converge to a finite value which is the performance mark.
+        The smaller, the better (depends on the problem specification of course - you might want to maximize objective instead).
+        
+        """
+
+        self.accum_obj_val += self.stage_objective(observation, action) * delta
 
     def odometry_callback(self, msg):
 
@@ -226,26 +240,31 @@ class ROSHarness:
         start_time = time_lib.time()
         rate = rospy.Rate(self.RATE)
         self.time_start = rospy.get_time()
+        t = t_prev = 0
 
         while not rospy.is_shutdown() and (rospy.get_time() - self.time_start) < 240:
             timer = rospy.get_time()
             t = rospy.get_time() - self.time_start
             self.t = t
 
+            delta_t = t - t_prev
+
+            t_prev = t
+
             velocity = Twist()
-            action = self.ctrl_benchm.compute_action(
-                self.t, self.new_state, self.constraints, self.line_constrs,
+            action = self.ctrl_benchm.compute_action_sampled(
+                self.t, self.new_state, self.constraints
             )
 
             self.system.receive_action(action)
-            self.ctrl_benchm.upd_accum_obj(self.new_state, action)
 
             xCoord = self.new_state[0]
             yCoord = self.new_state[1]
             alpha = self.new_state[2]
 
-            stage_obj = self.ctrl_benchm.stage_obj(self.new_state, action)
-            accum_obj = self.ctrl_benchm.accum_obj_val
+            stage_obj = self.stage_objective(self.new_state, action)
+            self.upd_accum_obj(self.new_state, action, delta_t)
+            accum_obj = self.accum_obj_val
 
             if is_print_sim_step:
                 self.logger.print_sim_step(

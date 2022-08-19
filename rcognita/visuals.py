@@ -104,7 +104,10 @@ class RobotMarker:
         self.angle = angle
 
 
-class Animator3WRobot(Animator):
+from pipelines import pipeline_3wrobot, pipeline_3wrobot_NI, pipeline_2tank
+
+
+class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
     """
     Animator class for a 3-wheel robot with dynamic actuators. 
     
@@ -124,6 +127,7 @@ class Animator3WRobot(Animator):
             self.logger,
             self.actor_optimizer,
             self.critic_optimizer,
+            self.stage_objective,
         ) = self.objects
 
         (
@@ -150,6 +154,8 @@ class Animator3WRobot(Animator):
         ) = self.pars
 
         # Store some parameters for later use
+        self.t_prev = 0
+        self.accum_obj_val = 0
         self.t0 = t0
         self.state_full_init = state_full_init
         self.t1 = t1
@@ -228,7 +234,7 @@ class Animator3WRobot(Animator):
             stage_obj = stage_obj_init
         else:
             observation_init = self.sys.out(state_init)
-            stage_obj = self.ctrl_benchmarking.stage_obj(observation_init, action_init)
+            stage_obj = self.stage_objective(observation_init, action_init)
 
         self.axs_cost = self.fig_sim.add_subplot(
             223,
@@ -364,16 +370,16 @@ class Animator3WRobot(Animator):
 
             t, state, observation, state_full = self.simulator.get_sim_step_data()
 
+            delta_t = t - self.t_prev
+
+            self.t_prev = t
+
             if self.control_mode == "nominal":
                 action = self.ctrl_nominal.compute_action_sampled(t, observation)
             else:
                 action = self.ctrl_benchmarking.compute_action_sampled(t, observation,)
 
             self.sys.receive_action(action)
-            self.ctrl_benchmarking.upd_accum_obj(observation, action)
-
-            stage_obj = self.ctrl_benchmarking.stage_obj(observation, action)
-            accum_obj = self.ctrl_benchmarking.accum_obj_val
 
         xCoord = state_full[0]
         yCoord = state_full[1]
@@ -381,6 +387,10 @@ class Animator3WRobot(Animator):
         alpha_deg = alpha / np.pi * 180
         v = state_full[3]
         omega = state_full[4]
+
+        stage_obj = self.stage_objective(observation, action)
+        self.upd_accum_obj(observation, action, delta_t)
+        accum_obj = self.accum_obj_val
 
         if not self.no_print:
             self.logger.print_sim_step(
@@ -483,7 +493,7 @@ class Animator3WRobot(Animator):
             upd_line(self.line_traj, np.nan, np.nan)
 
 
-class Animator3WRobotNI(Animator):
+class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
     """
     Animator class for a 3-wheel robot with static actuators. 
     
@@ -503,6 +513,7 @@ class Animator3WRobotNI(Animator):
             self.logger,
             self.actor_optimizer,
             self.optimizer,
+            self.stage_objective,
         ) = self.objects
 
         (
@@ -529,6 +540,8 @@ class Animator3WRobotNI(Animator):
         ) = self.pars
 
         # Store some parameters for later use
+        self.t_prev = 0
+        self.accum_obj_val = 0
         self.t0 = t0
         self.state_full_init = state_full_init
         self.t1 = t1
@@ -607,7 +620,7 @@ class Animator3WRobotNI(Animator):
             stage_obj = stage_obj_init
         else:
             observation_init = self.sys.out(state_init)
-            stage_obj = self.ctrl_benchmarking.stage_obj(observation_init, action_init)
+            stage_obj = self.stage_objective(observation_init, action_init)
 
         self.axs_cost = self.fig_sim.add_subplot(
             223,
@@ -735,6 +748,10 @@ class Animator3WRobotNI(Animator):
 
             t, state, observation, state_full = self.simulator.get_sim_step_data()
 
+            delta_t = t - self.t_prev
+
+            self.t_prev = t
+
             if self.control_mode == "nominal":
                 action = self.ctrl_nominal.compute_action_sampled(t, observation)
             else:
@@ -742,15 +759,15 @@ class Animator3WRobotNI(Animator):
             # if is_symbolic:
             #     action = np.array(action).reshape(-1)
             self.sys.receive_action(action)
-            self.ctrl_benchmarking.upd_accum_obj(observation, action)
-
-            stage_obj = self.ctrl_benchmarking.stage_obj(observation, action)
-            accum_obj = self.ctrl_benchmarking.accum_obj_val
 
         xCoord = state_full[0]
         yCoord = state_full[1]
         alpha = state_full[2]
         alpha_deg = alpha / np.pi * 180
+
+        stage_obj = self.stage_objective(observation, action)
+        self.upd_accum_obj(observation, action, delta_t)
+        accum_obj = self.accum_obj_val
 
         if not self.no_print:
             self.logger.print_sim_step(
@@ -851,7 +868,7 @@ class Animator3WRobotNI(Animator):
             upd_line(self.line_traj, np.nan, np.nan)
 
 
-class Animator2Tank(Animator):
+class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
     """
     Animator class for a 2-tank system. 
     

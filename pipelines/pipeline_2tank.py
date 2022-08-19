@@ -82,7 +82,7 @@ class Pipeline2Tank(AbstractPipeline):
         )
 
     def objectives_initialization(self):
-        self.objectives = objectives.Objectives(
+        self.objective = objectives.StageObjective(
             stage_obj_model=models.ModelQuadForm(R1=self.R1, R2=self.R2)
         )
 
@@ -116,7 +116,7 @@ class Pipeline2Tank(AbstractPipeline):
                 dim_input=self.dim_input,
                 dim_output=self.dim_output,
                 buffer_size=self.buffer_size,
-                stage_obj=self.objectives.stage_obj,
+                stage_obj=self.objective,
                 gamma=self.gamma,
                 optimizer=self.critic_optimizer,
                 critic_model=models.ModelPolynomial(model_name=self.critic_struct),
@@ -134,7 +134,7 @@ class Pipeline2Tank(AbstractPipeline):
                 state_predictor=self.state_predictor,
                 optimizer=self.actor_optimizer,
                 critic=self.critic,
-                stage_obj=self.objectives.stage_obj,
+                stage_obj=self.objective,
                 eps=100,
             )
         else:
@@ -143,7 +143,7 @@ class Pipeline2Tank(AbstractPipeline):
                 dim_input=self.dim_input,
                 dim_output=self.dim_output,
                 buffer_size=self.buffer_size,
-                stage_obj=self.objectives.stage_obj,
+                stage_obj=self.objective,
                 gamma=self.gamma,
                 optimizer=self.critic_optimizer,
                 critic_model=models.ModelPolynomial(model_name=self.critic_struct),
@@ -159,7 +159,7 @@ class Pipeline2Tank(AbstractPipeline):
                     state_predictor=self.state_predictor,
                     optimizer=self.actor_optimizer,
                     critic=self.critic,
-                    stage_obj=self.objectives.stage_obj,
+                    stage_obj=self.objective,
                 )
             elif self.control_mode == "RQL":
                 self.actor = ActorRQL(
@@ -171,7 +171,7 @@ class Pipeline2Tank(AbstractPipeline):
                     state_predictor=self.state_predictor,
                     optimizer=self.actor_optimizer,
                     critic=self.critic,
-                    stage_obj=self.objectives.stage_obj,
+                    stage_obj=self.objective,
                 )
             elif self.control_mode == "SQL":
                 self.actor = ActorSQL(
@@ -183,7 +183,7 @@ class Pipeline2Tank(AbstractPipeline):
                     state_predictor=self.state_predictor,
                     optimizer=self.actor_optimizer,
                     critic=self.critic,
-                    stage_obj=self.objectives.stage_obj,
+                    stage_obj=self.objective,
                 )
 
     def controller_initialization(self):

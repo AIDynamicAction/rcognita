@@ -59,7 +59,6 @@ class OptimalController(ABC):
         critic_period=0.1,
         actor=[],
         critic=[],
-        stage_obj_pars=[],
         observation_target=[],
     ):
 
@@ -122,10 +121,6 @@ class OptimalController(ABC):
         self.critic_clock = t0
         self.critic_period = critic_period
         self.critic = critic
-        self.stage_obj_pars = stage_obj_pars
-        self.stage_obj_model = models.ModelQuadForm(
-            **{f"R{i+1}": x for (i, x) in enumerate(self.stage_obj_pars)}
-        )
         self.observation_target = observation_target
 
         self.accum_obj_val = 0
@@ -141,36 +136,6 @@ class OptimalController(ABC):
         """
         self.ctrl_clock = t0
         self.action_prev = self.action_min / 10
-
-    def stage_obj(self, observation, action):
-
-        """
-        Stage (equivalently, instantaneous or running) objective. Depending on the context, it is also called utility, reward, running cost etc.
-        
-        See class documentation.
-        """
-        observation = nc.to_col(observation)
-        action = nc.to_col(action)
-
-        if self.observation_target == []:
-            chi = nc.concatenate([observation, action])
-        else:
-            chi = nc.concatenate([(observation - self.observation_target), action])
-
-        stage_obj = self.stage_obj_model(chi, chi)
-
-        return stage_obj
-
-    def upd_accum_obj(self, observation, action):
-
-        """
-        Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
-        If the agent succeeded to stabilize the system, ``accum_obj`` would converge to a finite value which is the performance mark.
-        The smaller, the better (depends on the problem specification of course - you might want to maximize cost instead).
-        
-        """
-
-        self.accum_obj_val += self.stage_obj(observation, action) * self.sampling_time
 
     def _estimate_model(self, t, observation):
         """
@@ -321,19 +286,14 @@ class CtrlOptPred(OptimalController):
             # Critic
 
             # Update data buffers
-            self.critic.action_buffer = push_vec(
-                self.critic.action_buffer, self.actor.action_prev
-            )
+            self.critic.update_buffers(observation, self.actor.action_prev)
 
-            self.critic.observation_buffer = nc.push_vec(
-                self.critic.observation_buffer, observation
-            )
 
             if is_critic_update:
                 # Update critic's internal clock
                 self.critic_clock = t
 
-                self.critic.weights = self.critic.get_optimized_weights()
+                self.critic.weights = self.critic.get_optimized_weights(t=t)
 
                 # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
                 # self.weights_init = self.weights_prev
@@ -495,14 +455,14 @@ class CtrlNominal3WRobot:
         """
 
         sigma_tilde = (
-            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + np.sqrt(nc.abs(xNI[2]))
+            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + nc.sqrt(nc.abs(xNI[2]))
         )
 
         F = xNI[0] ** 4 + xNI[1] ** 4 + nc.abs(xNI[2]) ** 3 / sigma_tilde ** 2
 
         z = eta - self._kappa(xNI, theta)
 
-        return F + 1 / 2 * np.dot(z, z)
+        return F + 1 / 2 * nc.dot(z, z)
 
     def _minimizer_theta(self, xNI, eta):
         thetaInit = 0

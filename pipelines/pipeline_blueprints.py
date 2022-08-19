@@ -1,4 +1,5 @@
 from abc import ABCMeta, abstractmethod
+from rcognita.utilities import nc
 
 
 class AbstractPipeline(metaclass=ABCMeta):
@@ -43,3 +44,14 @@ class AbstractPipeline(metaclass=ABCMeta):
     @abstractmethod
     def pipeline_execution(self):
         pass
+
+    def upd_accum_obj(self, observation, action, delta):
+
+        """
+        Sample-to-sample accumulated (summed up or integrated) stage objective. This can be handy to evaluate the performance of the agent.
+        If the agent succeeded to stabilize the system, ``accum_obj`` would converge to a finite value which is the performance mark.
+        The smaller, the better (depends on the problem specification of course - you might want to maximize objective instead).
+        
+        """
+
+        self.accum_obj_val += self.stage_objective(observation, action) * delta

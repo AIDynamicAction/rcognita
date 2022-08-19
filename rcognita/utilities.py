@@ -23,8 +23,57 @@ from numpy.matlib import repmat
 import scipy.stats as st
 from scipy import signal
 import matplotlib.pyplot as plt
-from npcasadi_api import typeInferenceDecorator, is_CasADi_typecheck
 import casadi
+
+import inspect
+import warnings
+
+try:
+    import casadi
+
+    CASADI_TYPES = tuple(
+        x[1] for x in inspect.getmembers(casadi.casadi, inspect.isclass)
+    )
+except ModuleNotFoundError:
+    warnings.warn_explicit(
+        "\nImporting casadi failed. You may still use rcognita, but"
+        + " without symbolic optimization capability. ",
+        UserWarning,
+        __file__,
+        42,
+    )
+    CASADI_TYPES = []
+import types
+
+
+def is_CasADi_typecheck(*args):
+    return any([isinstance(arg, CASADI_TYPES) for arg in args])
+
+
+def decorateAll(decorator):
+    class MetaClassDecorator(type):
+        def __new__(meta, classname, supers, classdict):
+            for name, elem in classdict.items():
+                if type(elem) is types.FunctionType and (name != "__init__"):
+                    classdict[name] = decorator(classdict[name])
+            return type.__new__(meta, classname, supers, classdict)
+
+    return MetaClassDecorator
+
+
+@decorateAll
+def typeInferenceDecorator(func):
+    def wrapper(*args, **kwargs):
+        is_symbolic = kwargs.get("is_symbolic")
+        if not is_symbolic is None:
+            del kwargs["is_symbolic"]
+        return func(
+            is_symbolic=(is_CasADi_typecheck(*args, *kwargs.values()) or is_symbolic),
+            *args,
+            **kwargs,
+        )
+
+    return wrapper
 
 
 class SymbolicHandler(metaclass=typeInferenceDecorator):
@@ -46,7 +95,7 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
         return casadi.vertcat(*tup) if is_symbolic else np.vstack(tup)
 
     def reshape_CasADi_as_np(self, array, dim_params, is_symbolic=False):
-        result = casadi.SX(*dim_params)
+        result = casadi.MX(*dim_params)
         n_rows = dim_params[0]
         n_cols = dim_params[1]
         for i in range(n_rows):
@@ -159,10 +208,13 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
     def dot(self, A, B, is_symbolic=False):
         return casadi.dot(A, B) if is_symbolic else A @ B
 
+    def sqrt(self, x, is_symbolic=False):
+        return casadi.sqrt(x) if is_symbolic else np.sqrt(x)
+
     def shape(self, array, is_symbolic=False):
         return (
             array.size()
-            if isinstance(array, (casadi.SX, casadi.DM, casadi.MX))
+            if isinstance(array, (casadi.MX, casadi.DM, casadi.MX))
             else np.shape(array)
         )
 
@@ -172,9 +224,9 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
             return lambda x: func(x, *params)
         else:
             try:
-                x_symb = casadi.SX.sym("x", self.shape(x0))
+                x_symb = casadi.MX.sym("x", self.shape(x0))
             except NotImplementedError as e:  #####
-                x_symb = casadi.SX.sym("x", *self.shape(x0), 1)
+                x_symb = casadi.MX.sym("x", *self.shape(x0), 1)
 
             if params:
                 return func(x_symb, *params), x_symb
@@ -207,10 +259,10 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
                     f"Not implemented for number of dimensions grreater than 2. Passed: {len(tup)}"
                 )
             else:
-                return casadi.SX.sym(literal, *tup)
+                return casadi.MX.sym(literal, *tup)
 
         elif isinstance(tup, int):
-            return casadi.SX.sym(literal, tup)
+            return casadi.MX.sym(literal, tup)
 
         else:
             raise TypeError(

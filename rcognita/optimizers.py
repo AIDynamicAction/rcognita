@@ -2,7 +2,7 @@ from rcognita.utilities import rep_mat, nc
 import scipy as sp
 from scipy.optimize import minimize
 import numpy as np
-from casadi import vertcat, nlpsol, DM, SX, Function
+from casadi import vertcat, nlpsol, DM, MX, Function
 from abc import ABC, abstractmethod
 import time
 
@@ -68,7 +68,7 @@ class CasADiOptimizer(BaseOptimizer):
 
         if isinstance(constraints, tuple):
             ubg = [0 for _ in constraints]
-        elif isinstance(constraints, (SX, DM, int, float)):
+        elif isinstance(constraints, (MX, DM, int, float)):
             ubg = [0]
 
         try:
@@ -109,7 +109,7 @@ class GradientOptimizer(BaseOptimizer):
         self.grad_norm_ub = grad_norm_ub
 
     def substitute_args(self, x0, *args):
-        cost_function, symbolic_var = nc.function2SX(
+        cost_function, symbolic_var = nc.function2MX(
             self.objective, x0=x0, force=True, *args
         )
 

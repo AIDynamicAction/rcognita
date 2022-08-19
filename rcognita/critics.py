@@ -45,13 +45,18 @@ class Critic(ABC):
         return self.forward(*args, **kwargs)
 
     @abstractmethod
-    def cost(self):
+    def objective(self):
         pass
+
+    def update_buffers(self, observation, action):
+        self.action_buffer = nc.push_vec(self.action_buffer, action)
+
+        self.observation_buffer = nc.push_vec(self.observation_buffer, observation)
 
     def get_optimized_weights(self, constraint_functions=(), t=None):
 
         """
-        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred.cost`.
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred.objective`.
 
         """
 
@@ -65,7 +70,7 @@ class Critic(ABC):
 
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.cost, x0=weights_init, is_symbolic=True
+                self.objective, x0=weights_init, is_symbolic=True
             )
 
             if constraint_functions:
@@ -82,7 +87,7 @@ class Critic(ABC):
             )
 
         elif self.optimizer.engine == "SciPy":
-            cost_function = nc.func_to_lambda_with_params(self.cost)
+            cost_function = nc.func_to_lambda_with_params(self.objective)
 
             if constraint_functions:
                 constraints = sp.optimize.NonlinearConstraint(
@@ -179,7 +184,7 @@ class CriticValue(Critic):
 
         return critic_res
 
-    def cost(self, weights):
+    def objective(self, weights):
         """
         Cost function of the critic.
         
@@ -266,7 +271,7 @@ class CriticActionValue(Critic):
 
         return result
 
-    def cost(self, weights):
+    def objective(self, weights):
         """
         Cost function of the critic.
         
@@ -321,7 +326,7 @@ class CriticSTAG(CriticValue):
     def get_optimized_weights(self, constraint_functions=(), t=None):
 
         """
-        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred.cost`.
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred.objective`.
 
         """
 
@@ -354,7 +359,7 @@ class CriticSTAG(CriticValue):
 
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.cost, x0=weights_init, is_symbolic=True
+                self.objective, x0=weights_init, is_symbolic=True
             )
 
             if constraint_functions:
@@ -377,7 +382,7 @@ class CriticSTAG(CriticValue):
             )
 
         elif self.optimizer.engine == "SciPy":
-            cost_function = nc.func_to_lambda_with_params(self.cost)
+            cost_function = nc.func_to_lambda_with_params(self.objective)
 
             if constraint_functions:
                 constraints = sp.optimize.NonlinearConstraint(
@@ -408,7 +413,7 @@ class CriticMPC(Critic):
     def forward(self, observation, action, weights):
         pass
 
-    def cost(self, weights):
+    def objective(self, weights):
         pass
 
     def get_optimized_weights(self, constraint_functions=(), t=None):

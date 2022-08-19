@@ -166,7 +166,7 @@ it contains an explicit specification of the sampling time ``dt``.
 
 The method ``critic`` computes a model of something related to the
 value, e.g., value function, Q-function or advantage. In turn,
-``cost`` defines a cost (loss) function to fir the critic
+``cost`` defines a cost (loss) function to fit the critic
 (commonly based on temporal errors). The method ``get_optimized_weights``
 actually optimizes the critic cost. The principle is analogous with the
 actor, except that it optimizes an objective along a prediction horizon.

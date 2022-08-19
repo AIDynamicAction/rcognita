@@ -33,6 +33,7 @@ print("INFO:", info)
 
 from rcognita.ROS_harnesses import ROSHarness
 from pipeline_3wrobot_NI import Pipeline3WRobotNI
+from pipeline_3wrobot_NI_casadi import Pipeline3WRobotNICasadi
 from config_blueprints import ConfigROS3WRobotNI
 
 # ------------------------------------imports for interaction with ROS
@@ -45,17 +46,18 @@ import os
 class PipelineROS3wrobotNI(Pipeline3WRobotNI):
     def ros_harness_initialization(self):
         self.ros_preset_task = ROSHarness(
-            self.control_mode,
-            [0, 0, 0],
-            self.state_init,
-            self.my_ctrl_nominal,
-            self.my_sys,
-            self.my_ctrl_benchm,
-            self.action_manual,
-            self.my_logger,
-            self.datafiles,
-            self.dt,
-            self.pred_step_size,
+            control_mode=self.control_mode,
+            state_init=[0, 0, 0],
+            state_goal=self.state_init,
+            my_ctrl_nominal=self.my_ctrl_nominal,
+            my_sys=self.my_sys,
+            my_ctrl_benchm=self.my_ctrl_benchm,
+            action_manual=self.action_manual,
+            stage_objective=self.stage_objective,
+            my_logger=self.my_logger,
+            datafiles=self.datafiles,
+            dt=self.dt,
+            pred_step_size=self.pred_step_size,
         )
 
     def pipeline_execution(self, **kwargs):
@@ -64,7 +66,9 @@ class PipelineROS3wrobotNI(Pipeline3WRobotNI):
         self.__dict__.update(kwargs)
         self.system_initialization()
         self.state_predictor_initialization()
+        self.objectives_initialization()
         self.optimizers_initialization()
+        self.actor_critic_initialization()
         self.controller_initialization()
         self.simulator_initialization()
         self.logger_initialization()

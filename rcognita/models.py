@@ -74,7 +74,7 @@ class ModelPolynomial:
         chi = nc.concatenate([v1, v2])
         if self.model_name == "quad-lin":
             polynom = nc.to_col(uptria2vec(nc.outer(chi, chi)))
-            polynom = nc.concatenate([polynom, chi])**2
+            polynom = nc.concatenate([polynom, chi]) ** 2
         elif self.model_name == "quadratic":
             polynom = nc.to_col(uptria2vec(nc.outer(chi, chi))) ** 2
         elif self.model_name == "quad-nomix":
@@ -85,6 +85,12 @@ class ModelPolynomial:
         result = nc.dot(weights, polynom)
 
         return result
+
+    def gradient(self, vector, weights):
+
+        gradient = nc.autograd(self.compute, vector, [], weights)
+
+        return gradient
 
 
 class ModelQuadForm:
@@ -97,12 +103,26 @@ class ModelQuadForm:
         return self.compute(v1, v2)
 
     def compute(self, v1, v2):
-        if self.model_name == "quadratic":
-            result = nc.matmul(nc.matmul(v1.T, self.R1), v2)
-        elif self.model_name == "biquadratic":
-            result = nc.matmul(nc.matmul(v1.T ** 2, self.R2), v2 ** 2) + nc.matmul(
-                nc.matmul(v1.T, self.R1), v2
-            )
+        result = nc.matmul(nc.matmul(v1.T, self.R1), v2)
+
+        result = nc.squeeze(result)
+
+        return result
+
+
+class ModelBiquadForm:
+    def __init__(self, R1=None, R2=None, model_name="biquadratic"):
+        self.model_name = model_name
+        self.R1 = R1
+        self.R2 = R2
+
+    def __call__(self, v1, v2):
+        return self.compute(v1, v2)
+
+    def compute(self, v1, v2):
+        result = nc.matmul(nc.matmul(v1.T ** 2, self.R2), v2 ** 2) + nc.matmul(
+            nc.matmul(v1.T, self.R1), v2
+        )
         result = nc.squeeze(result)
 
         return result

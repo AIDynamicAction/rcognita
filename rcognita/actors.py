@@ -135,7 +135,7 @@ class Actor:
 
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.cost, observation, x0=my_action_sqn_init, is_symbolic=True
+                self.objective, observation, x0=my_action_sqn_init, is_symbolic=True
             )
 
             if constraint_functions:
@@ -153,13 +153,13 @@ class Actor:
 
         elif self.optimizer.engine == "SciPy":
             cost_function = nc.func_to_lambda_with_params(
-                self.cost, observation, x0=my_action_sqn_init
+                self.objective, observation, x0=my_action_sqn_init
             )
 
             if constraint_functions:
                 constraints = sp.optimize.NonlinearConstraint(
                     partial(
-                        self.create_scipy_constraints,
+                        self.create_constraints,
                         constraint_functions=constraint_functions,
                         observation=observation,
                     ),
@@ -203,7 +203,7 @@ class Actor:
 
 
 class ActorMPC(Actor):
-    def cost(
+    def objective(
         self, action_sqn, observation,
     ):
         """
@@ -237,7 +237,7 @@ class ActorMPC(Actor):
 
 
 class ActorSQL(Actor):
-    def cost(
+    def objective(
         self, action_sqn, observation,
     ):
         """
@@ -273,7 +273,7 @@ class ActorSQL(Actor):
 
 
 class ActorRQL(Actor):
-    def cost(
+    def objective(
         self, action_sqn, observation,
     ):
         """
@@ -310,7 +310,7 @@ class ActorRQL(Actor):
 
 
 class ActorVI(Actor):
-    def cost(
+    def objective(
         self, action_sqn, observation,
     ):
         """
@@ -373,7 +373,7 @@ class ActorSTAG(ActorVI):
 
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.cost, observation, x0=my_action_sqn_init, is_symbolic=True
+                self.objective, observation, x0=my_action_sqn_init, is_symbolic=True
             )
 
             if constraint_functions:
@@ -397,7 +397,7 @@ class ActorSTAG(ActorVI):
 
         elif self.optimizer.engine == "SciPy":
             cost_function = nc.func_to_lambda_with_params(
-                self.cost, observation, x0=my_action_sqn_init
+                self.objective, observation, x0=my_action_sqn_init
             )
 
             if constraint_functions:
@@ -427,7 +427,7 @@ class ActorSTAG(ActorVI):
 
         return action_sqn_optimized[: self.dim_input]
 
-    def cost(
+    def objective(
         self, action_sqn, observation,
     ):
         """
@@ -453,6 +453,6 @@ class ActorSTAG(ActorVI):
         )
 
         J = self.stage_obj(observation_sqn[0, :], my_action_sqn[0, :]) + self.critic(
-            observation_sqn[1, :].T, self.critic.weights
+            observation_sqn[1, :], self.critic.weights
         )
         return J

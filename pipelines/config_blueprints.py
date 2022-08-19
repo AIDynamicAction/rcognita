@@ -213,7 +213,7 @@ class Config3WRobot(AbstractConfig):
             "--Ncritic",
             type=int,
             default=4,
-            help="Critic stack size (number of temporal difference terms in critic cost).",
+            help="Critic stack size (number of temporal difference terms in critic objective).",
         )
         parser.add_argument("--gamma", type=float, default=1.0, help="Discount factor.")
         parser.add_argument(
@@ -280,7 +280,7 @@ class Config3WRobot(AbstractConfig):
 
         self.t0 = 0
 
-        self.action_init = 0 * np.ones(self.dim_input)
+        self.action_init = np.ones(self.dim_input)
 
         # Solver
         self.atol = 1e-5
@@ -305,6 +305,7 @@ class Config3WRobot(AbstractConfig):
         # System parameters
         self.m = 10  # [kg]
         self.I = 1  # [kg m^2]
+        self.observation_target = []
 
 
 class Config3WRobotNI(AbstractConfig):
@@ -408,7 +409,7 @@ class Config3WRobotNI(AbstractConfig):
             "--Ncritic",
             type=int,
             default=4,
-            help="Critic stack size (number of temporal difference terms in critic cost).",
+            help="Critic stack size (number of temporal difference terms in critic objective).",
         )
         parser.add_argument("--gamma", type=float, default=1.0, help="Discount factor.")
         parser.add_argument(
@@ -506,6 +507,7 @@ class Config3WRobotNI(AbstractConfig):
         self.yCoord0 = self.state_init[1]
         self.alpha0 = self.state_init[2]
         self.alpha_deg_0 = self.alpha0 / 2 / np.pi
+        self.observation_target = []
 
 
 class ConfigROS3WRobotNI(Config3WRobotNI):
@@ -519,6 +521,7 @@ class ConfigROS3WRobotNI(Config3WRobotNI):
         self.control_bounds = np.array(
             [[self.v_min, self.v_max], [self.omega_min, self.omega_max]]
         )
+        self.state_init = np.array([2, 2, 3.1415])
         return self.__dict__
 
 
@@ -624,7 +627,7 @@ class Config2Tank(AbstractConfig):
             "--Ncritic",
             type=int,
             default=4,
-            help="Critic stack size (number of temporal difference terms in critic cost).",
+            help="Critic stack size (number of temporal difference terms in critic objective).",
         )
         parser.add_argument("--gamma", type=float, default=1.0, help="Discount factor.")
         parser.add_argument(
