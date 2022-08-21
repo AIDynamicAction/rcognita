@@ -218,15 +218,17 @@ class SymbolicHandler(metaclass=typeInferenceDecorator):
             else np.shape(array)
         )
 
-    def func_to_lambda_with_params(self, func, *params, x0=None, is_symbolic=False):
+    def func_to_lambda_with_params(
+        self, func, *params, var_prototype=None, is_symbolic=False
+    ):
 
         if not is_symbolic:
             return lambda x: func(x, *params)
         else:
             try:
-                x_symb = casadi.MX.sym("x", self.shape(x0))
+                x_symb = casadi.MX.sym("x", self.shape(var_prototype))
             except NotImplementedError as e:  #####
-                x_symb = casadi.MX.sym("x", *self.shape(x0), 1)
+                x_symb = casadi.MX.sym("x", *self.shape(var_prototype), 1)
 
             if params:
                 return func(x_symb, *params), x_symb

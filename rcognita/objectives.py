@@ -1,5 +1,7 @@
 from .utilities import nc
 from abc import ABC, abstractmethod
+from torch.nn import Module
+import actors
 
 
 class Objective(ABC):
@@ -12,9 +14,8 @@ class Objective(ABC):
 
 
 class StageObjective(Objective):
-    def __init__(self, stage_obj_model, observation_target=[]):
+    def __init__(self, stage_obj_model):
         self.stage_obj_model = stage_obj_model
-        self.observation_target = observation_target
 
     def __call__(self, observation, action):
         """
@@ -25,12 +26,23 @@ class StageObjective(Objective):
         observation = nc.to_col(observation)
         action = nc.to_col(action)
 
-        if self.observation_target == []:
-            chi = nc.concatenate([observation, action])
-        else:
-            chi = nc.concatenate([(observation - self.observation_target), action])
+        chi = nc.concatenate([observation, action])
 
         stage_obj = self.stage_obj_model(chi, chi)
 
         return stage_obj
 
+
+class TorchMPCObjective(Module, actors.ActorMPC):
+    def forward(self, action_sqn, observation):
+        self.objective(action_sqn, observation)
+
+
+class TorchSQLObjective(Module, actors.ActorMPC):
+    def forward(self, action_sqn, observation):
+        self.objective(action_sqn, observation)
+
+
+class TorchRQLObjective(Module, actors.ActorMPC):
+    def forward(self, action_sqn, observation):
+        self.objective(action_sqn, observation)

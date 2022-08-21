@@ -61,7 +61,7 @@ from rcognita.critics import (
 
 
 class Pipeline2Tank(AbstractPipeline):
-    def system_initialization(self):
+    def initialize_system(self):
         self.my_sys = systems.Sys2Tank(
             sys_type="diff_eqn",
             dim_state=self.dim_state,
@@ -72,7 +72,7 @@ class Pipeline2Tank(AbstractPipeline):
             control_bounds=self.control_bounds,
         )
 
-    def state_predictor_initialization(self):
+    def initialize_state_predictor(self):
         self.state_predictor = state_predictors.EulerStatePredictor(
             self.pred_step_size,
             self.my_sys._state_dyn,
@@ -81,12 +81,12 @@ class Pipeline2Tank(AbstractPipeline):
             self.Nactor,
         )
 
-    def objectives_initialization(self):
+    def initialize_objectives(self):
         self.objective = objectives.StageObjective(
             stage_obj_model=models.ModelQuadForm(R1=self.R1, R2=self.R2)
         )
 
-    def optimizers_initialization(self):
+    def initialize_optimizers(self):
         opt_options = {
             "maxiter": 200,
             "maxfev": 5000,
@@ -102,7 +102,7 @@ class Pipeline2Tank(AbstractPipeline):
             opt_method="SLSQP", opt_options=opt_options,
         )
 
-    def actor_critic_initialization(self):
+    def initialize_actor_critic(self):
         self.my_ctrl_nominal = controllers.CtrlNominal3WRobotNI(
             ctrl_gain=0.5,
             control_bounds=self.control_bounds,
@@ -111,82 +111,43 @@ class Pipeline2Tank(AbstractPipeline):
         )
 
         if self.control_mode == "RLSTAB":
-            self.critic = CriticSTAG(
-                Ncritic=self.Ncritic,
-                dim_input=self.dim_input,
-                dim_output=self.dim_output,
-                buffer_size=self.buffer_size,
-                stage_obj=self.objective,
-                gamma=self.gamma,
-                optimizer=self.critic_optimizer,
-                critic_model=models.ModelPolynomial(model_name=self.critic_struct),
-                safe_ctrl=self.my_ctrl_nominal,
-                state_predictor=self.state_predictor,
-                eps=100,
-            )
+            Critic = CriticSTAG
+            Actor = ActorSTAG
 
-            self.actor = ActorSTAG(
-                self.Nactor,
-                self.dim_input,
-                self.dim_output,
-                self.control_mode,
-                self.control_bounds,
-                state_predictor=self.state_predictor,
-                optimizer=self.actor_optimizer,
-                critic=self.critic,
-                stage_obj=self.objective,
-                eps=100,
-            )
         else:
-            self.critic = CriticActionValue(
-                Ncritic=self.Ncritic,
-                dim_input=self.dim_input,
-                dim_output=self.dim_output,
-                buffer_size=self.buffer_size,
-                stage_obj=self.objective,
-                gamma=self.gamma,
-                optimizer=self.critic_optimizer,
-                critic_model=models.ModelPolynomial(model_name=self.critic_struct),
-            )
-
+            Critic = CriticActionValue
             if self.control_mode == "MPC":
-                self.actor = ActorMPC(
-                    self.Nactor,
-                    self.dim_input,
-                    self.dim_output,
-                    self.control_mode,
-                    self.control_bounds,
-                    state_predictor=self.state_predictor,
-                    optimizer=self.actor_optimizer,
-                    critic=self.critic,
-                    stage_obj=self.objective,
-                )
+                Actor = ActorMPC
             elif self.control_mode == "RQL":
-                self.actor = ActorRQL(
-                    self.Nactor,
-                    self.dim_input,
-                    self.dim_output,
-                    self.control_mode,
-                    self.control_bounds,
-                    state_predictor=self.state_predictor,
-                    optimizer=self.actor_optimizer,
-                    critic=self.critic,
-                    stage_obj=self.objective,
-                )
+                Actor = ActorRQL
             elif self.control_mode == "SQL":
-                self.actor = ActorSQL(
-                    self.Nactor,
-                    self.dim_input,
-                    self.dim_output,
-                    self.control_mode,
-                    self.control_bounds,
-                    state_predictor=self.state_predictor,
-                    optimizer=self.actor_optimizer,
-                    critic=self.critic,
-                    stage_obj=self.objective,
-                )
+                Actor = ActorSQL
 
-    def controller_initialization(self):
+        self.critic = Critic(
+            Ncritic=self.Ncritic,
+            dim_input=self.dim_input,
+            dim_output=self.dim_output,
+            buffer_size=self.buffer_size,
+            stage_obj=self.stage_objective,
+            gamma=self.gamma,
+            optimizer=self.critic_optimizer,
+            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
+            safe_ctrl=self.my_ctrl_nominal,
+            state_predictor=self.state_predictor,
+        )
+        self.actor = Actor(
+            self.Nactor,
+            self.dim_input,
+            self.dim_output,
+            self.control_mode,
+            self.control_bounds,
+            state_predictor=self.state_predictor,
+            optimizer=self.actor_optimizer,
+            critic=self.critic,
+            stage_obj=self.stage_objective,
+        )
+
+    def initialize_controller(self):
         self.my_ctrl_benchm = controllers.CtrlOptPred(
             action_init=self.action_init,
             t0=self.t0,
@@ -208,7 +169,7 @@ class Pipeline2Tank(AbstractPipeline):
             observation_target=[],
         )
 
-    def simulator_initialization(self):
+    def initialize_simulator(self):
         self.my_simulator = simulator.Simulator(
             sys_type="diff_eqn",
             closed_loop_rhs=self.my_sys.closed_loop_rhs,
@@ -227,7 +188,7 @@ class Pipeline2Tank(AbstractPipeline):
             is_dyn_ctrl=self.is_dyn_ctrl,
         )
 
-    def logger_initialization(self):
+    def initialize_logger(self):
         if (
             os.path.basename(os.path.normpath(os.path.abspath(os.getcwd())))
             == "presets"
@@ -415,18 +376,18 @@ class Pipeline2Tank(AbstractPipeline):
 
                 accum_obj = 0
 
-    def pipeline_execution(self, **kwargs):
+    def execute_pipeline(self, **kwargs):
         self.load_config(Config2Tank)
         self.setup_env()
         self.__dict__.update(kwargs)
-        self.system_initialization()
-        self.state_predictor_initialization()
-        self.objectives_initialization()
-        self.optimizers_initialization()
-        self.actor_critic_initialization()
-        self.controller_initialization()
-        self.simulator_initialization()
-        self.logger_initialization()
+        self.initialize_system()
+        self.initialize_state_predictor()
+        self.initialize_objectives()
+        self.initialize_optimizers()
+        self.initialize_actor_critic()
+        self.initialize_controller()
+        self.initialize_simulator()
+        self.initialize_logger()
         if not self.no_visual and not self.save_trajectory:
             self.main_loop_visual()
         else:
@@ -435,4 +396,4 @@ class Pipeline2Tank(AbstractPipeline):
 
 if __name__ == "__main__":
 
-    Pipeline2Tank().pipeline_execution()
+    Pipeline2Tank().execute_pipeline()

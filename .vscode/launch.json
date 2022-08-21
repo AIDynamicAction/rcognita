@@ -11,7 +11,17 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": []
+            "args": [
+                "--Nactor",
+                "5",
+                "--dt",
+                "0.02",
+                "--control_mode",
+                "SQL",
+                "--no_visual",
+                "--critic_struct",
+                "NN"
+            ]
         }
     ]
 }

@@ -5,13 +5,10 @@ import numpy as np
 from casadi import vertcat, nlpsol, DM, MX, Function
 from abc import ABC, abstractmethod
 import time
+import torch.optim as optim
 
 
 class BaseOptimizer(ABC):
-    @abstractmethod
-    def __init__(self):
-        pass
-
     @property
     @abstractmethod
     def engine(self):
@@ -33,10 +30,11 @@ class SciPyOptimizer(BaseOptimizer):
         self.opt_method = opt_method
         self.opt_options = opt_options
 
-    def optimize(self, objective, x0, bounds, constraints=()):
+    def optimize(self, objective, x0, bounds, constraints=(), verbose=True):
 
         bounds = sp.optimize.Bounds(bounds[0], bounds[1], keep_feasible=True)
 
+        tic = time.time()
         opt_result = minimize(
             objective,
             x0=x0,
@@ -46,6 +44,10 @@ class SciPyOptimizer(BaseOptimizer):
             constraints=constraints,
             tol=1e-7,
         )
+        toc = time.time()
+        result_time = toc - tic
+        if verbose:
+            print(result_time)
 
         return opt_result.x
 
@@ -79,14 +81,14 @@ class CasADiOptimizer(BaseOptimizer):
             print(e)
             return x0
 
-        start = time.time()
+        tic = time.time()
         if not ubg is None:
             result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1], ubg=ubg)
         else:
             result = solver(x0=x0, lbx=bounds[0], ubx=bounds[1])
-        final_time = time.time() - start
+        toc = time.time()
 
-        result_time = final_time - start
+        result_time = toc - tic
 
         if verbose:
             print(result_time)
@@ -100,9 +102,8 @@ class CasADiOptimizer(BaseOptimizer):
         return result["x"]
 
 
-class GradientOptimizer(BaseOptimizer):
+class GradientOptimizer(CasADiOptimizer):
     def __init__(self, objective, learning_rate, n_steps, grad_norm_ub=1e-2):
-        self.engine = "CasADi"
         self.objective = objective
         self.learning_rate = learning_rate
         self.n_steps = n_steps
@@ -132,4 +133,15 @@ class GradientOptimizer(BaseOptimizer):
             x0 = self.grad_step(x0, *args)
 
         return x0
+
+
+# class TorchOptimizer(BaseOptimizer):
+#     engine = "PyTorch"
+
+#     def __init__(*args, **kwargs):
+#         pass
+
+#     def optimize(
+#         self, objective, x0, bounds
+#     ):
 

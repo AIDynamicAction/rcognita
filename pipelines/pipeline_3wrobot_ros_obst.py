@@ -60,18 +60,18 @@ class PipelineROS3wrobotNI(Pipeline3WRobotNI):
             pred_step_size=self.pred_step_size,
         )
 
-    def pipeline_execution(self, **kwargs):
+    def execute_pipeline(self, **kwargs):
         self.load_config(ConfigROS3WRobotNI)
         self.setup_env()
         self.__dict__.update(kwargs)
-        self.system_initialization()
-        self.state_predictor_initialization()
-        self.objectives_initialization()
-        self.optimizers_initialization()
-        self.actor_critic_initialization()
-        self.controller_initialization()
-        self.simulator_initialization()
-        self.logger_initialization()
+        self.initialize_system()
+        self.initialize_state_predictor()
+        self.initialize_objectives()
+        self.initialize_optimizers()
+        self.initialize_actor_critic()
+        self.initialize_controller()
+        self.initialize_simulator()
+        self.initialize_logger()
         self.ros_harness_initialization()
         self.ros_preset_task.spin(
             is_print_sim_step=~self.no_print, is_log_data=self.is_log
@@ -80,4 +80,4 @@ class PipelineROS3wrobotNI(Pipeline3WRobotNI):
 
 if __name__ == "__main__":
     rospy.init_node("ROS_preset_node")
-    PipelineROS3wrobotNI().pipeline_execution()
+    PipelineROS3wrobotNI().execute_pipeline()

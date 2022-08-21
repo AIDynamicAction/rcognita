@@ -28,7 +28,7 @@ from pipeline_2tank import Pipeline2Tank
 
 
 class Pipeline2TankCasADi(Pipeline2Tank):
-    def optimizers_initialization(self):
+    def initialize_optimizers(self):
 
         opt_options = {
             "print_time": 0,
@@ -48,4 +48,4 @@ class Pipeline2TankCasADi(Pipeline2Tank):
 
 if __name__ == "__main__":
 
-    Pipeline2TankCasADi().pipeline_execution()
+    Pipeline2TankCasADi().execute_pipeline()

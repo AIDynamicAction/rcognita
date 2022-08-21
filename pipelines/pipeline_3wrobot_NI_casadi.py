@@ -28,7 +28,7 @@ from pipeline_3wrobot_NI import Pipeline3WRobotNI
 
 
 class Pipeline3WRobotNICasadi(Pipeline3WRobotNI):
-    def optimizers_initialization(self):
+    def initialize_optimizers(self):
 
         opt_options = {
             "print_time": 0,
@@ -48,4 +48,4 @@ class Pipeline3WRobotNICasadi(Pipeline3WRobotNI):
 
 if __name__ == "__main__":
 
-    Pipeline3WRobotNICasadi().pipeline_execution()
+    Pipeline3WRobotNICasadi().execute_pipeline()

@@ -70,7 +70,7 @@ class Critic(ABC):
 
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.objective, x0=weights_init, is_symbolic=True
+                self.objective, var_prototype=weights_init, is_symbolic=True
             )
 
             if constraint_functions:
@@ -222,33 +222,41 @@ class CriticValue(Critic):
 class CriticActionValue(Critic):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        if self.critic_model.model_name == "quad-lin":
-            self.dim_critic = int(
-                ((self.dim_output + self.dim_input) + 1)
-                * (self.dim_output + self.dim_input)
-                / 2
-                + (self.dim_output + self.dim_input)
-            )
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-        elif self.critic_model.model_name == "quadratic":
-            self.dim_critic = int(
-                ((self.dim_output + self.dim_input) + 1)
-                * (self.dim_output + self.dim_input)
-                / 2
-            )
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-        elif self.critic_model.model_name == "quad-nomix":
-            self.dim_critic = self.dim_output + self.dim_input
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-        elif self.critic_model.model_name == "quad-mix":
-            self.dim_critic = int(
-                self.dim_output + self.dim_output * self.dim_input + self.dim_input
-            )
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
+
+        if self.critic_model.model_name != "NN":
+            if self.critic_model.model_name == "quad-lin":
+                self.dim_critic = int(
+                    ((self.dim_output + self.dim_input) + 1)
+                    * (self.dim_output + self.dim_input)
+                    / 2
+                    + (self.dim_output + self.dim_input)
+                )
+                self.Wmin = np.zeros(self.dim_critic)
+                self.Wmax = 1e3 * np.ones(self.dim_critic)
+            elif self.critic_model.model_name == "quadratic":
+                self.dim_critic = int(
+                    ((self.dim_output + self.dim_input) + 1)
+                    * (self.dim_output + self.dim_input)
+                    / 2
+                )
+                self.Wmin = np.zeros(self.dim_critic)
+                self.Wmax = 1e3 * np.ones(self.dim_critic)
+            elif self.critic_model.model_name == "quad-nomix":
+                self.dim_critic = self.dim_output + self.dim_input
+                self.Wmin = np.zeros(self.dim_critic)
+                self.Wmax = 1e3 * np.ones(self.dim_critic)
+            elif self.critic_model.model_name == "quad-mix":
+                self.dim_critic = int(
+                    self.dim_output + self.dim_output * self.dim_input + self.dim_input
+                )
+                self.Wmin = np.zeros(self.dim_critic)
+                self.Wmax = 1e3 * np.ones(self.dim_critic)
+
+        else:
+            weights = self.critic_model.get_weights()
+            self.dim_critic = weights.shape
+            self.Wmin = np.zeros(weights.shape)
+            self.Wmax = 1e3 * np.ones(weights.shape)
 
         self.weights_prev = np.ones(self.dim_critic)
         self.weights_init = np.ones(self.dim_critic)
@@ -359,7 +367,7 @@ class CriticSTAG(CriticValue):
 
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.objective, x0=weights_init, is_symbolic=True
+                self.objective, var_prototype=weights_init, is_symbolic=True
             )
 
             if constraint_functions:

@@ -288,7 +288,6 @@ class CtrlOptPred(OptimalController):
             # Update data buffers
             self.critic.update_buffers(observation, self.actor.action_prev)
 
-
             if is_critic_update:
                 # Update critic's internal clock
                 self.critic_clock = t

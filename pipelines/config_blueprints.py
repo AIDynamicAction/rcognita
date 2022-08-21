@@ -422,12 +422,13 @@ class Config3WRobotNI(AbstractConfig):
             "--critic_struct",
             type=str,
             default="quad-nomix",
-            choices=["quad-lin", "quadratic", "quad-nomix", "quad-mix"],
+            choices=["quad-lin", "quadratic", "quad-nomix", "quad-mix", "NN"],
             help="Feature structure (critic). Currently available: "
             + "----quad-lin: quadratic-linear; "
             + "----quadratic: quadratic; "
             + "----quad-nomix: quadratic, no mixed terms; "
-            + "----quad-mix: quadratic, mixed observation-action terms (for, say, Q or advantage function approximations).",
+            + "----quad-mix: quadratic, mixed observation-action terms (for, say, Q or advantage function approximations)."
+            + "----NN: PyTorch neural network.",
         )
         parser.add_argument(
             "--actor_struct",

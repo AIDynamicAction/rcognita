@@ -21,19 +21,19 @@ class TestPipeline3WRobot(Pipeline3WRobotTest):
 
     def test_run_animate(self):
         with ArgvContext("run_animate"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_run_raw(self):
         with ArgvContext("run_raw", "--no_visual"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_run_raw_sql(self):
         with ArgvContext("run_raw_sql", "--no_visual", "--control_mode", "SQL"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_trajectory(self, load_trajectory):
         with ArgvContext("trajectory", "--no_visual", "--save_trajectory"):
-            self.pipeline_execution()
+            self.execute_pipeline()
             assert_allclose(self.trajectory, self.reference_trajectory)
 
 
@@ -45,19 +45,19 @@ class TestPipeline3WRobotNI(Pipeline3WRobotNITest):
 
     def test_run_animate(self):
         with ArgvContext("run_animate"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_run_raw(self):
         with ArgvContext("run_raw", "--no_visual"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_run_raw_sql(self):
         with ArgvContext("run_raw_sql", "--no_visual", "--control_mode", "SQL"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_trajectory(self, load_trajectory):
         with ArgvContext("trajectory", "--no_visual", "--save_trajectory"):
-            self.pipeline_execution()
+            self.execute_pipeline()
             assert_allclose(self.trajectory, self.reference_trajectory)
 
 
@@ -69,17 +69,17 @@ class TestPipeline2Tank(Pipeline2TankTest):
 
     def test_run_animate(self):
         with ArgvContext("run_animate"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_run_raw(self):
         with ArgvContext("run_animate", "--no_visual"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_run_raw_sql(self):
         with ArgvContext("run_raw_sql", "--no_visual", "--control_mode", "SQL"):
-            self.pipeline_execution()
+            self.execute_pipeline()
 
     def test_trajectory(self, load_trajectory):
         with ArgvContext("trajectory", "--no_visual", "--save_trajectory"):
-            self.pipeline_execution()
+            self.execute_pipeline()
             assert_allclose(self.trajectory, self.reference_trajectory)

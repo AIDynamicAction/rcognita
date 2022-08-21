@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt
 
 
 class Pipeline3WRobotCasadi(Pipeline3WRobot):
-    def optimizers_initialization(self):
+    def initialize_optimizers(self):
 
         opt_options = {
             "print_time": 0,
@@ -51,7 +51,7 @@ class Pipeline3WRobotCasadi(Pipeline3WRobot):
 
 def main():
     pipeline = Pipeline3WRobotCasadi()
-    pipeline.pipeline_execution()
+    pipeline.execute_pipeline()
     # DEBUG ===================================================================
     # if pipeline.control_mode == "RLSTAB":
     #     plt.figure(figsize=(10, 10))

@@ -5,7 +5,7 @@ sys.path.insert(0, PARENT_DIR)
 CUR_DIR = os.path.abspath(__file__ + "/..")
 sys.path.insert(0, CUR_DIR)
 import numpy as np
-from .utilities import nc
+from utilities import nc
 from abc import ABC, abstractmethod
 from models import ModelPolynomial
 from casadi import Function
@@ -125,7 +125,7 @@ class Actor:
 
     def get_optimized_action(self, observation, constraint_functions=(), t=None):
 
-        rep_action_prev = nc.rep_mat(self.action_prev / 10, 1, self.Nactor + 1)
+        rep_action_prev = nc.rep_mat(self.action_prev, 1, self.Nactor + 1)
 
         my_action_sqn_init = nc.reshape(
             rep_action_prev, [(self.Nactor + 1) * self.dim_input,],
@@ -135,7 +135,10 @@ class Actor:
 
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.objective, observation, x0=my_action_sqn_init, is_symbolic=True
+                self.objective,
+                observation,
+                var_prototype=my_action_sqn_init,
+                is_symbolic=True,
             )
 
             if constraint_functions:
@@ -153,7 +156,7 @@ class Actor:
 
         elif self.optimizer.engine == "SciPy":
             cost_function = nc.func_to_lambda_with_params(
-                self.objective, observation, x0=my_action_sqn_init
+                self.objective, observation, var_prototype=my_action_sqn_init
             )
 
             if constraint_functions:
@@ -224,9 +227,9 @@ class ActorMPC(Actor):
             observation, my_action_sqn
         )
 
-        observation_sqn = nc.vstack(
-            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
-        )
+        observation_cur = nc.reshape(observation, [1, self.dim_output])
+
+        observation_sqn = nc.vstack((observation_cur, observation_sqn_predicted))
 
         J = 0
         for k in range(self.Nactor):
@@ -348,7 +351,7 @@ class ActorSTAG(ActorVI):
 
     def get_optimized_action(self, observation, constraint_functions=(), t=None):
 
-        rep_action_prev = nc.rep_mat(self.action_prev / 10, 1, self.Nactor + 1)
+        rep_action_prev = nc.rep_mat(self.action_prev, 1, self.Nactor + 1)
 
         my_action_sqn_init = nc.reshape(
             rep_action_prev, [(self.Nactor + 1) * self.dim_input,],
@@ -373,7 +376,10 @@ class ActorSTAG(ActorVI):
 
         if self.optimizer.engine == "CasADi":
             cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.objective, observation, x0=my_action_sqn_init, is_symbolic=True
+                self.objective,
+                observation,
+                var_prototype=my_action_sqn_init,
+                is_symbolic=True,
             )
 
             if constraint_functions:
@@ -397,7 +403,7 @@ class ActorSTAG(ActorVI):
 
         elif self.optimizer.engine == "SciPy":
             cost_function = nc.func_to_lambda_with_params(
-                self.objective, observation, x0=my_action_sqn_init
+                self.objective, observation, var_prototype=my_action_sqn_init
             )
 
             if constraint_functions:
