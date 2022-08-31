@@ -17,7 +17,7 @@ from .utilities import upd_line
 from .utilities import reset_line
 from .utilities import upd_scatter
 from .utilities import upd_text
-from .utilities import to_col_vec
+from .utilities import rc
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -127,7 +127,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
             self.logger,
             self.actor_optimizer,
             self.critic_optimizer,
-            self.stage_objective,
+            self.running_objective,
         ) = self.objects
 
         (
@@ -150,7 +150,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
             no_print,
             is_log,
             is_playback,
-            stage_obj_init,
+            running_obj_init,
         ) = self.pars
 
         # Store some parameters for later use
@@ -231,16 +231,16 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
 
         # Cost
         if is_playback:
-            stage_obj = stage_obj_init
+            running_obj = running_obj_init
         else:
             observation_init = self.sys.out(state_init)
-            stage_obj = self.stage_objective(observation_init, action_init)
+            running_obj = self.running_objective(observation_init, action_init)
 
         self.axs_cost = self.fig_sim.add_subplot(
             223,
             autoscale_on=False,
             xlim=(t0, t1),
-            ylim=(0, 1e4 * stage_obj),
+            ylim=(0, 1e4 * running_obj),
             yscale="symlog",
             xlabel="t [s]",
         )
@@ -255,8 +255,8 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
             horizontalalignment="left",
             verticalalignment="center",
         )
-        (self.line_stage_obj,) = self.axs_cost.plot(
-            t0, stage_obj, "r-", lw=0.5, label="Stage obj."
+        (self.line_running_obj,) = self.axs_cost.plot(
+            t0, running_obj, "r-", lw=0.5, label="Stage obj."
         )
         (self.line_accum_obj,) = self.axs_cost.plot(
             t0, 0, "g-", lw=0.5, label=r"$\int \mathrm{Stage\,obj.} \,\mathrm{d}t$"
@@ -272,7 +272,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
             xlabel="t [s]",
         )
         self.axs_ctrl.plot([t0, t1], [0, 0], "k--", lw=0.75)  # Help line
-        self.lines_ctrl = self.axs_ctrl.plot(t0, to_col_vec(action_init).T, lw=0.5)
+        self.lines_ctrl = self.axs_ctrl.plot(t0, rc.to_col(action_init).T, lw=0.5)
         self.axs_ctrl.legend(
             iter(self.lines_ctrl), ("F [N]", "M [Nm]"), fancybox=True, loc="upper right"
         )
@@ -284,7 +284,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
                 "line_traj",
                 "line_norm",
                 "line_alpha",
-                "line_stage_obj",
+                "line_running_obj",
                 "line_accum_obj",
                 "lines_ctrl",
             ],
@@ -293,7 +293,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
             line_traj=self.line_traj,
             line_norm=self.line_norm,
             line_alpha=self.line_alpha,
-            line_stage_obj=self.line_stage_obj,
+            line_running_obj=self.line_running_obj,
             line_accum_obj=self.line_accum_obj,
             lines_ctrl=self.lines_ctrl,
         )
@@ -337,7 +337,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
                 self.omegas[self.curr_step],
             ]
         )
-        self.stage_obj = self.rs[self.curr_step]
+        self.running_obj = self.rs[self.curr_step]
         self.accum_obj = self.accum_objs[self.curr_step]
         self.action = np.array([self.Fs[self.curr_step], self.Ms[self.curr_step]])
 
@@ -362,7 +362,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
             t = self.t
             state_full = self.state_full
             action = self.action
-            stage_obj = self.stage_obj
+            running_obj = self.running_obj
             accum_obj = self.accum_obj
 
         else:
@@ -388,27 +388,16 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
         v = state_full[3]
         omega = state_full[4]
 
-        stage_obj = self.stage_objective(observation, action)
+        running_obj = self.running_objective(observation, action)
         self.upd_accum_obj(observation, action, delta_t)
         accum_obj = self.accum_obj_val
 
         if not self.no_print:
-            self.logger.print_sim_step(
-                t, xCoord, yCoord, alpha, v, omega, stage_obj, accum_obj, action
-            )
+            self.logger.print_sim_step(t, state_full, action, running_obj, accum_obj)
 
         if self.is_log:
             self.logger.log_data_row(
-                self.datafile_curr,
-                t,
-                xCoord,
-                yCoord,
-                alpha,
-                v,
-                omega,
-                stage_obj,
-                accum_obj,
-                action,
+                self.datafile_curr, t, state_full, action, running_obj, accum_obj,
             )
 
         # xy plane
@@ -433,7 +422,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
         upd_line(self.line_alpha, t, alpha)
 
         # Cost
-        upd_line(self.line_stage_obj, t, stage_obj)
+        upd_line(self.line_running_obj, t, running_obj)
         upd_line(self.line_accum_obj, t, accum_obj)
         text_accum_obj = r"$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.1f}".format(
             accum_obj=np.squeeze(np.array(accum_obj))
@@ -476,7 +465,7 @@ class Animator3WRobot(Animator, pipeline_3wrobot.Pipeline3WRobot):
 
             reset_line(self.line_norm)
             reset_line(self.line_alpha)
-            reset_line(self.line_stage_obj)
+            reset_line(self.line_running_obj)
             reset_line(self.line_accum_obj)
             reset_line(self.lines_ctrl[0])
             reset_line(self.lines_ctrl[1])
@@ -513,7 +502,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
             self.logger,
             self.actor_optimizer,
             self.optimizer,
-            self.stage_objective,
+            self.running_objective,
         ) = self.objects
 
         (
@@ -536,7 +525,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
             no_print,
             is_log,
             is_playback,
-            stage_obj_init,
+            running_obj_init,
         ) = self.pars
 
         # Store some parameters for later use
@@ -617,16 +606,16 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
 
         # Cost
         if is_playback:
-            stage_obj = stage_obj_init
+            running_obj = running_obj_init
         else:
             observation_init = self.sys.out(state_init)
-            stage_obj = self.stage_objective(observation_init, action_init)
+            running_obj = self.running_objective(observation_init, action_init)
 
         self.axs_cost = self.fig_sim.add_subplot(
             223,
             autoscale_on=False,
             xlim=(t0, t1),
-            ylim=(0, 1e4 * stage_obj),
+            ylim=(0, 1e4 * running_obj),
             yscale="symlog",
             xlabel="t [s]",
         )
@@ -641,8 +630,8 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
             horizontalalignment="left",
             verticalalignment="center",
         )
-        (self.line_stage_obj,) = self.axs_cost.plot(
-            t0, stage_obj, "r-", lw=0.5, label="Stage obj."
+        (self.line_running_obj,) = self.axs_cost.plot(
+            t0, running_obj, "r-", lw=0.5, label="Stage obj."
         )
         (self.line_accum_obj,) = self.axs_cost.plot(
             t0, 0, "g-", lw=0.5, label=r"$\int \mathrm{Stage\,obj.} \,\mathrm{d}t$"
@@ -658,7 +647,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
             xlabel="t [s]",
         )
         self.axs_ctrl.plot([t0, t1], [0, 0], "k--", lw=0.75)  # Help line
-        self.lines_ctrl = self.axs_ctrl.plot(t0, to_col_vec(action_init).T, lw=0.5)
+        self.lines_ctrl = self.axs_ctrl.plot(t0, rc.to_col(action_init).T, lw=0.5)
         self.axs_ctrl.legend(
             iter(self.lines_ctrl),
             ("v [m/s]", r"$\omega$ [rad/s]"),
@@ -673,7 +662,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
                 "line_traj",
                 "line_norm",
                 "line_alpha",
-                "line_stage_obj",
+                "line_running_obj",
                 "line_accum_obj",
                 "lines_ctrl",
             ],
@@ -682,7 +671,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
             line_traj=self.line_traj,
             line_norm=self.line_norm,
             line_alpha=self.line_alpha,
-            line_stage_obj=self.line_stage_obj,
+            line_running_obj=self.line_running_obj,
             line_accum_obj=self.line_accum_obj,
             lines_ctrl=self.lines_ctrl,
         )
@@ -715,7 +704,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
                 self.alphas[self.curr_step],
             ]
         )
-        self.stage_obj = self.rs[self.curr_step]
+        self.running_obj = self.rs[self.curr_step]
         self.accum_obj = self.accum_objs[self.curr_step]
         self.action = np.array([self.vs[self.curr_step], self.omegas[self.curr_step]])
 
@@ -740,7 +729,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
             t = self.t
             state_full = self.state_full
             action = self.action
-            stage_obj = self.stage_obj
+            running_obj = self.running_obj
             accum_obj = self.accum_obj
 
         else:
@@ -756,7 +745,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
                 action = self.ctrl_nominal.compute_action_sampled(t, observation)
             else:
                 action = self.ctrl_benchmarking.compute_action_sampled(t, observation)
-            # if is_symbolic:
+            # if rc_type:
             #     action = np.array(action).reshape(-1)
             self.sys.receive_action(action)
 
@@ -765,25 +754,18 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
         alpha = state_full[2]
         alpha_deg = alpha / np.pi * 180
 
-        stage_obj = self.stage_objective(observation, action)
+        running_obj = self.running_objective(observation, action)
         self.upd_accum_obj(observation, action, delta_t)
         accum_obj = self.accum_obj_val
 
         if not self.no_print:
             self.logger.print_sim_step(
-                t, xCoord, yCoord, alpha, stage_obj, accum_obj, action
+                t, state_full, action, running_obj, accum_obj,
             )
 
         if self.is_log:
             self.logger.log_data_row(
-                self.datafile_curr,
-                t,
-                xCoord,
-                yCoord,
-                alpha,
-                stage_obj,
-                accum_obj,
-                action,
+                self.datafile_curr, t, state_full, action, running_obj, accum_obj,
             )
 
         # xy plane
@@ -808,7 +790,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
         upd_line(self.line_alpha, t, alpha)
 
         # Cost
-        upd_line(self.line_stage_obj, t, stage_obj)
+        upd_line(self.line_running_obj, t, running_obj)
         upd_line(self.line_accum_obj, t, accum_obj)
         text_accum_obj = r"$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.1f}".format(
             accum_obj=np.squeeze(np.array(accum_obj))
@@ -851,7 +833,7 @@ class Animator3WRobotNI(Animator, pipeline_3wrobot_NI.Pipeline3WRobotNI):
 
             reset_line(self.line_norm)
             reset_line(self.line_alpha)
-            reset_line(self.line_stage_obj)
+            reset_line(self.line_running_obj)
             reset_line(self.line_accum_obj)
             reset_line(self.lines_ctrl[0])
             reset_line(self.lines_ctrl[1])
@@ -902,7 +884,7 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
             no_print,
             is_log,
             is_playback,
-            stage_obj_init,
+            running_obj_init,
             level_target,
         ) = self.pars
 
@@ -953,16 +935,18 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
 
         # Cost
         if is_playback:
-            stage_obj = stage_obj_init
+            running_obj = running_obj_init
         else:
             observation_init = self.sys.out(state_init)
-            stage_obj = self.ctrl_benchmarking.stage_obj(observation_init, action_init)
+            running_obj = self.ctrl_benchmarking.running_obj(
+                observation_init, action_init
+            )
 
         self.axs_cost = self.fig_sim.add_subplot(
             223,
             autoscale_on=False,
             xlim=(t0, t1),
-            ylim=(0, 1e4 * stage_obj),
+            ylim=(0, 1e4 * running_obj),
             yscale="symlog",
             xlabel="t [s]",
         )
@@ -977,8 +961,8 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
             horizontalalignment="left",
             verticalalignment="center",
         )
-        (self.line_stage_obj,) = self.axs_cost.plot(
-            t0, stage_obj, "r-", lw=0.5, label="Stage obj."
+        (self.line_running_obj,) = self.axs_cost.plot(
+            t0, running_obj, "r-", lw=0.5, label="Stage obj."
         )
         (self.line_accum_obj,) = self.axs_cost.plot(
             t0, 0, "g-", lw=0.5, label=r"$\int \mathrm{Stage\,obj.} \,\mathrm{d}t$"
@@ -1000,12 +984,12 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
         # Pack all lines together
         cLines = namedtuple(
             "lines",
-            ["line_h1", "line_h2", "line_stage_obj", "line_accum_obj", "line_ctrl"],
+            ["line_h1", "line_h2", "line_running_obj", "line_accum_obj", "line_ctrl"],
         )
         self.lines = cLines(
             line_h1=self.line_h1,
             line_h2=self.line_h2,
-            line_stage_obj=self.line_stage_obj,
+            line_running_obj=self.line_running_obj,
             line_accum_obj=self.line_accum_obj,
             line_ctrl=self.line_ctrl,
         )
@@ -1032,7 +1016,7 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
     def upd_sim_data_row(self):
         self.t = self.ts[self.curr_step]
         self.state_full = np.array([self.h1s[self.curr_step], self.h2s[self.curr_step]])
-        self.stage_obj = self.rs[self.curr_step]
+        self.running_obj = self.rs[self.curr_step]
         self.accum_obj = self.accum_objs[self.curr_step]
         self.action = np.array([self.ps[self.curr_step]])
 
@@ -1051,7 +1035,7 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
             t = self.t
             state_full = self.state_full
             action = self.action
-            stage_obj = self.stage_obj
+            running_obj = self.running_obj
             accum_obj = self.accum_obj
 
         else:
@@ -1064,7 +1048,7 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
             self.sys.receive_action(action)
             self.ctrl_benchmarking.upd_accum_obj(observation, action)
 
-            stage_obj = self.ctrl_benchmarking.stage_obj(observation, action)
+            running_obj = self.ctrl_benchmarking.running_obj(observation, action)
             accum_obj = self.ctrl_benchmarking.accum_obj_val
 
         h1 = state_full[0]
@@ -1072,11 +1056,11 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
         p = action
 
         if not self.no_print:
-            self.logger.print_sim_step(t, h1, h2, p, stage_obj, accum_obj)
+            self.logger.print_sim_step(t, h1, h2, p, running_obj, accum_obj)
 
         if self.is_log:
             self.logger.log_data_row(
-                self.datafile_curr, t, h1, h2, p, stage_obj, accum_obj
+                self.datafile_curr, t, h1, h2, p, running_obj, accum_obj
             )
 
         # # Solution
@@ -1084,7 +1068,7 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
         upd_line(self.line_h2, t, h2)
 
         # Cost
-        upd_line(self.line_stage_obj, t, stage_obj)
+        upd_line(self.line_running_obj, t, running_obj)
         upd_line(self.line_accum_obj, t, accum_obj)
         text_accum_obj = r"$\int \mathrm{{Stage\,obj.}} \,\mathrm{{d}}t$ = {accum_obj:2.1f}".format(
             accum_obj=np.squeeze(np.array(accum_obj))
@@ -1127,7 +1111,7 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
             reset_line(self.line_h1)
             reset_line(self.line_h1)
             reset_line(self.line_ctrl)
-            reset_line(self.line_stage_obj)
+            reset_line(self.line_running_obj)
             reset_line(self.line_accum_obj)
 
             # for item in self.lines:
@@ -1140,3 +1124,4 @@ class Animator2Tank(Animator, pipeline_2tank.Pipeline2Tank):
             #             self.reset_line(item)
 
             # upd_line(self.line_h1, np.nan)
+

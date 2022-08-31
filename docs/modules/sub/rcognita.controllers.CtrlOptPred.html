@@ -10,7 +10,7 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>rcognita.controllers.CtrlOptPred &mdash; rcognita v0.1.2 documentation</title>
+  <title>rcognita.controllers.RLController &mdash; rcognita v0.1.2 documentation</title>
 
 
 
@@ -119,7 +119,7 @@
                     href="rcognita.controllers.CtrlNominal3WRobotNI.html">rcognita.controllers.CtrlNominal3WRobotNI</a>
                 </li>
                 <li class="toctree-l2 current"><a class="current reference internal"
-                    href="#">rcognita.controllers.CtrlOptPred</a></li>
+                    href="#">rcognita.controllers.RLController</a></li>
                 <li class="toctree-l2"><a class="reference internal"
                     href="rcognita.controllers.CtrlRLStab.html">rcognita.controllers.CtrlRLStab</a></li>
               </ul>
@@ -185,7 +185,7 @@
                     class="docutils literal notranslate"><span class="pre">rcognita.controllers</span></code></a>
                 &raquo;</li>
 
-              <li>rcognita.controllers.CtrlOptPred</li>
+              <li>rcognita.controllers.RLController</li>
 
 
               <li class="wy-breadcrumbs-aside">
@@ -203,13 +203,13 @@
             <div itemprop="articleBody">
 
               <section id="rcognita-controllers-ctrloptpred">
-                <h1>rcognita.controllers.CtrlOptPred<a class="headerlink" href="#rcognita-controllers-ctrloptpred"
+                <h1>rcognita.controllers.RLController<a class="headerlink" href="#rcognita-controllers-ctrloptpred"
                     title="Permalink to this headline">¶</a></h1>
                 <dl class="py class">
-                  <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred">
+                  <dt class="sig sig-object py" id="rcognita.controllers.RLController">
                     <em class="property"><span class="pre">class</span> </em><span
                       class="sig-prename descclassname"><span class="pre">rcognita.controllers.</span></span><span
-                      class="sig-name descname"><span class="pre">CtrlOptPred</span></span><span
+                      class="sig-name descname"><span class="pre">RLController</span></span><span
                       class="sig-paren">(</span><em class="sig-param"><span class="n"><span
                           class="pre">dim_input</span></span></em>, <em class="sig-param"><span class="n"><span
                           class="pre">dim_output</span></span></em>, <em class="sig-param"><span class="n"><span
@@ -263,15 +263,16 @@
                           class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span
                           class="pre">critic_struct</span></span><span class="o"><span class="pre">=</span></span><span
                         class="default_value"><span class="pre">'quad-nomix'</span></span></em>, <em
-                      class="sig-param"><span class="n"><span class="pre">stage_obj_struct</span></span><span
+                      class="sig-param"><span class="n"><span class="pre">running_obj_struct</span></span><span
                         class="o"><span class="pre">=</span></span><span class="default_value"><span
                           class="pre">'quadratic'</span></span></em>, <em class="sig-param"><span class="n"><span
-                          class="pre">stage_obj_pars</span></span><span class="o"><span class="pre">=</span></span><span
-                        class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span
-                        class="n"><span class="pre">observation_target</span></span><span class="o"><span
+                          class="pre">running_obj_pars</span></span><span class="o"><span
+                          class="pre">=</span></span><span class="default_value"><span
+                          class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span
+                          class="pre">observation_target</span></span><span class="o"><span
                           class="pre">=</span></span><span class="default_value"><span
                           class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink"
-                      href="#rcognita.controllers.CtrlOptPred" title="Permalink to this definition">¶</a>
+                      href="#rcognita.controllers.RLController" title="Permalink to this definition">¶</a>
                   </dt>
                   <dd>
                     <p>Class of predictive optimal controllers, primarily model-predictive control and predictive
@@ -295,9 +296,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.mode">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.mode">
                         <span class="sig-name descname"><span class="pre">mode</span></span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.mode" title="Permalink to this definition">¶</a>
+                          href="#rcognita.controllers.RLController.mode" title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
                         <p>Controller mode. Currently available (<span
@@ -367,9 +368,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.control_bounds">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.control_bounds">
                         <span class="sig-name descname"><span class="pre">control_bounds</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.control_bounds"
+                          class="headerlink" href="#rcognita.controllers.RLController.control_bounds"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -388,9 +389,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.action_init">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.action_init">
                         <span class="sig-name descname"><span class="pre">action_init</span></span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.action_init"
+                          href="#rcognita.controllers.RLController.action_init"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -407,9 +408,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.t0">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.t0">
                         <span class="sig-name descname"><span class="pre">t0</span></span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.t0" title="Permalink to this definition">¶</a>
+                          href="#rcognita.controllers.RLController.t0" title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
                         <p>Initial value of the controller’s internal clock.</p>
@@ -423,9 +424,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.sampling_time">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.sampling_time">
                         <span class="sig-name descname"><span class="pre">sampling_time</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.sampling_time"
+                          class="headerlink" href="#rcognita.controllers.RLController.sampling_time"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -440,9 +441,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.Nactor">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.Nactor">
                         <span class="sig-name descname"><span class="pre">Nactor</span></span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.Nactor" title="Permalink to this definition">¶</a>
+                          href="#rcognita.controllers.RLController.Nactor" title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
                         <p>Size of prediction horizon <span class="math notranslate nohighlight">\(N_a\)</span>.</p>
@@ -456,9 +457,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.pred_step_size">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.pred_step_size">
                         <span class="sig-name descname"><span class="pre">pred_step_size</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.pred_step_size"
+                          class="headerlink" href="#rcognita.controllers.RLController.pred_step_size"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -500,9 +501,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.prob_noise_pow">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.prob_noise_pow">
                         <span class="sig-name descname"><span class="pre">prob_noise_pow</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.prob_noise_pow"
+                          class="headerlink" href="#rcognita.controllers.RLController.prob_noise_pow"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -518,9 +519,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.is_est_model">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.is_est_model">
                         <span class="sig-name descname"><span class="pre">is_est_model</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.is_est_model"
+                          class="headerlink" href="#rcognita.controllers.RLController.is_est_model"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -537,9 +538,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.model_est_stage">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.model_est_stage">
                         <span class="sig-name descname"><span class="pre">model_est_stage</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.model_est_stage"
+                          class="headerlink" href="#rcognita.controllers.RLController.model_est_stage"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -555,9 +556,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.model_est_period">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.model_est_period">
                         <span class="sig-name descname"><span class="pre">model_est_period</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.model_est_period"
+                          class="headerlink" href="#rcognita.controllers.RLController.model_est_period"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -572,9 +573,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.buffer_size">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.buffer_size">
                         <span class="sig-name descname"><span class="pre">buffer_size</span></span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.buffer_size"
+                          href="#rcognita.controllers.RLController.buffer_size"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -589,9 +590,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.model_order">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.model_order">
                         <span class="sig-name descname"><span class="pre">model_order</span></span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.model_order"
+                          href="#rcognita.controllers.RLController.model_order"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -624,9 +625,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.model_est_checks">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.model_est_checks">
                         <span class="sig-name descname"><span class="pre">model_est_checks</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.model_est_checks"
+                          class="headerlink" href="#rcognita.controllers.RLController.model_est_checks"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -644,9 +645,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.gamma">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.gamma">
                         <span class="sig-name descname"><span class="pre">gamma</span></span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.gamma" title="Permalink to this definition">¶</a>
+                          href="#rcognita.controllers.RLController.gamma" title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
                         <p>Discounting factor.
@@ -661,9 +662,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.Ncritic">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.Ncritic">
                         <span class="sig-name descname"><span class="pre">Ncritic</span></span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.Ncritic" title="Permalink to this definition">¶</a>
+                          href="#rcognita.controllers.RLController.Ncritic" title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
                         <p>Critic stack size <span class="math notranslate nohighlight">\(N_c\)</span>. The critic
@@ -680,9 +681,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.critic_period">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.critic_period">
                         <span class="sig-name descname"><span class="pre">critic_period</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.critic_period"
+                          class="headerlink" href="#rcognita.controllers.RLController.critic_period"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -698,9 +699,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.critic_struct">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.critic_struct">
                         <span class="sig-name descname"><span class="pre">critic_struct</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.critic_struct"
+                          class="headerlink" href="#rcognita.controllers.RLController.critic_struct"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -773,9 +774,9 @@
                     </dl>
 
                     <dl class="py attribute">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.stage_obj_struct">
-                        <span class="sig-name descname"><span class="pre">stage_obj_struct</span></span><a
-                          class="headerlink" href="#rcognita.controllers.CtrlOptPred.stage_obj_struct"
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.running_obj_struct">
+                        <span class="sig-name descname"><span class="pre">running_obj_struct</span></span><a
+                          class="headerlink" href="#rcognita.controllers.RLController.running_obj_struct"
                           title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
@@ -807,7 +808,7 @@
                                 <p>Quadratic <span class="math notranslate nohighlight">\(\chi^\top R_1 \chi\)</span>,
                                   where <span class="math notranslate nohighlight">\(\chi = [observation,
                                     action]\)</span>, <code
-                                    class="docutils literal notranslate"><span class="pre">stage_obj_pars</span></code>
+                                    class="docutils literal notranslate"><span class="pre">running_obj_pars</span></code>
                                   should be <code
                                     class="docutils literal notranslate"><span class="pre">[R1]</span></code></p>
                               </td>
@@ -820,7 +821,7 @@
                                 <p>4th order <span class="math notranslate nohighlight">\(\left( \chi^\top \right)^2 R_2
                                     \left( \chi \right)^2 + \chi^\top R_1 \chi\)</span>, where <span
                                     class="math notranslate nohighlight">\(\chi = [observation, action]\)</span>, <code
-                                    class="docutils literal notranslate"><span class="pre">stage_obj_pars</span></code>
+                                    class="docutils literal notranslate"><span class="pre">running_obj_pars</span></code>
                                   should be <code
                                     class="docutils literal notranslate"><span class="pre">[R1,</span> <span class="pre">R2]</span></code>
                                 </p>
@@ -829,8 +830,10 @@
                           </tbody>
                         </table>
                         <p><em>Pass correct stage objective parameters in</em> <code
-                            class="docutils literal notranslate"><span class="pre">stage_obj_pars</span></code> <em>(as
-                            a list)</em></p>
+                            class="docutils literal notranslate"><span class="pre">running_obj_pars</span></code>
+                          <em>(as
+                            a list)</em>
+                        </p>
                         <p><em>When customizing the stage objective, add your specification into the table above</em>
                         </p>
                         <dl class="field-list simple">
@@ -851,7 +854,7 @@
                       </dd>
                     </dl>
                     <dl class="py method">
-                      <dt class="sig sig-object py" id="rcognita.controllers.CtrlOptPred.__init__">
+                      <dt class="sig sig-object py" id="rcognita.controllers.RLController.__init__">
                         <span class="sig-name descname"><span class="pre">__init__</span></span><span
                           class="sig-paren">(</span><em class="sig-param"><span class="n"><span
                               class="pre">dim_input</span></span></em>, <em class="sig-param"><span class="n"><span
@@ -913,16 +916,16 @@
                               class="pre">critic_struct</span></span><span class="o"><span
                               class="pre">=</span></span><span class="default_value"><span
                               class="pre">'quad-nomix'</span></span></em>, <em class="sig-param"><span class="n"><span
-                              class="pre">stage_obj_struct</span></span><span class="o"><span
+                              class="pre">running_obj_struct</span></span><span class="o"><span
                               class="pre">=</span></span><span class="default_value"><span
                               class="pre">'quadratic'</span></span></em>, <em class="sig-param"><span class="n"><span
-                              class="pre">stage_obj_pars</span></span><span class="o"><span
+                              class="pre">running_obj_pars</span></span><span class="o"><span
                               class="pre">=</span></span><span class="default_value"><span
                               class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span
                               class="pre">observation_target</span></span><span class="o"><span
                               class="pre">=</span></span><span class="default_value"><span
                               class="pre">[]</span></span></em><span class="sig-paren">)</span><a class="headerlink"
-                          href="#rcognita.controllers.CtrlOptPred.__init__" title="Permalink to this definition">¶</a>
+                          href="#rcognita.controllers.RLController.__init__" title="Permalink to this definition">¶</a>
                       </dt>
                       <dd>
                         <dl class="field-list simple">
@@ -1023,7 +1026,8 @@
                               </li>
                               <li>
                                 <p><strong>Nactor</strong> (<em>: natural number</em>) – Size of prediction horizon
-                                  <span class="math notranslate nohighlight">\(N_a\)</span></p>
+                                  <span class="math notranslate nohighlight">\(N_a\)</span>
+                                </p>
                               </li>
                               <li>
                                 <p><strong>pred_step_size</strong> (<em>: number</em>) – Prediction step size in <span
@@ -1188,7 +1192,7 @@
                                 </p>
                               </li>
                               <li>
-                                <p><strong>stage_obj_struct</strong> (<em>: string</em>) –
+                                <p><strong>running_obj_struct</strong> (<em>: string</em>) –
                                 <p>Choice of the stage objective structure.</p>
                                 <p>Currently available:</p>
                                 <table class="colwidths-given docutils align-default" id="id7">
@@ -1217,7 +1221,7 @@
                                         <p>Quadratic <span class="math notranslate nohighlight">\(\chi^\top R_1
                                             \chi\)</span>, where <span class="math notranslate nohighlight">\(\chi =
                                             [observation, action]\)</span>, <code
-                                            class="docutils literal notranslate"><span class="pre">stage_obj_pars</span></code>
+                                            class="docutils literal notranslate"><span class="pre">running_obj_pars</span></code>
                                           should be <code
                                             class="docutils literal notranslate"><span class="pre">[R1]</span></code>
                                         </p>
@@ -1232,7 +1236,7 @@
                                             \right)^2 R_2 \left( \chi \right)^2 + \chi^\top R_1 \chi\)</span>, where
                                           <span class="math notranslate nohighlight">\(\chi = [observation,
                                             action]\)</span>, <code
-                                            class="docutils literal notranslate"><span class="pre">stage_obj_pars</span></code>
+                                            class="docutils literal notranslate"><span class="pre">running_obj_pars</span></code>
                                           should be <code
                                             class="docutils literal notranslate"><span class="pre">[R1,</span> <span class="pre">R2]</span></code>
                                         </p>
@@ -1257,8 +1261,8 @@
                       <tbody>
                         <tr class="row-odd">
                           <td>
-                            <p><a class="reference internal" href="#rcognita.controllers.CtrlOptPred.__init__"
-                                title="rcognita.controllers.CtrlOptPred.__init__"><code
+                            <p><a class="reference internal" href="#rcognita.controllers.RLController.__init__"
+                                title="rcognita.controllers.RLController.__init__"><code
                                   class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(dim_input, dim_output[, mode, …])
                             </p>
                           </td>
@@ -1307,7 +1311,7 @@
                         <tr class="row-odd">
                           <td>
                             <p><code
-                                class="xref py py-obj docutils literal notranslate"><span class="pre">stage_obj</span></code>(observation, action)
+                                class="xref py py-obj docutils literal notranslate"><span class="pre">running_obj</span></code>(observation, action)
                             </p>
                           </td>
                           <td>

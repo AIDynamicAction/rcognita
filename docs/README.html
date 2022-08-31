@@ -219,7 +219,7 @@
                     functionality is implemented and enabled via <code
                       class="docutils literal notranslate"><span class="pre">is_est_model</span></code>. Related
                     parameters can be found in the documentation of the <code
-                      class="docutils literal notranslate"><span class="pre">CtrlOptPred</span></code>
+                      class="docutils literal notranslate"><span class="pre">RLController</span></code>
                     class.
                   </p>
                   <section id="installing-dependencies">
@@ -299,7 +299,7 @@
                   main modules (presets) for each
                   agent-environment configuration.
                 </p>
-                <p><a class="reference external" href="./flowcharts/rcognita-flowchart-CtrlOptPred.pdf">This
+                <p><a class="reference external" href="./flowcharts/rcognita-flowchart-RLController.pdf">This
                     flowchart</a>
                   shows interaction of the core <code
                     class="docutils literal notranslate"><span class="pre">rcognita</span></code> classes contained in
@@ -352,10 +352,10 @@
                 </p>
                 <p>Finally, the <code class="docutils literal notranslate"><span class="pre">controllers</span></code>
                   module contains various agent types. One of
-                  them is <code class="docutils literal notranslate"><span class="pre">CtrlOptPred</span></code> – the
+                  them is <code class="docutils literal notranslate"><span class="pre">RLController</span></code> – the
                   class of predictive objective-optimizing
                   agents (model-predictive control and predictive reinforcement learning)
-                  as shown in <a class="reference external" href="./flowcharts/rcognita-flowchart-CtrlOptPred.pdf">this
+                  as shown in <a class="reference external" href="./flowcharts/rcognita-flowchart-RLController.pdf">this
                     flowchart</a>. Notice
                   it contains an explicit specification of the sampling time <code
                     class="docutils literal notranslate"><span class="pre">dt</span></code>.</p>
@@ -532,7 +532,8 @@
                       </tr>
                       <tr class="row-odd">
                         <td>
-                          <p><code class="docutils literal notranslate"><span class="pre">stage_obj_struct</span></code>
+                          <p><code
+                              class="docutils literal notranslate"><span class="pre">running_obj_struct</span></code>
                           </p>
                         </td>
                         <td>
@@ -613,13 +614,13 @@
                         possibly, <code class="docutils literal notranslate"><span class="pre">_actor</span></code>,
                         <code class="docutils literal notranslate"><span class="pre">critic</span></code>. For deep net
                         AC structures, use, say,
-                        <a class="reference external" href="https://pytorch.org/">PyTorch</a>
+                        <a class="reference external" href="https://pytorch.org/">Torch</a>
                       </p>
                     </li>
                     <li>
                       <p><strong>Custom model estimator</strong>: so far, the framework offers a
                         state-space model structure. You may use any other one. In case of
-                        neural nets, use, e.g., <a class="reference external" href="https://pytorch.org/">PyTorch</a>
+                        neural nets, use, e.g., <a class="reference external" href="https://pytorch.org/">Torch</a>
                       </p>
                     </li>
                   </ul>

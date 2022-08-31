@@ -42,7 +42,7 @@
   <link rel="index" title="Index" href="../../genindex.html" />
   <link rel="search" title="Search" href="../../search.html" />
   <link rel="next" title="rcognita.loggers" href="../rcognita.loggers.html" />
-  <link rel="prev" title="rcognita.controllers.CtrlOptPred" href="rcognita.controllers.CtrlOptPred.html" />
+  <link rel="prev" title="rcognita.controllers.RLController" href="rcognita.controllers.RLController.html" />
 </head>
 
 <body class="wy-body-for-nav">
@@ -118,7 +118,7 @@
                     href="rcognita.controllers.CtrlNominal3WRobotNI.html">rcognita.controllers.CtrlNominal3WRobotNI</a>
                 </li>
                 <li class="toctree-l2"><a class="reference internal"
-                    href="rcognita.controllers.CtrlOptPred.html">rcognita.controllers.CtrlOptPred</a></li>
+                    href="rcognita.controllers.RLController.html">rcognita.controllers.RLController</a></li>
                 <li class="toctree-l2 current"><a class="current reference internal"
                     href="#">rcognita.controllers.CtrlRLStab</a></li>
               </ul>
@@ -265,12 +265,13 @@
                       class="sig-param"><span class="n"><span class="pre">actor_struct</span></span><span
                         class="o"><span class="pre">=</span></span><span class="default_value"><span
                           class="pre">'quad-nomix'</span></span></em>, <em class="sig-param"><span class="n"><span
-                          class="pre">stage_obj_struct</span></span><span class="o"><span
+                          class="pre">running_obj_struct</span></span><span class="o"><span
                           class="pre">=</span></span><span class="default_value"><span
                           class="pre">'quadratic'</span></span></em>, <em class="sig-param"><span class="n"><span
-                          class="pre">stage_obj_pars</span></span><span class="o"><span class="pre">=</span></span><span
-                        class="default_value"><span class="pre">[]</span></span></em>, <em class="sig-param"><span
-                        class="n"><span class="pre">observation_target</span></span><span class="o"><span
+                          class="pre">running_obj_pars</span></span><span class="o"><span
+                          class="pre">=</span></span><span class="default_value"><span
+                          class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span
+                          class="pre">observation_target</span></span><span class="o"><span
                           class="pre">=</span></span><span class="default_value"><span
                           class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span
                           class="pre">safe_ctrl</span></span><span class="o"><span class="pre">=</span></span><span
@@ -283,7 +284,7 @@
                   <dd>
                     <p>Class of reinforcement learning agents with stabilizing constraints.</p>
                     <p>Sampling here is similar to the predictive controller agent <code
-                        class="docutils literal notranslate"><span class="pre">CtrlOptPred</span></code></p>
+                        class="docutils literal notranslate"><span class="pre">RLController</span></code></p>
                     <p>Needs a nominal controller object <code
                         class="docutils literal notranslate"><span class="pre">safe_ctrl</span></code> with a respective
                       Lyapunov function.</p>
@@ -291,13 +292,13 @@
                     <p>Feature structure is defined via a string flag <code
                         class="docutils literal notranslate"><span class="pre">actor_struct</span></code>. Read more on
                       features in class description of <code
-                        class="docutils literal notranslate"><span class="pre">controllers.CtrlOptPred</span></code>.
+                        class="docutils literal notranslate"><span class="pre">controllers.RLController</span></code>.
                     </p>
                     <p><code class="docutils literal notranslate"><span class="pre">weights</span></code> : weights.</p>
                     <p>Feature structure is defined via a string flag <code
                         class="docutils literal notranslate"><span class="pre">critic_struct</span></code>. Read more on
                       features in class description of <code
-                        class="docutils literal notranslate"><span class="pre">controllers.CtrlOptPred</span></code>.
+                        class="docutils literal notranslate"><span class="pre">controllers.RLController</span></code>.
                     </p>
                     <dl class="py attribute">
                       <dt class="sig sig-object py" id="rcognita.controllers.CtrlRLStab.mode">
@@ -410,10 +411,10 @@
                               class="pre">actor_struct</span></span><span class="o"><span
                               class="pre">=</span></span><span class="default_value"><span
                               class="pre">'quad-nomix'</span></span></em>, <em class="sig-param"><span class="n"><span
-                              class="pre">stage_obj_struct</span></span><span class="o"><span
+                              class="pre">running_obj_struct</span></span><span class="o"><span
                               class="pre">=</span></span><span class="default_value"><span
                               class="pre">'quadratic'</span></span></em>, <em class="sig-param"><span class="n"><span
-                              class="pre">stage_obj_pars</span></span><span class="o"><span
+                              class="pre">running_obj_pars</span></span><span class="o"><span
                               class="pre">=</span></span><span class="default_value"><span
                               class="pre">[]</span></span></em>, <em class="sig-param"><span class="n"><span
                               class="pre">observation_target</span></span><span class="o"><span
@@ -428,7 +429,7 @@
                       </dt>
                       <dd>
                         <p>Parameter specification largely resembles that of <code
-                            class="docutils literal notranslate"><span class="pre">CtrlOptPred</span></code> class.</p>
+                            class="docutils literal notranslate"><span class="pre">RLController</span></code> class.</p>
                         <dl class="field-list simple">
                           <dt class="field-odd">Parameters</dt>
                           <dd class="field-odd">
@@ -656,7 +657,7 @@
                                 </p>
                               </li>
                               <li>
-                                <p><strong>stage_obj_struct</strong> (<em>: string</em>) –
+                                <p><strong>running_obj_struct</strong> (<em>: string</em>) –
                                 <p>Choice of the stage objective structure.</p>
                                 <p>Currently available:</p>
                                 <table class="colwidths-given docutils align-default" id="id5">
@@ -685,7 +686,7 @@
                                         <p>Quadratic <span class="math notranslate nohighlight">\(\chi^\top R_1
                                             \chi\)</span>, where <span class="math notranslate nohighlight">\(\chi =
                                             [observation, action]\)</span>, <code
-                                            class="docutils literal notranslate"><span class="pre">stage_obj_pars</span></code>
+                                            class="docutils literal notranslate"><span class="pre">running_obj_pars</span></code>
                                           should be <code
                                             class="docutils literal notranslate"><span class="pre">[R1]</span></code>
                                         </p>
@@ -700,7 +701,7 @@
                                             \right)^2 R_2 \left( \chi \right)^2 + \chi^\top R_1 \chi\)</span>, where
                                           <span class="math notranslate nohighlight">\(\chi = [observation,
                                             action]\)</span>, <code
-                                            class="docutils literal notranslate"><span class="pre">stage_obj_pars</span></code>
+                                            class="docutils literal notranslate"><span class="pre">running_obj_pars</span></code>
                                           should be <code
                                             class="docutils literal notranslate"><span class="pre">[R1,</span> <span class="pre">R2]</span></code>
                                         </p>
@@ -732,7 +733,7 @@
                           </td>
                           <td>
                             <p>Parameter specification largely resembles that of <code
-                                class="docutils literal notranslate"><span class="pre">CtrlOptPred</span></code> class.
+                                class="docutils literal notranslate"><span class="pre">RLController</span></code> class.
                             </p>
                           </td>
                         </tr>
@@ -769,7 +770,7 @@
                         <tr class="row-odd">
                           <td>
                             <p><code
-                                class="xref py py-obj docutils literal notranslate"><span class="pre">stage_obj</span></code>(observation, action)
+                                class="xref py py-obj docutils literal notranslate"><span class="pre">running_obj</span></code>(observation, action)
                             </p>
                           </td>
                           <td>
@@ -805,8 +806,8 @@
                 accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
 
 
-              <a href="rcognita.controllers.CtrlOptPred.html" class="btn btn-neutral float-left"
-                title="rcognita.controllers.CtrlOptPred" accesskey="p" rel="prev"><span
+              <a href="rcognita.controllers.RLController.html" class="btn btn-neutral float-left"
+                title="rcognita.controllers.RLController" accesskey="p" rel="prev"><span
                   class="fa fa-arrow-circle-left"></span> Previous</a>
 
             </div>

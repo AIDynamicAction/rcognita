@@ -5,13 +5,15 @@ sys.path.insert(0, PARENT_DIR)
 CUR_DIR = os.path.abspath(__file__ + "/..")
 sys.path.insert(0, CUR_DIR)
 import numpy as np
-from .utilities import nc
+from .utilities import rc, NUMPY, CASADI, TORCH
 from abc import ABC, abstractmethod
-from models import ModelPolynomial
 from casadi import Function
 from tabulate import tabulate
 import scipy as sp
 from functools import partial
+import torch
+from copy import deepcopy
+from multiprocessing import Pool
 
 
 class Critic(ABC):
@@ -22,152 +24,178 @@ class Critic(ABC):
         dim_output,
         buffer_size,
         optimizer=None,
-        critic_model=ModelPolynomial(model_name="quad-nomix"),
-        stage_obj=[],
+        model=None,
+        running_obj=[],
         gamma=1,
         observation_target=[],
     ):
-        self.observation_target = observation_target
+        if optimizer.engine == "Torch":
+            self.typing = TORCH
+        elif optimizer.engine == "CasADi":
+            self.typing = CASADI
+        else:
+            self.typing = NUMPY
+
         self.Ncritic = Ncritic
         self.buffer_size = buffer_size
         self.Ncritic = np.min([self.Ncritic, self.buffer_size - 1])
-        self.dim_input = dim_input
-        self.dim_output = dim_output
-        self.action_buffer = np.zeros([buffer_size, dim_input])
-        self.observation_buffer = np.zeros([buffer_size, dim_output])
+
+        self.action_buffer = rc.zeros([buffer_size, dim_input], rc_type=self.typing)
+        self.observation_buffer = rc.zeros(
+            [buffer_size, dim_output], rc_type=self.typing
+        )
+        self.observation_target = observation_target
+
         self.gamma = gamma
-        self.stage_obj = stage_obj
+        self.running_obj = running_obj
         self.optimizer = optimizer
-        self.critic_model = critic_model
+
         self.g_critic_values = []
+
+        self.model = model
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
 
-    @abstractmethod
-    def objective(self):
-        pass
+    def objDecorator(objective):
+        def wrapper(self, buffer, weights=None):
+            if weights:
+                print("Weights passed")
+                self.model.weights = weights
 
-    def update_buffers(self, observation, action):
-        self.action_buffer = nc.push_vec(self.action_buffer, action)
+            return objective(buffer)
 
-        self.observation_buffer = nc.push_vec(self.observation_buffer, observation)
+        return wrapper
 
-    def get_optimized_weights(self, constraint_functions=(), t=None):
+    def update(self, constraint_functions=(), t=None):
 
         """
-        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred.objective`.
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.RLController.objective`.
 
         """
 
         # Optimization method of critic
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
 
-        weights_init = self.weights_prev
-
-        constraints = ()
-        bounds = [self.Wmin, self.Wmax]
-
         if self.optimizer.engine == "CasADi":
-            cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.objective, var_prototype=weights_init, is_symbolic=True
-            )
-
-            if constraint_functions:
-                constraints = self.create_constraints(
-                    constraint_functions, symbolic_var
-                )
-
-            optimized_weights = self.optimizer.optimize(
-                cost_function,
-                weights_init,
-                bounds,
-                constraints=constraints,
-                symbolic_var=symbolic_var,
-            )
+            self._CasADi_update(constraint_functions)
 
         elif self.optimizer.engine == "SciPy":
-            cost_function = nc.func_to_lambda_with_params(self.objective)
+            self._SciPy_update(constraint_functions)
 
-            if constraint_functions:
-                constraints = sp.optimize.NonlinearConstraint(
-                    partial(
-                        self.create_constraints,
-                        constraint_functions=constraint_functions,
-                    ),
-                    -np.inf,
-                    0,
-                )
+        elif self.optimizer.engine == "Torch":
+            self._Torch_update()
 
-            optimized_weights = self.optimizer.optimize(
-                cost_function, weights_init, bounds, constraints=constraints,
-            )
-
-        #### DEBUG
-
-        # g2 = Function("g2", [symbolic_var], [constraints])
-        # self.g_critic_values.append([g2(weights), t])
-
-        # g1 = Function("g1", [symbolic_var], [constraints])
-
-        # row_header = ["g1"]
-        # row_data = [g1(weights)]
-        # row_format = "8.3f"
-        # table = tabulate(
-        #     [row_header, row_data],
-        #     floatfmt=row_format,
-        #     headers="firstrow",
-        #     tablefmt="grid",
-        # )
-        # print(table)
-        #### DEBUG
-
-        return optimized_weights
-
-    @abstractmethod
-    def forward(self):
-        pass
+    def update_buffers(self, observation, action):
+        self.action_buffer = rc.push_vec(
+            self.action_buffer, rc.array(action, prototype=self.action_buffer)
+        )
+        self.observation_buffer = rc.push_vec(
+            self.observation_buffer,
+            rc.array(observation, prototype=self.observation_buffer),
+        )
 
     def grad_observation(self, observation):
 
-        observation_symbolic = nc.array_symb(nc.shape(observation), literal="x")
-        weights_symbolic = nc.array_symb(nc.shape(self.weights), literal="w")
+        observation_symbolic = rc.array_symb(rc.shape(observation), literal="x")
+        weights_symbolic = rc.array_symb(rc.shape(self.weights), literal="w")
 
         critic_func = self.forward(weights_symbolic, observation_symbolic)
 
         f = Function("f", [observation_symbolic, weights_symbolic], [critic_func])
 
-        gradient = nc.autograd(f, observation_symbolic, weights_symbolic)
+        gradient = rc.autograd(f, observation_symbolic, weights_symbolic)
 
         gradient_evaluated = gradient(observation, weights_symbolic)
 
-        # Lie_derivative = nc.dot(v, gradient(observation_symbolic))
+        # Lie_derivative = rc.dot(v, gradient(observation_symbolic))
         return gradient_evaluated, weights_symbolic
+
+    def _SciPy_update(self, constraint_functions=()):
+
+        weights_init = self.model.weights
+
+        constraints = ()
+        bounds = [self.model.Wmin, self.model.Wmax]
+        experience_replay = {
+            "observation_buffer": self.observation_buffer,
+            "action_buffer": self.action_buffer,
+        }
+
+        cost_function = lambda weights: self.objective(
+            experience_replay, weights=weights
+        )
+
+        if constraint_functions:
+            constraints = sp.optimize.NonlinearConstraint(
+                partial(
+                    self.create_constraints, constraint_functions=constraint_functions,
+                ),
+                -np.inf,
+                0,
+            )
+
+        optimized_weights = self.optimizer.optimize(
+            cost_function, weights_init, bounds, constraints=constraints,
+        )
+
+        self.model.weights = optimized_weights
+
+    def _CasADi_update(self, constraint_functions=()):
+
+        weights_init = rc.DM(self.model_prev.weights)
+        symbolic_var = rc.array_symb(tup=rc.shape(weights_init), prototype=weights_init)
+
+        constraints = ()
+        bounds = [self.model.Wmin, self.model.Wmax]
+        experience_replay = {
+            "observation_buffer": self.observation_buffer,
+            "action_buffer": self.action_buffer,
+        }
+
+        cost_function = lambda weights: self.objective(
+            experience_replay, weights=weights
+        )
+
+        cost_function = rc.lambda2symb(cost_function, symbolic_var)
+
+        if constraint_functions:
+            constraints = self.create_constraints(constraint_functions, symbolic_var)
+
+        optimized_weights = self.optimizer.optimize(
+            cost_function,
+            weights_init,
+            bounds,
+            constraints=constraints,
+            symbolic_var=symbolic_var,
+        )
+
+        self.model.weights = optimized_weights
+
+    def _Torch_update(self):
+
+        experience_replay = {
+            "observation_buffer": torch.tensor(self.observation_buffer),
+            "action_buffer": torch.tensor(self.action_buffer),
+        }
+
+        self.optimizer.optimize(
+            objective=self.objective, model=self.model, model_input=experience_replay,
+        )
+
+        self.model.soft_update(1)
+
+    @abstractmethod
+    def objective(self):
+        pass
+
+    @abstractmethod
+    def forward(self):
+        pass
 
 
 class CriticValue(Critic):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.critic_model.model_name == "quad-lin":
-            self.dim_critic = int(
-                (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
-            )
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-        elif self.critic_model.model_name == "quadratic":
-            self.dim_critic = int((self.dim_output + 1) * self.dim_output / 2)
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-        elif self.critic_model.model_name == "quad-nomix":
-            self.dim_critic = self.dim_output
-            self.Wmin = np.zeros(self.dim_critic)
-            self.Wmax = 1e3 * np.ones(self.dim_critic)
-
-        self.weights_prev = np.ones(self.dim_critic)
-        self.weights_init = np.ones(self.dim_critic)
-        self.weights = self.weights_init
-
-    def forward(self, observation, weights):
+    def forward(self, observation):
 
         """
         Critic: a routine that models something related to the objective, e.g., value function, Q-function, advantage etc.
@@ -176,15 +204,14 @@ class CriticValue(Critic):
 
         """
 
-        if self.observation_target == []:
-            critic_res = self.critic_model(observation, np.array([]), weights)
-        else:
-            observation_new = observation - self.observation_target
-            critic_res = self.critic_model(observation_new, np.array([]), weights)
+        if self.observation_target != []:
+            observation = observation - self.observation_target
 
-        return critic_res
+        result = self.model(observation)
 
-    def objective(self, weights):
+        return result
+
+    def objective(self, data_buffer, weights=None):
         """
         Cost function of the critic.
         
@@ -196,22 +223,25 @@ class CriticValue(Critic):
         Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation. 
        
         """
+        observation_buffer = data_buffer.observation_buffer
+        action_buffer = data_buffer.action_buffer
+
         Jc = 0
 
         for k in range(self.buffer_size - 1, self.buffer_size - self.Ncritic, -1):
-            observation_prev = self.observation_buffer[k - 1, :]
-            observation_next = self.observation_buffer[k, :]
-            action_prev = self.action_buffer[k - 1, :]
+            observation_prev = observation_buffer[k - 1, :]
+            observation_next = observation_buffer[k, :]
+            action_prev = action_buffer[k - 1, :]
 
             # Temporal difference
 
-            critic_prev = self.forward(observation_prev, weights)
-            critic_next = self.forward(observation_next, self.weights_prev)
+            critic_prev = self.model(observation_prev, weights)
+            critic_next = self.model(observation_next, use_fixed_weights=True)
 
             e = (
                 critic_prev
                 - self.gamma * critic_next
-                - self.stage_obj(observation_prev, action_prev)
+                - self.running_obj(observation_prev, action_prev)
             )
 
             Jc += 1 / 2 * e ** 2
@@ -220,49 +250,7 @@ class CriticValue(Critic):
 
 
 class CriticActionValue(Critic):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        if self.critic_model.model_name != "NN":
-            if self.critic_model.model_name == "quad-lin":
-                self.dim_critic = int(
-                    ((self.dim_output + self.dim_input) + 1)
-                    * (self.dim_output + self.dim_input)
-                    / 2
-                    + (self.dim_output + self.dim_input)
-                )
-                self.Wmin = np.zeros(self.dim_critic)
-                self.Wmax = 1e3 * np.ones(self.dim_critic)
-            elif self.critic_model.model_name == "quadratic":
-                self.dim_critic = int(
-                    ((self.dim_output + self.dim_input) + 1)
-                    * (self.dim_output + self.dim_input)
-                    / 2
-                )
-                self.Wmin = np.zeros(self.dim_critic)
-                self.Wmax = 1e3 * np.ones(self.dim_critic)
-            elif self.critic_model.model_name == "quad-nomix":
-                self.dim_critic = self.dim_output + self.dim_input
-                self.Wmin = np.zeros(self.dim_critic)
-                self.Wmax = 1e3 * np.ones(self.dim_critic)
-            elif self.critic_model.model_name == "quad-mix":
-                self.dim_critic = int(
-                    self.dim_output + self.dim_output * self.dim_input + self.dim_input
-                )
-                self.Wmin = np.zeros(self.dim_critic)
-                self.Wmax = 1e3 * np.ones(self.dim_critic)
-
-        else:
-            weights = self.critic_model.get_weights()
-            self.dim_critic = weights.shape
-            self.Wmin = np.zeros(weights.shape)
-            self.Wmax = 1e3 * np.ones(weights.shape)
-
-        self.weights_prev = np.ones(self.dim_critic)
-        self.weights_init = np.ones(self.dim_critic)
-        self.weights = self.weights_init
-
-    def forward(self, observation, action, weights):
+    def forward(self, observation, action, use_fixed_weights=False):
 
         """
         Critic: a routine that models something related to the objective, e.g., value function, Q-function, advantage etc.
@@ -271,15 +259,15 @@ class CriticActionValue(Critic):
 
         """
 
-        if self.observation_target == []:
-            result = self.critic_model(observation, action, weights)
-        else:
-            observation_diff = observation - self.observation_target
-            result = self.critic_model(observation_diff, action, weights)
+        if self.observation_target != []:
+            observation = observation - self.observation_target
+
+        chi = rc.concatenate((observation, action))
+        result = self.model(chi, use_fixed_weights=use_fixed_weights)
 
         return result
 
-    def objective(self, weights):
+    def objective(self, data_buffer, weights=None):
         """
         Cost function of the critic.
         
@@ -291,23 +279,29 @@ class CriticActionValue(Critic):
         Introduce your critic part of an RL algorithm here. Don't forget to provide description in the class documentation. 
        
         """
+
+        observation_buffer = data_buffer["observation_buffer"]
+        action_buffer = data_buffer["action_buffer"]
+
         Jc = 0
 
         for k in range(self.buffer_size - 1, self.buffer_size - self.Ncritic, -1):
-            observation_prev = self.observation_buffer[k - 1, :]
-            observation_next = self.observation_buffer[k, :]
-            action_prev = self.action_buffer[k - 1, :]
-            action_next = self.action_buffer[k, :]
+            observation_prev = observation_buffer[k - 1, :]
+            observation_next = observation_buffer[k, :]
+            action_prev = action_buffer[k - 1, :]
+            action_next = action_buffer[k, :]
 
             # Temporal difference
+            chi_prev = rc.concatenate((observation_prev, action_prev))
+            chi_next = rc.concatenate((observation_next, action_next))
 
-            critic_prev = self.forward(observation_prev, action_prev, weights)
-            critic_next = self.forward(observation_next, action_next, self.weights_prev)
+            critic_prev = self.model(chi_prev, weights)
+            critic_next = self.model(chi_next, use_fixed_weights=True)
 
             e = (
                 critic_prev
                 - self.gamma * critic_next
-                - self.stage_obj(observation_prev, action_prev)
+                - self.running_obj(observation_prev, action_prev)
             )
 
             Jc += 1 / 2 * e ** 2
@@ -334,14 +328,14 @@ class CriticSTAG(CriticValue):
     def get_optimized_weights(self, constraint_functions=(), t=None):
 
         """
-        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.CtrlOptPred.objective`.
+        This method is merely a wrapper for an optimizer that minimizes :func:`~controllers.RLController.objective`.
 
         """
 
         # Optimization method of critic
         # Methods that respect constraints: BFGS, L-BFGS-B, SLSQP, trust-constr, Powell
 
-        weights_init = self.weights_prev
+        weights_init = self.model_prev.weights
 
         constraints = ()
         bounds = [self.Wmin, self.Wmax]
@@ -356,7 +350,7 @@ class CriticSTAG(CriticValue):
                 observation, action_safe
             )
 
-            critic_curr = self.forward(observation, self.weights_prev)
+            critic_curr = self.forward(observation, self.model_prev.weights)
             critic_next = self.forward(observation_next, weights)
 
             return (
@@ -366,8 +360,8 @@ class CriticSTAG(CriticValue):
             )
 
         if self.optimizer.engine == "CasADi":
-            cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.objective, var_prototype=weights_init, is_symbolic=True
+            cost_function, symbolic_var = rc.func_to_lambda_with_params(
+                self.objective, var_prototype=weights_init
             )
 
             if constraint_functions:
@@ -379,7 +373,7 @@ class CriticSTAG(CriticValue):
                 lambda weights: constr_stab_decay_w(weights, observation) - self.eps
             )
 
-            constraints += (nc.lambda2symb(lambda_constr, symbolic_var),)
+            constraints += (rc.lambda2symb(lambda_constr, symbolic_var),)
 
             optimized_weights = self.optimizer.optimize(
                 cost_function,
@@ -390,7 +384,7 @@ class CriticSTAG(CriticValue):
             )
 
         elif self.optimizer.engine == "SciPy":
-            cost_function = nc.func_to_lambda_with_params(self.objective)
+            cost_function = rc.func_to_lambda_with_params(self.objective)
 
             if constraint_functions:
                 constraints = sp.optimize.NonlinearConstraint(
@@ -418,6 +412,9 @@ class CriticSTAG(CriticValue):
 
 
 class CriticMPC(Critic):
+    def __init__(self):
+        pass
+
     def forward(self, observation, action, weights):
         pass
 
@@ -426,3 +423,45 @@ class CriticMPC(Critic):
 
     def get_optimized_weights(self, constraint_functions=(), t=None):
         pass
+
+    def update_buffers(self, observation, action):
+        pass
+
+    def update(self, constraint_functions=(), t=None):
+        pass
+
+
+class CriticTabular(Critic):
+    def __init__(self, dim_state_space, running_obj, state_predictor, model, gamma=1):
+
+        self.value_table = rc.zeros(dim_state_space)
+        self.action_table = rc.zeros(dim_state_space)
+        self.running_obj = running_obj
+        self.state_predictor = state_predictor
+        self.model = model
+        self.gamma = gamma
+
+    def forward(self, observation, use_fixed_weights=False):
+        return self.model(observation)
+
+    def update_single_cell(self, x):
+        action = self.model.table[x]
+        self.model.table[x] = (
+            self.running_obj(x, action)
+            + self.gamma
+            * self.model.table[self.state_predictor.predict_state(x, action)]
+        )
+
+    def update(self):
+        with Pool(self.n_process) as p:
+            self.model.update_values(
+                p.map(
+                    self.update_single_cell,
+                    np.nditer(self.model.table, flags=["external_loop"]),
+                )[0]
+            )
+
+    def objective(self):
+        pass
+        # self.value_table =  pool.map(lambda row: self.row_value_update(action, row), new_table)
+

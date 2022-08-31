@@ -5,10 +5,8 @@ sys.path.insert(0, PARENT_DIR)
 CUR_DIR = os.path.abspath(__file__ + "/..")
 sys.path.insert(0, CUR_DIR)
 import numpy as np
-from utilities import nc
+from utilities import rc
 from abc import ABC, abstractmethod
-from models import ModelPolynomial
-from casadi import Function
 from tabulate import tabulate
 import scipy as sp
 from functools import partial
@@ -26,8 +24,8 @@ class Actor:
         state_predictor=[],
         optimizer=None,
         critic=[],
-        stage_obj=[],
-        actor_model=ModelPolynomial(model_name="quad-lin"),
+        running_obj=[],
+        model=None,
         gamma=1,
     ):
         self.Nactor = Nactor
@@ -37,29 +35,17 @@ class Actor:
         self.control_bounds = control_bounds
         self.optimizer = optimizer
         self.critic = critic
-        self.stage_obj = stage_obj
-        self.actor_model = actor_model
+        self.running_obj = running_obj
+        self.model = model
         self.state_predictor = state_predictor
         self.gamma = gamma
         self.g_actor_values = []
-
-        if self.actor_model.model_name == "quad-lin":
-            self.dim_actor_per_input = int(
-                (self.dim_output + 1) * self.dim_output / 2 + self.dim_output
-            )
-        elif self.actor_model.model_name == "quadratic":
-            self.dim_actor_per_input = int((self.dim_output + 1) * self.dim_output / 2)
-        elif self.actor_model.model_name == "quad-nomix":
-            self.dim_actor_per_input = self.dim_output
-
-        self.dim_actor = self.dim_actor_per_input * self.dim_input
-        self.w_actor = nc.zeros(self.dim_actor)
 
         if self.control_mode != "MPC" and self.critic == []:
             raise ValueError(
                 f"Critic should be passed to actor in {self.control_mode} mode"
             )
-        elif self.control_mode == "MPC" and self.stage_obj == []:
+        elif self.control_mode == "MPC" and self.running_obj == []:
             raise ValueError(
                 f"Stage objective should be passed to actor in {self.control_mode} mode"
             )
@@ -71,14 +57,15 @@ class Actor:
 
         if len(action_init) == 0:
             self.action_prev = self.action_min / 10
-            self.action_sqn_init = nc.rep_mat(self.action_min / 10, 1, self.Nactor + 1)
+            self.action_sqn_init = rc.rep_mat(self.action_min / 10, 1, self.Nactor + 1)
         else:
             self.action_prev = action_init
-            self.action_sqn_init = nc.rep_mat(action_init, 1, self.Nactor + 1)
+            self.action_sqn_init = rc.rep_mat(action_init, 1, self.Nactor + 1)
 
-        self.action_sqn_min = nc.rep_mat(self.action_min, 1, Nactor + 1)
-        self.action_sqn_max = nc.rep_mat(-self.action_min, 1, Nactor + 1)
+        self.action_sqn_min = rc.rep_mat(self.action_min, 1, Nactor + 1)
+        self.action_sqn_max = rc.rep_mat(-self.action_min, 1, Nactor + 1)
         self.control_bounds = [self.action_sqn_min, self.action_sqn_max]
+        self.action = self.action_prev
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)
@@ -92,10 +79,10 @@ class Actor:
         for constraint_function in constraint_functions:
             constraint_violations_buffer[0] = constraint_function(current_observation)
 
-        max_constraint_violation = nc.max(constraint_violations_buffer)
+        max_constraint_violation = rc.max(constraint_violations_buffer)
 
         max_constraint_violation = -1
-        action_sqn = nc.reshape(my_action_sqn, [self.Nactor, self.dim_input])
+        action_sqn = rc.reshape(my_action_sqn, [self.Nactor, self.dim_input])
         predicted_state = current_observation
 
         for i in range(1, self.Nactor):
@@ -111,11 +98,11 @@ class Actor:
             for constraint in constraint_functions:
                 constraint_violations_buffer.append(constraint(predicted_state))
 
-            max_constraint_violation = nc.max(constraint_violations_buffer)
+            max_constraint_violation = rc.max(constraint_violations_buffer)
             constraint_violations_result[i - 1] = max_constraint_violation
 
         for i in range(2, self.Nactor - 1):
-            constraint_violations_result[i] = nc.if_else(
+            constraint_violations_result[i] = rc.if_else(
                 constraint_violations_result[i - 1] > 0,
                 constraint_violations_result[i - 1],
                 constraint_violations_result[i],
@@ -123,23 +110,26 @@ class Actor:
 
         return constraint_violations_result
 
-    def get_optimized_action(self, observation, constraint_functions=(), t=None):
+    def update(self, observation, constraint_functions=(), t=None):
 
-        rep_action_prev = nc.rep_mat(self.action_prev, 1, self.Nactor + 1)
+        rep_action_prev = rc.rep_mat(self.action_prev, 1, self.Nactor + 1)
 
-        my_action_sqn_init = nc.reshape(
+        my_action_sqn_init = rc.reshape(
             rep_action_prev, [(self.Nactor + 1) * self.dim_input,],
         )
 
         constraints = ()
 
         if self.optimizer.engine == "CasADi":
-            cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.objective,
-                observation,
-                var_prototype=my_action_sqn_init,
-                is_symbolic=True,
+            my_action_sqn_init = rc.DM(my_action_sqn_init)
+            array_symb = rc.array_symb((2, 1))
+            symbolic_var = rc.array_symb(
+                tup=rc.shape(my_action_sqn_init), prototype=array_symb
             )
+
+            cost_function = lambda action_sqn: self.objective(action_sqn, observation)
+
+            cost_function = rc.lambda2symb(cost_function, symbolic_var)
 
             if constraint_functions:
                 constraints = self.create_constraints(
@@ -155,7 +145,7 @@ class Actor:
             )
 
         elif self.optimizer.engine == "SciPy":
-            cost_function = nc.func_to_lambda_with_params(
+            cost_function = rc.func_to_lambda_with_params(
                 self.objective, observation, var_prototype=my_action_sqn_init
             )
 
@@ -192,15 +182,19 @@ class Actor:
         # )
         # print(table)
         ##### DEBUG
-        return action_sqn_optimized[: self.dim_input]
+        self.action_prev = self.action
+        self.action = action_sqn_optimized[: self.dim_input]
+
+    def get_action(self):
+        return self.action
 
     def forward(self, w_actor, observation):
 
-        w_actor_reshaped = nc.reshape(
+        w_actor_reshaped = rc.reshape(
             w_actor, (self.dim_input, self.dim_actor_per_input)
         )
 
-        result = self.actor_model(w_actor_reshaped, observation, observation)
+        result = self.model(w_actor_reshaped, observation, observation)
 
         return result
 
@@ -219,7 +213,7 @@ class ActorMPC(Actor):
 
         """
 
-        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+        my_action_sqn = rc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
 
         observation_sqn = [observation]
 
@@ -227,13 +221,13 @@ class ActorMPC(Actor):
             observation, my_action_sqn
         )
 
-        observation_cur = nc.reshape(observation, [1, self.dim_output])
+        observation_cur = rc.reshape(observation, [1, self.dim_output])
 
-        observation_sqn = nc.vstack((observation_cur, observation_sqn_predicted))
+        observation_sqn = rc.vstack((observation_cur, observation_sqn_predicted))
 
         J = 0
         for k in range(self.Nactor):
-            J += self.gamma ** k * self.stage_obj(
+            J += self.gamma ** k * self.running_obj(
                 observation_sqn[k, :].T, my_action_sqn[k, :].T
             )
         return J
@@ -253,7 +247,7 @@ class ActorSQL(Actor):
 
         """
 
-        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+        my_action_sqn = rc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
 
         observation_sqn = [observation]
 
@@ -261,14 +255,15 @@ class ActorSQL(Actor):
             observation, my_action_sqn
         )
 
-        observation_sqn = nc.vstack(
-            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        observation_sqn = rc.vstack(
+            (rc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
         )
 
         J = 0
+
         for k in range(self.Nactor + 1):
             Q = self.critic(
-                observation_sqn[k, :], my_action_sqn[k, :], self.critic.weights,
+                observation_sqn[k, :], my_action_sqn[k, :], use_fixed_weights=True
             )
 
             J += Q
@@ -289,7 +284,7 @@ class ActorRQL(Actor):
 
         """
 
-        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+        my_action_sqn = rc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
 
         observation_sqn = [observation]
 
@@ -297,24 +292,26 @@ class ActorRQL(Actor):
             observation, my_action_sqn
         )
 
-        observation_sqn = nc.vstack(
-            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        observation_sqn = rc.vstack(
+            (rc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
         )
 
         J = 0
+
         for k in range(self.Nactor):
-            J += self.gamma ** k * self.stage_obj(
+            J += self.gamma ** k * self.running_obj(
                 observation_sqn[k, :], my_action_sqn[k, :]
             )
+
         J += self.critic(
-            observation_sqn[-1, :], my_action_sqn[-1, :], self.critic.weights
+            observation_sqn[-1, :], my_action_sqn[-1, :], use_fixed_weights=True
         )
         return J
 
 
 class ActorVI(Actor):
     def objective(
-        self, action_sqn, observation,
+        self, action, observation,
     ):
         """
         See class documentation.
@@ -326,7 +323,7 @@ class ActorVI(Actor):
 
         """
 
-        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+        my_action_sqn = rc.reshape(action, [1, self.dim_input])
 
         observation_sqn = [observation]
 
@@ -334,13 +331,14 @@ class ActorVI(Actor):
             observation, my_action_sqn
         )
 
-        observation_sqn = nc.vstack(
-            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        observation_sqn = rc.vstack(
+            (rc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
         )
 
-        J = self.stage_obj(observation_sqn[0, :], my_action_sqn[0, :]) + self.critic(
-            observation_sqn[1, :].T, self.critic.weights
+        J = self.running_obj(observation_sqn[0, :], my_action_sqn) + self.critic(
+            observation_sqn[1, :], use_fixed_weights=True
         )
+
         return J
 
 
@@ -351,9 +349,9 @@ class ActorSTAG(ActorVI):
 
     def get_optimized_action(self, observation, constraint_functions=(), t=None):
 
-        rep_action_prev = nc.rep_mat(self.action_prev, 1, self.Nactor + 1)
+        rep_action_prev = rc.rep_mat(self.action_prev, 1, self.Nactor + 1)
 
-        my_action_sqn_init = nc.reshape(
+        my_action_sqn_init = rc.reshape(
             rep_action_prev, [(self.Nactor + 1) * self.dim_input,],
         )
 
@@ -365,8 +363,8 @@ class ActorSTAG(ActorVI):
 
             observation_next = self.state_predictor.predict_state(observation, action)
 
-            critic_curr = self.critic(observation, self.critic.weights_prev)
-            critic_next = self.critic(observation_next, self.critic.weights)
+            critic_curr = self.critic(observation)
+            critic_next = self.critic(observation_next)
 
             return (
                 critic_next
@@ -375,11 +373,8 @@ class ActorSTAG(ActorVI):
             )
 
         if self.optimizer.engine == "CasADi":
-            cost_function, symbolic_var = nc.func_to_lambda_with_params(
-                self.objective,
-                observation,
-                var_prototype=my_action_sqn_init,
-                is_symbolic=True,
+            cost_function, symbolic_var = rc.func_to_lambda_with_params(
+                self.objective, observation, var_prototype=my_action_sqn_init
             )
 
             if constraint_functions:
@@ -391,7 +386,7 @@ class ActorSTAG(ActorVI):
                 lambda action: constr_stab_decay_action(action, observation) - self.eps
             )
 
-            constraints += (nc.lambda2symb(lambda_constr, symbolic_var),)
+            constraints += (rc.lambda2symb(lambda_constr, symbolic_var),)
 
             action_sqn_optimized = self.optimizer.optimize(
                 cost_function,
@@ -402,7 +397,7 @@ class ActorSTAG(ActorVI):
             )
 
         elif self.optimizer.engine == "SciPy":
-            cost_function = nc.func_to_lambda_with_params(
+            cost_function = rc.func_to_lambda_with_params(
                 self.objective, observation, var_prototype=my_action_sqn_init
             )
 
@@ -446,7 +441,7 @@ class ActorSTAG(ActorVI):
 
         """
 
-        my_action_sqn = nc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
+        my_action_sqn = rc.reshape(action_sqn, [self.Nactor + 1, self.dim_input])
 
         observation_sqn = [observation]
 
@@ -454,11 +449,24 @@ class ActorSTAG(ActorVI):
             observation, my_action_sqn
         )
 
-        observation_sqn = nc.vstack(
-            (nc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
+        observation_sqn = rc.vstack(
+            (rc.reshape(observation, [1, self.dim_output]), observation_sqn_predicted)
         )
 
-        J = self.stage_obj(observation_sqn[0, :], my_action_sqn[0, :]) + self.critic(
-            observation_sqn[1, :], self.critic.weights
+        J = self.running_obj(observation_sqn[0, :], my_action_sqn[0, :]) + self.critic(
+            observation_sqn[1, :], self.critic.weights, use_fixed_weights=True
         )
         return J
+
+
+class ActorTabular(ActorVI):
+    def __init__(self, dim_world, *args, action_space=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.action_space = action_space
+        self.action_table = rc.zeros(dim_world)
+
+    def update(self):
+
+        new_action_table = self.optimizer.optimize(self.objective, self.model.table)
+
+        self.model.update(new_action_table)

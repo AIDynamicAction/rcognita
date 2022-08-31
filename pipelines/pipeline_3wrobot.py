@@ -11,8 +11,6 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import csv
 import rcognita
-import numpy as np
-from rcognita.utilities import rep_mat
 
 from config_blueprints import Config3WRobot
 from pipeline_blueprints import PipelineWithDefaults
@@ -46,7 +44,7 @@ from rcognita import (
     models,
 )
 from datetime import datetime
-from rcognita.utilities import on_key_press
+from rcognita.utilities import on_key_press, rc
 
 
 class Pipeline3WRobot(PipelineWithDefaults):
@@ -132,7 +130,9 @@ class Pipeline3WRobot(PipelineWithDefaults):
                         ]
                     )
                     writer.writerow(["buffer_size", str(self.buffer_size)])
-                    writer.writerow(["stage_obj_struct", str(self.stage_obj_struct)])
+                    writer.writerow(
+                        ["running_obj_struct", str(self.running_obj_struct)]
+                    )
                     writer.writerow(["R1_diag", str(self.R1_diag)])
                     writer.writerow(["R2_diag", str(self.R2_diag)])
                     writer.writerow(["Ncritic", str(self.Ncritic)])
@@ -150,7 +150,7 @@ class Pipeline3WRobot(PipelineWithDefaults):
                             "alpha [rad]",
                             "v [m/s]",
                             "omega [rad/s]",
-                            "stage_obj",
+                            "running_obj",
                             "accum_obj",
                             "F [N]",
                             "M [N m]",
@@ -176,7 +176,7 @@ class Pipeline3WRobot(PipelineWithDefaults):
                 self.my_logger,
                 self.actor_optimizer,
                 self.critic_optimizer,
-                self.stage_objective,
+                self.running_objective,
             ),
             pars=(
                 self.state_init,
@@ -221,89 +221,6 @@ class Pipeline3WRobot(PipelineWithDefaults):
         my_animator.fig_sim.tight_layout()
 
         plt.show()
-
-    def main_loop_raw(self):
-
-        run_curr = 1
-        self.accum_obj_val = 0
-        datafile = self.datafiles[0]
-        t = t_prev = 0
-
-        while True:
-
-            self.my_simulator.sim_step()
-
-            t_prev = t
-
-            (t, _, observation, state_full,) = self.my_simulator.get_sim_step_data()
-
-            delta_t = t - t_prev
-
-            if self.save_trajectory:
-                self.trajectory.append(np.concatenate((state_full, t), axis=None))
-            if self.control_mode == "nominal":
-                action = self.my_ctrl_nominal.compute_action_sampled(t, observation)
-            else:
-                action = self.my_ctrl_benchm.compute_action_sampled(t, observation)
-
-            self.my_sys.receive_action(action)
-
-            xCoord = state_full[0]
-            yCoord = state_full[1]
-            alpha = state_full[2]
-            v = state_full[3]
-            omega = state_full[4]
-
-            stage_obj = self.stage_objective(observation, action)
-            self.upd_accum_obj(observation, action, delta_t)
-            accum_obj = self.accum_obj_val
-
-            if not self.no_print:
-                self.my_logger.print_sim_step(
-                    t, xCoord, yCoord, alpha, v, omega, stage_obj, accum_obj, action
-                )
-
-            if self.is_log:
-                self.my_logger.log_data_row(
-                    datafile,
-                    t,
-                    xCoord,
-                    yCoord,
-                    alpha,
-                    v,
-                    omega,
-                    stage_obj,
-                    accum_obj,
-                    action,
-                )
-
-            if t >= self.t1:
-                if not self.no_print:
-                    print(
-                        ".....................................Run {run:2d} done.....................................".format(
-                            run=run_curr
-                        )
-                    )
-
-                run_curr += 1
-
-                if run_curr > self.Nruns:
-                    break
-
-                if self.is_log:
-                    datafile = self.datafiles[run_curr - 1]
-
-                # Reset simulator
-                self.my_simulator.status = "running"
-                self.my_simulator.t = self.t0
-                self.my_simulator.observation = self.state_full_init
-
-                if self.control_mode != "nominal":
-                    self.my_ctrl_benchm.reset(self.t0)
-                else:
-                    self.my_ctrl_nominal.reset(self.t0)
-
-                accum_obj = 0
 
 
 def main():

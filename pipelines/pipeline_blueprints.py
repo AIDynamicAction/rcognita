@@ -1,12 +1,7 @@
 from abc import ABCMeta, abstractmethod
-from rcognita import (
-    controllers,
-    simulator,
-    state_predictors,
-    optimizers,
-    models,
-    objectives,
-)
+from rcognita import controllers, simulator, state_predictors, optimizers, objectives
+
+from rcognita.utilities import rc
 from rcognita.actors import (
     ActorSTAG,
     ActorMPC,
@@ -14,10 +9,18 @@ from rcognita.actors import (
     ActorSQL,
 )
 
-from rcognita.critics import (
-    CriticActionValue,
-    CriticSTAG,
+from rcognita.critics import CriticActionValue, CriticSTAG, CriticMPC
+
+from rcognita.models import (
+    ModelQuadLin,
+    ModelQuadratic,
+    ModelQuadNoMix,
+    ModelNN,
+    ModelQuadForm,
+    ModelSS,
 )
+
+# from rcognita.estimators import Estimator
 
 
 class AbstractPipeline(metaclass=ABCMeta):
@@ -77,7 +80,7 @@ class AbstractPipeline(metaclass=ABCMeta):
         
         """
 
-        self.accum_obj_val += self.stage_objective(observation, action) * delta
+        self.accum_obj_val += self.running_objective(observation, action) * delta
 
 
 class PipelineWithDefaults(AbstractPipeline):
@@ -91,23 +94,55 @@ class PipelineWithDefaults(AbstractPipeline):
         )
 
     def initialize_models(self):
-        if self.critic_struct == "NN":
-            self.critic_model = models.ModelNN(
-                self.dim_output, self.dim_input, dim_hidden=2
-            )
+        if self.control_mode == "STAG":
+            self.dim_critic_model_input = self.dim_output
         else:
-            self.critic_model = models.ModelPolynomial(model_name=self.critic_struct)
-        self.stage_obj_model = models.ModelQuadForm(R1=self.R1, R2=self.R2)
+            self.dim_critic_model_input = self.dim_input + self.dim_output
+
+        if self.critic_struct == "NN":
+            self.critic_model = ModelNN(self.dim_output, self.dim_input, dim_hidden=3)
+        else:
+            if self.critic_struct == "quad-lin":
+                self.critic_model = ModelQuadLin(self.dim_critic_model_input)
+            elif self.critic_struct == "quad-nomix":
+                self.critic_model = ModelQuadNoMix(self.dim_critic_model_input)
+            elif self.critic_struct == "quadratic":
+                self.critic_model = ModelQuadratic(self.dim_critic_model_input)
+
+        if self.actor_struct == "NN":
+            self.critic_model = ModelNN(self.dim_output, dim_hidden=3)
+        else:
+            if self.actor_struct == "quad-lin":
+                self.actor_model = ModelQuadLin(self.dim_output)
+            elif self.actor_struct == "quad-nomix":
+                self.actor_model = ModelQuadNoMix(self.dim_output)
+            elif self.actor_struct == "quadratic":
+                self.actor_model = ModelQuadratic(self.dim_output)
+
+        self.running_obj_model = ModelQuadForm(R1=self.R1, R2=self.R2)
+
+        A = rc.zeros([self.model_order, self.model_order])
+        B = rc.zeros([self.model_order, self.dim_input])
+        C = rc.zeros([self.dim_output, self.model_order])
+        D = rc.zeros([self.dim_output, self.dim_input])
+        x0est = rc.zeros(self.model_order)
+
+        self.model_SS = ModelSS(A, B, C, D, x0est)
+
+    # def estimator_initialization(self):
+    #     self.estimator = Estimator(
+    #         model_est_checks=self.model_est_checks, model=self.model_SS
+    #     )
 
     def initialize_objectives(self):
 
-        self.stage_objective = objectives.StageObjective(
-            stage_obj_model=self.stage_obj_model
+        self.running_objective = objectives.RunningObjective(
+            running_obj_model=self.running_obj_model
         )
 
     def initialize_optimizers(self):
         opt_options = {
-            "maxiter": 200,
+            "maxiter": 500,
             "maxfev": 5000,
             "disp": False,
             "adaptive": True,
@@ -129,32 +164,34 @@ class PipelineWithDefaults(AbstractPipeline):
                 dim_input=self.dim_input,
                 dim_output=self.dim_output,
                 buffer_size=self.buffer_size,
-                stage_obj=self.stage_objective,
+                running_obj=self.running_objective,
                 gamma=self.gamma,
                 optimizer=self.critic_optimizer,
-                critic_model=self.critic_model,
+                model=self.critic_model,
                 safe_ctrl=self.my_ctrl_nominal,
                 state_predictor=self.state_predictor,
             )
             Actor = ActorSTAG
 
         else:
-            self.critic = CriticActionValue(
-                Ncritic=self.Ncritic,
-                dim_input=self.dim_input,
-                dim_output=self.dim_output,
-                buffer_size=self.buffer_size,
-                stage_obj=self.stage_objective,
-                gamma=self.gamma,
-                optimizer=self.critic_optimizer,
-                critic_model=self.critic_model,
-            )
             if self.control_mode == "MPC":
                 Actor = ActorMPC
-            elif self.control_mode == "RQL":
-                Actor = ActorRQL
-            elif self.control_mode == "SQL":
-                Actor = ActorSQL
+                self.critic = CriticMPC()
+            else:
+                self.critic = CriticActionValue(
+                    Ncritic=self.Ncritic,
+                    dim_input=self.dim_input,
+                    dim_output=self.dim_output,
+                    buffer_size=self.buffer_size,
+                    running_obj=self.running_objective,
+                    gamma=self.gamma,
+                    optimizer=self.critic_optimizer,
+                    model=self.critic_model,
+                )
+                if self.control_mode == "RQL":
+                    Actor = ActorRQL
+                elif self.control_mode == "SQL":
+                    Actor = ActorSQL
 
         self.actor = Actor(
             self.Nactor,
@@ -165,11 +202,12 @@ class PipelineWithDefaults(AbstractPipeline):
             state_predictor=self.state_predictor,
             optimizer=self.actor_optimizer,
             critic=self.critic,
-            stage_obj=self.stage_objective,
+            running_obj=self.running_objective,
+            model=self.actor_model,
         )
 
     def initialize_controller(self):
-        self.my_ctrl_benchm = controllers.CtrlOptPred(
+        self.my_ctrl_benchm = controllers.RLController(
             action_init=self.action_init,
             t0=self.t0,
             sampling_time=self.dt,
@@ -207,6 +245,54 @@ class PipelineWithDefaults(AbstractPipeline):
             is_disturb=self.is_disturb,
             is_dyn_ctrl=self.is_dyn_ctrl,
         )
+
+    def main_loop_raw(self):
+
+        run_curr = 1
+        self.accum_obj_val = 0
+        datafile = self.datafiles[0]
+        t = t_prev = 0
+
+        while True:
+
+            self.my_simulator.sim_step()
+
+            t_prev = t
+
+            (t, _, observation, state_full,) = self.my_simulator.get_sim_step_data()
+
+            delta_t = t - t_prev
+
+            if self.save_trajectory:
+                self.trajectory.append(rc.concatenate((state_full, t), axis=None))
+            if self.control_mode == "nominal":
+                action = self.my_ctrl_nominal.compute_action_sampled(t, observation)
+            else:
+                action = self.my_ctrl_benchm.compute_action_sampled(t, observation)
+
+            self.my_sys.receive_action(action)
+
+            running_obj = self.running_objective(observation, action)
+            self.upd_accum_obj(observation, action, delta_t)
+            accum_obj = self.accum_obj_val
+
+            if not self.no_print:
+                self.my_logger.print_sim_step(
+                    t, state_full, action, running_obj, accum_obj
+                )
+
+            if self.is_log:
+                self.my_logger.log_data_row(
+                    datafile, t, state_full, action, running_obj, accum_obj,
+                )
+
+            if t >= self.t1:
+                if not self.no_print:
+                    print(
+                        ".....................................Run {run:2d} done.....................................".format(
+                            run=run_curr
+                        )
+                    )
 
     def execute_pipeline(self, **kwargs):
         self.load_config()

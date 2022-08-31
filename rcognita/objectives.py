@@ -1,4 +1,4 @@
-from .utilities import nc
+from .utilities import rc
 from abc import ABC, abstractmethod
 from torch.nn import Module
 import actors
@@ -13,9 +13,9 @@ class Objective(ABC):
         pass
 
 
-class StageObjective(Objective):
-    def __init__(self, stage_obj_model):
-        self.stage_obj_model = stage_obj_model
+class RunningObjective(Objective):
+    def __init__(self, running_obj_model):
+        self.running_obj_model = running_obj_model
 
     def __call__(self, observation, action):
         """
@@ -23,26 +23,18 @@ class StageObjective(Objective):
         
         See class documentation.
         """
-        observation = nc.to_col(observation)
-        action = nc.to_col(action)
+        observation = rc.to_col(observation)
+        action = rc.to_col(action)
 
-        chi = nc.concatenate([observation, action])
+        chi = rc.concatenate([observation, action])
 
-        stage_obj = self.stage_obj_model(chi, chi)
+        running_obj = self.running_obj_model(chi, chi)
 
-        return stage_obj
+        return running_obj
 
+class TabularObjective(Objective):
 
-class TorchMPCObjective(Module, actors.ActorMPC):
-    def forward(self, action_sqn, observation):
-        self.objective(action_sqn, observation)
-
-
-class TorchSQLObjective(Module, actors.ActorMPC):
-    def forward(self, action_sqn, observation):
-        self.objective(action_sqn, observation)
+    def __init__(self, dim_state_space):
 
 
-class TorchRQLObjective(Module, actors.ActorMPC):
-    def forward(self, action_sqn, observation):
-        self.objective(action_sqn, observation)
+

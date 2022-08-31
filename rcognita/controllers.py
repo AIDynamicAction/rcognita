@@ -11,7 +11,7 @@ Remarks:
 
 """
 
-from .utilities import dss_sim, push_vec, nc
+from .utilities import rc
 from . import models
 import numpy as np
 
@@ -20,24 +20,12 @@ from numpy.random import rand
 from scipy.optimize import minimize
 from abc import ABC, abstractmethod
 from casadi import nlpsol
-import warnings
+
 from casadi import Function
 from optimizers import GradientOptimizer
 
 # For debugging purposes
 from tabulate import tabulate
-
-try:
-    import sippy
-except ModuleNotFoundError:
-    warnings.warn_explicit(
-        "\nImporting sippy failed. You may still use rcognita, but"
-        + " without model identification capability. \nRead on how"
-        + " to install sippy at https://github.com/AIDynamicAction/rcognita\n",
-        UserWarning,
-        __file__,
-        33,
-    )
 
 
 class OptimalController(ABC):
@@ -81,15 +69,15 @@ class OptimalController(ABC):
 
         if len(action_init) == 0:
             self.action_prev = self.action_min / 10
-            self.action_sqn_init = nc.rep_mat(
+            self.action_sqn_init = rc.rep_mat(
                 self.action_min / 10, 1, self.actor.Nactor
             )
         else:
             self.action_prev = action_init
-            self.action_sqn_init = nc.rep_mat(action_init, 1, self.actor.Nactor)
+            self.action_sqn_init = rc.rep_mat(action_init, 1, self.actor.Nactor)
 
-        self.action_buffer = nc.zeros([buffer_size, self.dim_input])
-        self.observation_buffer = nc.zeros([buffer_size, self.dim_output])
+        self.action_buffer = rc.zeros([buffer_size, self.dim_input])
+        self.observation_buffer = rc.zeros([buffer_size, self.dim_output])
 
         # Exogeneous model's things
         self.state_dyn = state_dyn
@@ -105,18 +93,6 @@ class OptimalController(ABC):
         self.model_order = model_order
         self.model_est_checks = model_est_checks
 
-        A = nc.zeros([self.model_order, self.model_order])
-        B = nc.zeros([self.model_order, self.dim_input])
-        C = nc.zeros([self.dim_output, self.model_order])
-        D = nc.zeros([self.dim_output, self.dim_input])
-        x0est = nc.zeros(self.model_order)
-
-        self.my_model = models.ModelSS(A, B, C, D, x0est)
-
-        self.model_stack = []
-        for k in range(self.model_est_checks):
-            self.model_stack.append(self.my_model)
-
         # RL elements
         self.critic_clock = t0
         self.critic_period = critic_period
@@ -126,6 +102,10 @@ class OptimalController(ABC):
         self.accum_obj_val = 0
 
         self.control_mode = self.actor.control_mode
+
+    def estimate_model(self, observation, t):
+        if self.is_est_model or self.mode in ["RQL", "SQL"]:
+            self.estimator.estimate_model(observation, t)
 
     def reset(self, t0):
         """
@@ -137,117 +117,6 @@ class OptimalController(ABC):
         self.ctrl_clock = t0
         self.action_prev = self.action_min / 10
 
-    def _estimate_model(self, t, observation):
-        """
-        Estimate model parameters by accumulating data buffers ``action_buffer`` and ``observation_buffer``.
-        
-        """
-
-        time_in_sample = t - self.ctrl_clock
-
-        if time_in_sample >= self.sampling_time:  # New sample
-            # Update buffers when using RL or requiring estimated model
-            if self.is_est_model or self.mode in ["RQL", "SQL"]:
-                time_in_est_period = t - self.est_clock
-
-                # Estimate model if required
-                if (time_in_est_period >= self.model_est_period) and self.is_est_model:
-                    # Update model estimator's internal clock
-                    self.est_clock = t
-
-                    try:
-                        # Using Github:CPCLAB-UNIPI/SIPPY
-                        # method: N4SID, MOESP, CVA, PARSIM-P, PARSIM-S, PARSIM-K
-                        SSest = sippy.system_identification(
-                            self.observation_buffer,
-                            self.action_buffer,
-                            id_method="N4SID",
-                            SS_fixed_order=self.model_order,
-                            SS_D_required=False,
-                            SS_A_stability=False,
-                            # SS_f=int(self.buffer_size/12),
-                            # SS_p=int(self.buffer_size/10),
-                            SS_PK_B_reval=False,
-                            tsample=self.sampling_time,
-                        )
-
-                        self.my_model.upd_pars(SSest.A, SSest.B, SSest.C, SSest.D)
-
-                        # ToDo: train an NN via Torch
-                        # NN_wgts = NN_train(...)
-
-                    except:
-                        print("Model estimation problem")
-                        self.my_model.upd_pars(
-                            np.zeros([self.model_order, self.model_order]),
-                            np.zeros([self.model_order, self.dim_input]),
-                            np.zeros([self.dim_output, self.model_order]),
-                            np.zeros([self.dim_output, self.dim_input]),
-                        )
-
-                    # Model checks
-                    if self.model_est_checks > 0:
-                        # Update estimated model parameter stacks
-                        self.model_stack.pop(0)
-                        self.model_stack.append(self.model)
-
-                        # Perform check of stack of models and pick the best
-                        tot_abs_err_curr = 1e8
-                        for k in range(self.model_est_checks):
-                            A, B, C, D = (
-                                self.model_stack[k].A,
-                                self.model_stack[k].B,
-                                self.model_stack[k].C,
-                                self.model_stack[k].D,
-                            )
-                            x0est, _, _, _ = np.linalg.lstsq(C, observation)
-                            Yest, _ = dss_sim(
-                                A, B, C, D, self.action_buffer, x0est, observation
-                            )
-                            mean_err = np.mean(Yest - self.observation_buffer, axis=0)
-
-                            # DEBUG ===================================================================
-                            # ================================Interm output of model prediction quality
-                            # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
-                            # dataRow = []
-                            # for k in range(dim_output):
-                            #     dataRow.append( mean_err[k] )
-                            # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
-                            # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
-                            # print( table )
-                            # /DEBUG ===================================================================
-
-                            tot_abs_err = np.sum(np.abs(mean_err))
-                            if tot_abs_err <= tot_abs_err_curr:
-                                tot_abs_err_curr = tot_abs_err
-                                self.my_model.upd_pars(
-                                    SSest.A, SSest.B, SSest.C, SSest.D
-                                )
-
-                        # DEBUG ===================================================================
-                        # ==========================================Print quality of the best model
-                        # R  = '\033[31m'
-                        # Bl  = '\033[30m'
-                        # x0est,_,_,_ = np.linalg.lstsq(ctrlStat.C, observation)
-                        # Yest,_ = dssSim(ctrlStat.A, ctrlStat.B, ctrlStat.C, ctrlStat.D, ctrlStat.action_buffer, x0est, observation)
-                        # mean_err = np.mean(Yest - ctrlStat.observation_buffer, axis=0)
-                        # headerRow = ['diff y1', 'diff y2', 'diff y3', 'diff y4', 'diff y5']
-                        # dataRow = []
-                        # for k in range(dim_output):
-                        #     dataRow.append( mean_err[k] )
-                        # rowFormat = ('8.5f', '8.5f', '8.5f', '8.5f', '8.5f')
-                        # table = tabulate([headerRow, dataRow], floatfmt=rowFormat, headers='firstrow', tablefmt='grid')
-                        # print(R+table+Bl)
-                        # /DEBUG ===================================================================
-
-            # Update initial state estimate
-            x0est, _, _, _ = np.linalg.lstsq(self.my_model.C, observation)
-            self.my_model.updateIC(x0est)
-
-            if t >= self.model_est_stage:
-                # Drop probing noise
-                self.is_prob_noise = 0
-
     def compute_action_sampled(self, t, observation, constraints=()):
 
         time_in_sample = t - self.ctrl_clock
@@ -255,6 +124,8 @@ class OptimalController(ABC):
         is_critic_update = timeInCriticPeriod >= self.critic_period
 
         if time_in_sample >= self.sampling_time:  # New sample
+            if self.is_est_model:
+                self.estimate_model(observation, t)
             # Update controller's internal clock
             self.ctrl_clock = t
             # DEBUG ==============================
@@ -274,40 +145,25 @@ class OptimalController(ABC):
         pass
 
 
-class CtrlOptPred(OptimalController):
+class RLController(OptimalController):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def compute_action(
         self, t, observation, is_critic_update=False,
     ):
+        # Critic
 
-        if self.control_mode != "MPC":
-            # Critic
+        # Update data buffers
+        self.critic.update_buffers(observation, self.actor.action_prev)
 
-            # Update data buffers
-            self.critic.update_buffers(observation, self.actor.action_prev)
+        if is_critic_update:
+            # Update critic's internal clock
+            self.critic_clock = t
+            self.critic.update(t=t)
 
-            if is_critic_update:
-                # Update critic's internal clock
-                self.critic_clock = t
-
-                self.critic.weights = self.critic.get_optimized_weights(t=t)
-
-                # Update initial critic weight for the optimizer. In general, this assignment is subject to tuning
-                # self.weights_init = self.weights_prev
-
-            else:
-                self.critic.weights = self.critic.weights_prev
-
-            # Actor. Apply control when model estimation phase is over
-            if self.is_est_model and self.is_prob_noise:
-                return self.prob_noise_pow * (rand(self.dim_input) - 0.5)
-
-        action = self.actor.get_optimized_action(observation)
-
-        self.critic.weights_prev = self.critic.weights
-        self.actor.action_prev = action
+        self.actor.update(observation)
+        action = self.actor.get_action()
 
         return action
 
@@ -355,7 +211,7 @@ class CtrlNominal3WRobot:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.action_prev = nc.zeros(2)
+        self.action_prev = rc.zeros(2)
 
     def reset(self, t0):
 
@@ -364,7 +220,7 @@ class CtrlNominal3WRobot:
         
         """
         self.ctrl_clock = t0
-        self.action_prev = nc.zeros(2)
+        self.action_prev = rc.zeros(2)
 
     def _zeta(self, xNI, theta):
 
@@ -397,27 +253,27 @@ class CtrlNominal3WRobot:
         #                                            sigma~
 
         sigma_tilde = (
-            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + np.sqrt(nc.abs(xNI[2]))
+            xNI[0] * rc.cos(theta) + xNI[1] * rc.sin(theta) + np.sqrt(rc.abs(xNI[2]))
         )
 
-        nablaF = nc.zeros(3)
+        nablaF = rc.zeros(3)
 
         nablaF[0] = (
-            4 * xNI[0] ** 3 - 2 * nc.abs(xNI[2]) ** 3 * nc.cos(theta) / sigma_tilde ** 3
+            4 * xNI[0] ** 3 - 2 * rc.abs(xNI[2]) ** 3 * rc.cos(theta) / sigma_tilde ** 3
         )
 
         nablaF[1] = (
-            4 * xNI[1] ** 3 - 2 * nc.abs(xNI[2]) ** 3 * nc.sin(theta) / sigma_tilde ** 3
+            4 * xNI[1] ** 3 - 2 * rc.abs(xNI[2]) ** 3 * rc.sin(theta) / sigma_tilde ** 3
         )
 
         nablaF[2] = (
             (
-                3 * xNI[0] * nc.cos(theta)
-                + 3 * xNI[1] * nc.sin(theta)
-                + 2 * np.sqrt(nc.abs(xNI[2]))
+                3 * xNI[0] * rc.cos(theta)
+                + 3 * xNI[1] * rc.sin(theta)
+                + 2 * rc.sqrt(rc.abs(xNI[2]))
             )
             * xNI[2] ** 2
-            * nc.sign(xNI[2])
+            * rc.sign(xNI[2])
             / sigma_tilde ** 3
         )
 
@@ -429,19 +285,19 @@ class CtrlNominal3WRobot:
         Stabilizing controller for NI-part.
 
         """
-        kappa_val = nc.zeros(2)
+        kappa_val = rc.zeros(2)
 
-        G = nc.zeros([3, 2])
+        G = rc.zeros([3, 2])
         G[:, 0] = [1, 0, xNI[1]]
         G[:, 1] = [0, 1, -xNI[0]]
 
         zeta_val = self._zeta(xNI, theta)
 
-        kappa_val[0] = -nc.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * nc.sign(
-            np.dot(zeta_val, G[:, 0])
+        kappa_val[0] = -rc.abs(rc.dot(zeta_val, G[:, 0])) ** (1 / 3) * rc.sign(
+            rc.dot(zeta_val, G[:, 0])
         )
-        kappa_val[1] = -nc.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * nc.sign(
-            np.dot(zeta_val, G[:, 1])
+        kappa_val[1] = -rc.abs(rc.dot(zeta_val, G[:, 1])) ** (1 / 3) * rc.sign(
+            rc.dot(zeta_val, G[:, 1])
         )
 
         return kappa_val
@@ -454,14 +310,14 @@ class CtrlNominal3WRobot:
         """
 
         sigma_tilde = (
-            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + nc.sqrt(nc.abs(xNI[2]))
+            xNI[0] * rc.cos(theta) + xNI[1] * rc.sin(theta) + rc.sqrt(rc.abs(xNI[2]))
         )
 
-        F = xNI[0] ** 4 + xNI[1] ** 4 + nc.abs(xNI[2]) ** 3 / sigma_tilde ** 2
+        F = xNI[0] ** 4 + xNI[1] ** 4 + rc.abs(xNI[2]) ** 3 / sigma_tilde ** 2
 
         z = eta - self._kappa(xNI, theta)
 
-        return F + 1 / 2 * nc.dot(z, z)
+        return F + 1 / 2 * rc.dot(z, z)
 
     def _minimizer_theta(self, xNI, eta):
         thetaInit = 0
@@ -496,8 +352,8 @@ class CtrlNominal3WRobot:
 
         """
 
-        xNI = nc.zeros(3)
-        eta = nc.zeros(2)
+        xNI = rc.zeros(3)
+        eta = rc.zeros(2)
 
         xc = coords_Cart[0]
         yc = coords_Cart[1]
@@ -506,13 +362,13 @@ class CtrlNominal3WRobot:
         omega = coords_Cart[4]
 
         xNI[0] = alpha
-        xNI[1] = xc * nc.cos(alpha) + yc * nc.sin(alpha)
-        xNI[2] = -2 * (yc * nc.cos(alpha) - xc * nc.sin(alpha)) - alpha * (
-            xc * nc.cos(alpha) + yc * nc.sin(alpha)
+        xNI[1] = xc * rc.cos(alpha) + yc * rc.sin(alpha)
+        xNI[2] = -2 * (yc * rc.cos(alpha) - xc * rc.sin(alpha)) - alpha * (
+            xc * rc.cos(alpha) + yc * rc.sin(alpha)
         )
 
         eta[0] = omega
-        eta[1] = (yc * nc.cos(alpha) - xc * nc.sin(alpha)) * omega + v
+        eta[1] = (yc * rc.cos(alpha) - xc * rc.sin(alpha)) * omega + v
 
         return [xNI, eta]
 
@@ -532,7 +388,7 @@ class CtrlNominal3WRobot:
 
         """
 
-        uCart = nc.zeros(2)
+        uCart = rc.zeros(2)
 
         uCart[0] = self.m * (
             uNI[1]
@@ -629,7 +485,7 @@ class CtrlNominal3WRobotNI:
         self.ctrl_clock = t0
         self.sampling_time = sampling_time
 
-        self.action_prev = nc.zeros(2)
+        self.action_prev = rc.zeros(2)
 
     def reset(self, t0):
 
@@ -638,7 +494,7 @@ class CtrlNominal3WRobotNI:
         
         """
         self.ctrl_clock = t0
-        self.action_prev = nc.zeros(2)
+        self.action_prev = rc.zeros(2)
 
     def _zeta(self, xNI):
 
@@ -672,11 +528,11 @@ class CtrlNominal3WRobotNI:
 
         sigma = np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) + np.sqrt(abs(xNI[2]))
 
-        nablaL = nc.zeros(3)
+        nablaL = rc.zeros(3)
 
         nablaL[0] = (
             4 * xNI[0] ** 3
-            + nc.abs(xNI[2]) ** 3
+            + rc.abs(xNI[2]) ** 3
             / sigma ** 3
             * 1
             / np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) ** 3
@@ -685,39 +541,39 @@ class CtrlNominal3WRobotNI:
         )
         nablaL[1] = (
             4 * xNI[1] ** 3
-            + nc.abs(xNI[2]) ** 3
+            + rc.abs(xNI[2]) ** 3
             / sigma ** 3
             * 1
             / np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) ** 3
             * 2
             * xNI[1]
         )
-        nablaL[2] = 3 * nc.abs(xNI[2]) ** 2 * nc.sign(xNI[2]) + nc.abs(
+        nablaL[2] = 3 * rc.abs(xNI[2]) ** 2 * rc.sign(xNI[2]) + rc.abs(
             xNI[2]
-        ) ** 3 / sigma ** 3 * 1 / np.sqrt(nc.abs(xNI[2])) * nc.sign(xNI[2])
+        ) ** 3 / sigma ** 3 * 1 / np.sqrt(rc.abs(xNI[2])) * rc.sign(xNI[2])
 
         theta = 0
 
         sigma_tilde = (
-            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + np.sqrt(nc.abs(xNI[2]))
+            xNI[0] * rc.cos(theta) + xNI[1] * rc.sin(theta) + np.sqrt(rc.abs(xNI[2]))
         )
 
-        nablaF = nc.zeros(3)
+        nablaF = rc.zeros(3)
 
         nablaF[0] = (
-            4 * xNI[0] ** 3 - 2 * nc.abs(xNI[2]) ** 3 * nc.cos(theta) / sigma_tilde ** 3
+            4 * xNI[0] ** 3 - 2 * rc.abs(xNI[2]) ** 3 * rc.cos(theta) / sigma_tilde ** 3
         )
         nablaF[1] = (
-            4 * xNI[1] ** 3 - 2 * nc.abs(xNI[2]) ** 3 * nc.sin(theta) / sigma_tilde ** 3
+            4 * xNI[1] ** 3 - 2 * rc.abs(xNI[2]) ** 3 * rc.sin(theta) / sigma_tilde ** 3
         )
         nablaF[2] = (
             (
-                3 * xNI[0] * nc.cos(theta)
-                + 3 * xNI[1] * nc.sin(theta)
-                + 2 * np.sqrt(nc.abs(xNI[2]))
+                3 * xNI[0] * rc.cos(theta)
+                + 3 * xNI[1] * rc.sin(theta)
+                + 2 * np.sqrt(rc.abs(xNI[2]))
             )
             * xNI[2] ** 2
-            * nc.sign(xNI[2])
+            * rc.sign(xNI[2])
             / sigma_tilde ** 3
         )
 
@@ -732,19 +588,19 @@ class CtrlNominal3WRobotNI:
         Stabilizing controller for NI-part.
 
         """
-        kappa_val = nc.zeros(2)
+        kappa_val = rc.zeros(2)
 
-        G = nc.zeros([3, 2])
-        G[:, 0] = nc.array([1, 0, xNI[1]], prototype=G)
-        G[:, 1] = nc.array([0, 1, -xNI[0]], prototype=G)
+        G = rc.zeros([3, 2])
+        G[:, 0] = rc.array([1, 0, xNI[1]], prototype=G)
+        G[:, 1] = rc.array([0, 1, -xNI[0]], prototype=G)
 
         zeta_val = self._zeta(xNI)
 
-        kappa_val[0] = -nc.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * nc.sign(
-            nc.dot(zeta_val, G[:, 0])
+        kappa_val[0] = -rc.abs(np.dot(zeta_val, G[:, 0])) ** (1 / 3) * rc.sign(
+            rc.dot(zeta_val, G[:, 0])
         )
-        kappa_val[1] = -nc.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * nc.sign(
-            nc.dot(zeta_val, G[:, 1])
+        kappa_val[1] = -rc.abs(np.dot(zeta_val, G[:, 1])) ** (1 / 3) * rc.sign(
+            rc.dot(zeta_val, G[:, 1])
         )
 
         return kappa_val
@@ -757,10 +613,10 @@ class CtrlNominal3WRobotNI:
         """
 
         sigma_tilde = (
-            xNI[0] * nc.cos(theta) + xNI[1] * nc.sin(theta) + np.sqrt(nc.abs(xNI[2]))
+            xNI[0] * rc.cos(theta) + xNI[1] * rc.sin(theta) + np.sqrt(rc.abs(xNI[2]))
         )
 
-        F = xNI[0] ** 4 + xNI[1] ** 4 + nc.abs(xNI[2]) ** 3 / sigma_tilde ** 2
+        F = xNI[0] ** 4 + xNI[1] ** 4 + rc.abs(xNI[2]) ** 3 / sigma_tilde ** 2
 
         z = eta - self._kappa(xNI, theta)
 
@@ -773,16 +629,16 @@ class CtrlNominal3WRobotNI:
 
         """
 
-        xNI = nc.zeros(3)
+        xNI = rc.zeros(3)
 
         xc = coords_Cart[0]
         yc = coords_Cart[1]
         alpha = coords_Cart[2]
 
         xNI[0] = alpha
-        xNI[1] = xc * nc.cos(alpha) + yc * nc.sin(alpha)
-        xNI[2] = -2 * (yc * nc.cos(alpha) - xc * nc.sin(alpha)) - alpha * (
-            xc * nc.cos(alpha) + yc * nc.sin(alpha)
+        xNI[1] = xc * rc.cos(alpha) + yc * rc.sin(alpha)
+        xNI[2] = -2 * (yc * rc.cos(alpha) - xc * rc.sin(alpha)) - alpha * (
+            xc * rc.cos(alpha) + yc * rc.sin(alpha)
         )
 
         return xNI
@@ -794,7 +650,7 @@ class CtrlNominal3WRobotNI:
 
         """
 
-        uCart = nc.zeros(2)
+        uCart = rc.zeros(2)
 
         uCart[0] = uNI[1] + 1 / 2 * uNI[0] * (xNI[2] + xNI[0] * xNI[1])
         uCart[1] = uNI[0]
@@ -858,6 +714,6 @@ class CtrlNominal3WRobotNI:
 
         xNI = self._Cart2NH(observation)
 
-        sigma = np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) + np.sqrt(nc.abs(xNI[2]))
+        sigma = np.sqrt(xNI[0] ** 2 + xNI[1] ** 2) + np.sqrt(rc.abs(xNI[2]))
 
-        return xNI[0] ** 4 + xNI[1] ** 4 + nc.abs(xNI[2]) ** 3 / sigma ** 2
+        return xNI[0] ** 4 + xNI[1] ** 4 + rc.abs(xNI[2]) ** 3 / sigma ** 2

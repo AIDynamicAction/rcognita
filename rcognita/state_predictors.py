@@ -1,7 +1,7 @@
 import numpy as np
 from abc import ABCMeta, abstractmethod
 
-from .utilities import nc
+from .utilities import rc
 
 
 class BaseStatePredictor(metaclass=ABCMeta):
@@ -30,7 +30,7 @@ class EulerStatePredictor(BaseStatePredictor):
 
     def predict_state_sqn(self, observation, my_action_sqn):
 
-        observation_sqn = nc.zeros(
+        observation_sqn = rc.zeros(
             [self.Nsteps, self.dim_output], prototype=my_action_sqn
         )
         current_observation = observation
@@ -41,3 +41,14 @@ class EulerStatePredictor(BaseStatePredictor):
             observation_sqn[k, :] = self.sys_out(next_observation)
             current_observation = next_observation
         return observation_sqn
+
+
+class TrivialStatePredictor(BaseStatePredictor):
+    def __init__(self, state_dyn):
+        self.state_dyn = state_dyn
+
+    def predict_state(self, current_state, action):
+        return self.state_dyn(current_state, action)
+
+    def predict_state_sqn(self, current_state, action):
+        return self.predict_state(current_state, action)

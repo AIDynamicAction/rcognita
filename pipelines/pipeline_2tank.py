@@ -11,8 +11,6 @@ import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import csv
 import rcognita
-import numpy as np
-from rcognita.utilities import rep_mat
 
 from config_blueprints import Config2Tank
 from pipeline_blueprints import AbstractPipeline
@@ -82,8 +80,8 @@ class Pipeline2Tank(AbstractPipeline):
         )
 
     def initialize_objectives(self):
-        self.objective = objectives.StageObjective(
-            stage_obj_model=models.ModelQuadForm(R1=self.R1, R2=self.R2)
+        self.objective = objectives.RunningObjective(
+            running_obj_model=models.ModelQuadForm(R1=self.R1, R2=self.R2)
         )
 
     def initialize_optimizers(self):
@@ -128,10 +126,10 @@ class Pipeline2Tank(AbstractPipeline):
             dim_input=self.dim_input,
             dim_output=self.dim_output,
             buffer_size=self.buffer_size,
-            stage_obj=self.stage_objective,
+            running_obj=self.running_objective,
             gamma=self.gamma,
             optimizer=self.critic_optimizer,
-            critic_model=models.ModelPolynomial(model_name=self.critic_struct),
+            model=models.ModelPolynomial(model_name=self.critic_struct),
             safe_ctrl=self.my_ctrl_nominal,
             state_predictor=self.state_predictor,
         )
@@ -144,11 +142,11 @@ class Pipeline2Tank(AbstractPipeline):
             state_predictor=self.state_predictor,
             optimizer=self.actor_optimizer,
             critic=self.critic,
-            stage_obj=self.stage_objective,
+            running_obj=self.running_objective,
         )
 
     def initialize_controller(self):
-        self.my_ctrl_benchm = controllers.CtrlOptPred(
+        self.my_ctrl_benchm = controllers.RLController(
             action_init=self.action_init,
             t0=self.t0,
             sampling_time=self.dt,
@@ -165,7 +163,7 @@ class Pipeline2Tank(AbstractPipeline):
             critic_period=self.critic_period,
             actor=self.actor,
             critic=self.critic,
-            stage_obj_pars=[self.R1],
+            running_obj_pars=[self.R1],
             observation_target=[],
         )
 
@@ -244,7 +242,9 @@ class Pipeline2Tank(AbstractPipeline):
                         ]
                     )
                     writer.writerow(["buffer_size", str(self.buffer_size)])
-                    writer.writerow(["stage_obj_struct", str(self.stage_obj_struct)])
+                    writer.writerow(
+                        ["running_obj_struct", str(self.running_obj_struct)]
+                    )
                     writer.writerow(["R1_diag", str(self.R1_diag)])
                     writer.writerow(["R2_diag", str(self.R2_diag)])
                     writer.writerow(["Ncritic", str(self.Ncritic)])
@@ -255,7 +255,7 @@ class Pipeline2Tank(AbstractPipeline):
                     writer.writerow(["critic_struct", str(self.critic_struct)])
                     writer.writerow(["actor_struct", str(self.actor_struct)])
                     writer.writerow(
-                        ["t [s]", "h1", "h2", "p", "stage_obj", "accum_obj"]
+                        ["t [s]", "h1", "h2", "p", "running_obj", "accum_obj"]
                     )
 
         # Do not display annoying warnings when print is on
@@ -337,15 +337,15 @@ class Pipeline2Tank(AbstractPipeline):
             h2 = state_full[1]
             p = action
 
-            stage_obj = self.my_ctrl_benchm.stage_obj(observation, action)
+            running_obj = self.my_ctrl_benchm.running_obj(observation, action)
             accum_obj = self.my_ctrl_benchm.accum_obj_val
 
             if not self.no_print:
-                self.my_logger.print_sim_step(t, h1, h2, p, stage_obj, accum_obj)
+                self.my_logger.print_sim_step(t, h1, h2, p, running_obj, accum_obj)
 
             if self.is_log:
                 self.my_logger.log_data_row(
-                    datafile, t, h1, h2, p, stage_obj, accum_obj
+                    datafile, t, h1, h2, p, running_obj, accum_obj
                 )
 
             if t >= self.t1:

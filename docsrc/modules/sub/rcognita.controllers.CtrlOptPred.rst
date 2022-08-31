@@ -1,9 +1,9 @@
-rcognita.controllers.CtrlOptPred
+rcognita.controllers.RLController
 ================================
 
 .. currentmodule:: rcognita.controllers
 
-.. autoclass:: CtrlOptPred
+.. autoclass:: RLController
 
    
    .. automethod:: __init__
@@ -13,12 +13,12 @@ rcognita.controllers.CtrlOptPred
 
    .. autosummary::
    
-      ~CtrlOptPred.__init__
-      ~CtrlOptPred.compute_action
-      ~CtrlOptPred.receive_sys_state
-      ~CtrlOptPred.reset
-      ~CtrlOptPred.stage_obj
-      ~CtrlOptPred.upd_accum_obj
+      ~RLController.__init__
+      ~RLController.compute_action
+      ~RLController.receive_sys_state
+      ~RLController.reset
+      ~RLController.running_obj
+      ~RLController.upd_accum_obj
    
    
 

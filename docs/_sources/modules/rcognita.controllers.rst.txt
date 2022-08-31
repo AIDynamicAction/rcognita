@@ -28,7 +28,7 @@
    
       CtrlNominal3WRobot
       CtrlNominal3WRobotNI
-      CtrlOptPred
+      RLController
       CtrlRLStab
    
    

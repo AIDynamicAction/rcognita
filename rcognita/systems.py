@@ -14,7 +14,7 @@ Remarks:
 from calendar import c
 import numpy as np
 from numpy.random import randn
-from .utilities import nc
+from .utilities import rc
 
 
 class System:
@@ -187,7 +187,7 @@ class System:
         | ``sys_type = "discr_prob"`` : :math:`action^+ \sim P_U(action^+|action, observation)`        
         
         """
-        Daction = nc.zeros(self.dim_input)
+        Daction = rc.zeros(self.dim_input)
 
         return Daction
 
@@ -324,9 +324,9 @@ class Sys3WRobot(System):
 
         m, I = self.pars[0], self.pars[1]
 
-        Dstate = nc.zeros(self.dim_state, prototype=action)
-        Dstate[0] = state[3] * nc.cos(state[2])
-        Dstate[1] = state[3] * nc.sin(state[2])
+        Dstate = rc.zeros(self.dim_state, prototype=action)
+        Dstate[0] = state[3] * rc.cos(state[2])
+        Dstate[1] = state[3] * rc.sin(state[2])
         Dstate[2] = state[4]
 
         if self.is_disturb and (disturb != []):
@@ -354,7 +354,7 @@ class Sys3WRobot(System):
         ``pars_disturb = [sigma_disturb, mu_disturb, tau_disturb]``, with each being an array of shape ``[dim_disturb, ]``
         
         """
-        Ddisturb = nc.zeros(self.dim_disturb)
+        Ddisturb = rc.zeros(self.dim_disturb)
 
         for k in range(0, self.dim_disturb):
             Ddisturb[k] = -self.tau_disturb[k] * (
@@ -365,7 +365,7 @@ class Sys3WRobot(System):
 
     def out(self, state, action=[]):
 
-        # observation = nc.zeros(self.dim_output)
+        # observation = rc.zeros(self.dim_output)
         # observation = state[:3] + measNoise # <-- Measure only position and orientation
         # observation = state  # <-- Position, force and torque sensors on
         return state
@@ -390,15 +390,15 @@ class Sys3WRobotNI(System):
 
     def _state_dyn(self, t, state, action, disturb=[]):
 
-        Dstate = nc.zeros(self.dim_state, prototype=action)
+        Dstate = rc.zeros(self.dim_state, prototype=action)
 
         if self.is_disturb and (disturb != []):
-            Dstate[0] = action[0] * nc.cos(state[2]) + disturb[0]
-            Dstate[1] = action[0] * nc.sin(state[2]) + disturb[0]
+            Dstate[0] = action[0] * rc.cos(state[2]) + disturb[0]
+            Dstate[1] = action[0] * rc.sin(state[2]) + disturb[0]
             Dstate[2] = action[1] + disturb[1]
         else:
-            Dstate[0] = action[0] * nc.cos(state[2])
-            Dstate[1] = action[0] * nc.sin(state[2])
+            Dstate[0] = action[0] * rc.cos(state[2])
+            Dstate[1] = action[0] * rc.sin(state[2])
             Dstate[2] = action[1]
 
         return Dstate
@@ -409,7 +409,7 @@ class Sys3WRobotNI(System):
         
         
         """
-        Ddisturb = nc.zeros(self.dim_disturb)
+        Ddisturb = rc.zeros(self.dim_disturb)
 
         for k in range(0, self.dim_disturb):
             Ddisturb[k] = -self.tau_disturb[k] * (
@@ -438,7 +438,7 @@ class Sys2Tank(System):
 
         tau1, tau2, K1, K2, K3 = self.pars
 
-        Dstate = nc.zeros(self.dim_state, prototype=action)
+        Dstate = rc.zeros(self.dim_state, prototype=action)
         Dstate[0] = 1 / (tau1) * (-state[0] + K1 * action)
         Dstate[1] = 1 / (tau2) * (-state[1] + K2 * state[0] + K3 * state[1] ** 2)
 
@@ -446,10 +446,30 @@ class Sys2Tank(System):
 
     def _disturb_dyn(self, t, disturb):
 
-        Ddisturb = nc.zeros(self.dim_disturb)
+        Ddisturb = rc.zeros(self.dim_disturb)
 
         return Ddisturb
 
     def out(self, state, action=[]):
 
         return state
+
+
+class TabularSystem(System):
+    """
+    Simple action encoding rule: right, left, up, down -> 1, 2, 3, 4
+    """
+
+    def __init__(self, dims):
+        self.dims = dims
+
+    def _state_dyn(self, current_state, action):
+        if action % 2 == 1:
+            if current_state[action > 2] < self.dims[action != 1] - 1:
+                current_state[action > 2] += 1
+            return current_state
+
+        elif action % 2 == 0:
+            if current_state[action > 2] > 1:
+                current_state[action > 2] -= 1
+            return current_state

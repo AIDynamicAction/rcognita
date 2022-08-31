@@ -10,15 +10,127 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": true,
+            "justMyCode": false,
+        },
+        {
+            "name": "basic debug",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
             "args": [
-                "--Nactor",
-                "5",
-                "--dt",
-                "0.02",
+                "--no_visual",
+            ]
+        },
+        {
+            "name": "basic debug with critic",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
                 "--control_mode",
                 "SQL",
                 "--no_visual",
+            ]
+        },
+        {
+            "name": "basic debug Q-learning",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--control_mode",
+                "SQL",
+                "--no_visual",
+                "--Nactor",
+                "0"
+            ]
+        },
+        {
+            "name": "casadi debug",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI_casadi.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--no_visual",
+            ]
+        },
+        {
+            "name": "casadi debug with critic",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI_casadi.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--control_mode",
+                "SQL",
+                "--no_visual",
+            ]
+        },
+        {
+            "name": "casadi debug Q-learning",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI_casadi.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--control_mode",
+                "SQL",
+                "--no_visual",
+                "--Nactor",
+                "0"
+            ]
+        },
+        {
+            "name": "torch debug",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI_torch.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--no_visual",
+                "--critic_struct",
+                "NN"
+            ]
+        },
+        {
+            "name": "torch debug with critic",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI_torch.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--control_mode",
+                "SQL",
+                "--no_visual",
+                "--critic_struct",
+                "NN"
+            ]
+        },
+        {
+            "name": "torch debug Q-learning",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/odinmaniac/Downloads/Repos/test/rcognita/pipelines/pipeline_3wrobot_NI_torch.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--control_mode",
+                "SQL",
+                "--no_visual",
+                "--Nactor",
+                "0",
                 "--critic_struct",
                 "NN"
             ]

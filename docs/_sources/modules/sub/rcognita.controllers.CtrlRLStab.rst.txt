@@ -17,7 +17,7 @@ rcognita.controllers.CtrlRLStab
       ~CtrlRLStab.compute_action
       ~CtrlRLStab.receive_sys_state
       ~CtrlRLStab.reset
-      ~CtrlRLStab.stage_obj
+      ~CtrlRLStab.running_obj
       ~CtrlRLStab.upd_accum_obj
    
    

@@ -15,15 +15,64 @@ sys.path.insert(0, PARENT_DIR)
 CUR_DIR = os.path.abspath(__file__ + "/..")
 sys.path.insert(0, CUR_DIR)
 
-from utilities import uptria2vec, nc
+from utilities import rc
 import numpy as np
 import torch
-from torch import nn, optim
+from torch import nn
 import torch.nn.functional as F
 import math
+from abc import ABC, abstractmethod
+from copy import deepcopy
+
+
+class ModelAbstract(ABC):
+    @property
+    @abstractmethod
+    def model_name(self):
+        return "model_name"
+
+    @abstractmethod
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def forward(self):
+        pass
+
+    def cache_cur_state(self):
+        self.cache = None
+        self.cache = deepcopy(self)
+
+    def __call__(self, argin, weights=None, use_fixed_weights=False):
+        if use_fixed_weights is False:
+            if weights is not None:
+                return self.forward(argin, weights)
+            else:
+                return self.forward(argin, self.weights)
+        else:
+            if weights is not None:
+                return self.cache.forward(argin, weights)
+            else:
+                return self.cache.forward(argin, self.weights)
+
+    def update(self, weights):
+        self._weights = weights
+
+    def get_weights(self):
+        return self._weights
+
+    @property
+    def weights(self):
+        return self.get_weights()
+
+    @weights.setter
+    def weights(self, weights):
+        self.cache_cur_state()
+        self.update(weights)
 
 
 class ModelSS:
+    model_name = "state-space"
     """
     State-space model
             
@@ -48,7 +97,6 @@ class ModelSS:
         self.C = C
         self.D = D
         self.x0est = x0est
-        self.model_name = "state-space"
 
     def upd_pars(self, Anew, Bnew, Cnew, Dnew):
         self.A = Anew
@@ -60,99 +108,159 @@ class ModelSS:
         self.x0set = x0setNew
 
 
-class ModelRNN(nn.Module):
-    """
-    Class of recurrent neural network models
-    .. math::
-        \\begin{array}{ll}
-			\\hat y^+ & = \\vaprhi(y, u)
-        \\end{array}
-    Attributes
-    ----------
-    weights: : array of proper shape
-        Neural weights.
-    observation_est_init : : array
-        Initial estimate of observation.
-    """
+class ModelQuadLin(ModelAbstract):
+    model_name = "quad-lin"
 
-    def __init__(self, weights, dim_observation, dim_action, dim_hidden):
-        super().__init__()
-        self.fc1 = nn.Linear(dim_observation + dim_action, dim_hidden)
-        self.relu1 = nn.LeakyReLU()
-        self.fc2 = nn.Linear(dim_hidden, dim_observation)
+    def __init__(self, input_dim, Wmin=1.0, Wmax=1e3):
+        self.dim_weights = int((input_dim + 1) * input_dim / 2 + input_dim)
+        self.Wmin = Wmin * np.ones(self.dim_weights)
+        self.Wmax = Wmax * np.ones(self.dim_weights)
+        self.weights = self.Wmin
 
-        if weights is not None:
-            self.load_state_dict(weights)
+    def forward(self, vec, weights):
 
-        self.double()
+        polynom = rc.uptria2vec(rc.outer(vec, vec))
+        polynom = rc.concatenate([polynom, vec]) ** 2
+        result = rc.dot(weights, polynom)
 
-    def forward(self, x):
-        # print("x type", type(x))
-
-        x = x.double()
-
-        x = self.fc1(x)
-        x = self.relu1(x)
-        x = self.fc2(x)
-
-        return x
-
-    def model_out(self, observation, action):
-        """
-        Output estimated observation
-        """
-
-        # return RNN(observation, action, self.weights)  # Implement RNN output via torch
-
-        concat = np.concatenate((observation, action))
-        to_torch = torch.tensor(concat)
-
-        return self.forward(to_torch)
-
-    def updateIC(self, observation_est_init_new):
-        """
-        Update initial condition
-        """
-
-        self.observation_est_init = observation_est_init_new
+        return result
 
 
-class ModelNN(nn.Module):
+class ModelQuadratic(ModelAbstract):
+    model_name = "quadratic"
+
+    def __init__(self, input_dim, Wmin=1.0, Wmax=1e3):
+        self.dim_weights = int((input_dim + 1) * input_dim / 2)
+        self.Wmin = Wmin * np.ones(self.dim_weights)
+        self.Wmax = Wmax * np.ones(self.dim_weights)
+        self.weights = self.Wmin
+
+    def forward(self, vec, weights):
+
+        polynom = rc.to_col(rc.uptria2vec(rc.outer(vec, vec))) ** 2
+        result = rc.dot(weights, polynom)
+
+        return result
+
+
+class ModelQuadNoMix(ModelAbstract):
+    model_name = "quad-nomix"
+
+    def __init__(self, input_dim, Wmin=1.0, Wmax=1e3):
+        self.dim_weights = input_dim
+        self.Wmin = Wmin * np.ones(self.dim_weights)
+        self.Wmax = Wmax * np.ones(self.dim_weights)
+        self.weights = self.Wmin
+
+    def forward(self, vec, weights):
+
+        polynom = vec * vec
+        result = rc.dot(weights, polynom)
+
+        return result
+
+
+# class ModelQuadMix(ModelBase):
+#     model_name = "quad-mix"
+
+#     def __init__(self, input_dim, Wmin=1.0, Wmax=1e3):
+#         self.dim_weights = int(
+#             self.dim_output + self.dim_output * self.dim_input + self.dim_input
+#         )
+#         self.Wmin = Wmin * np.ones(self.dim_weights)
+#         self.Wmax = Wmax * np.ones(self.dim_weights)
+
+#     def _forward(self, vec, weights):
+
+#         v1 = rc.to_col(v1)
+#         v2 = rc.to_col(v2)
+
+#         polynom = rc.concatenate([v1 ** 2, rc.kron(v1, v2), v2 ** 2])
+#         result = rc.dot(weights, polynom)
+
+#         return result
+
+
+class ModelQuadForm:
+    model_name = "quad_form"
+
+    def __init__(self, R1=None, R2=None, model_name="quadratic"):
+        self.model_name = model_name
+        self.R1 = R1
+        self.R2 = R2
+
+    def __call__(self, v1, v2):
+        return self.forward(v1, v2)
+
+    def forward(self, v1, v2):
+        result = rc.matmul(rc.matmul(v1.T, self.R1), v2)
+
+        result = rc.squeeze(result)
+
+        return result
+
+
+class ModelBiquadForm:
+    model_name = "biquad_form"
+
+    def __init__(self, R1=None, R2=None, model_name="biquadratic"):
+        self.model_name = model_name
+        self.R1 = R1
+        self.R2 = R2
+
+    def __call__(self, v1, v2):
+        return self.forward(v1, v2)
+
+    def forward(self, v1, v2):
+        result = rc.matmul(rc.matmul(v1.T ** 2, self.R2), v2 ** 2) + rc.matmul(
+            rc.matmul(v1.T, self.R1), v2
+        )
+        result = rc.squeeze(result)
+
+        return result
+
+
+class ModelNN(nn.Module, ModelAbstract):
+    model_name = "NN"
+
     def __init__(self, dim_observation, dim_action, dim_hidden=5, weights=None):
         super().__init__()
 
-        self.model_name = "NN"
-        self.fc1 = nn.Linear(dim_observation + dim_action, dim_hidden)
+        self.fc1 = nn.Linear(dim_observation + dim_action, dim_hidden, bias=False)
         self.relu1 = nn.LeakyReLU()
-        self.fc2 = nn.Linear(dim_hidden, dim_observation)
+        self.fc2 = nn.Linear(dim_hidden, dim_observation, bias=False)
 
         if weights is not None:
             self.load_state_dict(weights)
 
         self.double()
+        self.cache_cur_state()
 
-    def forward(self, x):
+    def forward(self, input_tensor):
         # print("x type", type(x))
 
-        x = x.double()
+        # input_tensor = input_tensor.double()
 
-        x = self.fc1(x)
+        x = self.fc1(input_tensor)
         x = self.relu1(x)
         x = self.fc2(x)
-        x = torch.linalg.vector_norm(x)
+        x = torch.linalg.vector_norm(
+            x
+        )  # + 1e-3 * torch.linalg.vector_norm(input_tensor)
 
-        return x.detach().numpy()
+        return x
 
-    def __call__(self, observation, action, weights=None):
+    # def __call__(self, model_input):
 
-        concat = np.concatenate((observation, action))
-        to_torch = torch.tensor(concat)
+    #     model_input = torch.tensor(model_input)
 
-        if not weights is None:
-            state_dict = self.weights2dict(weights)
-            self.load_state_dict(state_dict)
+    #     concated = torch.cat((observation_tensor, action_tensor))
 
-        return self.forward(to_torch)
+    #     return self.forward(model_input)
+
+    def detach_cur_model(self):
+        for variable in self.parameters():
+            variable.detach_()
 
     def get_weights(self):
 
@@ -163,6 +271,16 @@ class ModelNN(nn.Module):
             weights_all = np.hstack((weights_all, weights))
 
         return weights_all
+
+    def cache_cur_state(self):
+        # self.cache = None
+        # self.cache = deepcopy(self)
+        super().cache_cur_state()
+        self.cache.detach_cur_model()
+
+    def update(self, weights):
+        weights_dict = self.weights2dict(weights)
+        self.load_state_dict(weights_dict)
 
     def weights2dict(self, weights_to_parse):
 
@@ -183,70 +301,60 @@ class ModelNN(nn.Module):
 
         return new_state_dict
 
+    def soft_update(self, tau):
+        """Soft update model parameters.
+        θ_target = τ*θ_local + (1 - τ)*θ_target
 
-class ModelPolynomial:
-    def __init__(self, model_name="quad-lin"):
-        self.model_name = model_name
+        Params
+        ======
+            local_model (Torch model): weights will be copied from
+            target_model (Torch model): weights will be copied to
+            tau (float): interpolation parameter 
+        """
+        for target_param, local_param in zip(
+            self.cache.parameters(), self.parameters()
+        ):
+            target_param.data.copy_(
+                tau * local_param.data + (1.0 - tau) * target_param.data
+            )
 
-    def __call__(self, v1, v2, weights):
-        return self.compute(v1, v2, weights)
+    def __call__(self, argin, weights=None, use_fixed_weights=False):
+        argin = torch.tensor(argin)
+        if use_fixed_weights is False:
+            if weights is not None:
+                result = self.forward(argin, weights)
+            else:
+                result = self.forward(argin)
+        else:
+            if weights is not None:
+                result = self.cache.forward(argin, weights)
+            else:
+                result = self.cache.forward(argin)
 
-    def compute(self, v1, v2, weights):
+        if use_fixed_weights:
+            return result.detach().numpy()
+        else:
+            return result
 
-        v1 = nc.to_col(v1)
-        v2 = nc.to_col(v2)
-        chi = nc.concatenate([v1, v2])
-        if self.model_name == "quad-lin":
-            polynom = nc.to_col(uptria2vec(nc.outer(chi, chi)))
-            polynom = nc.concatenate([polynom, chi]) ** 2
-        elif self.model_name == "quadratic":
-            polynom = nc.to_col(uptria2vec(nc.outer(chi, chi))) ** 2
-        elif self.model_name == "quad-nomix":
-            polynom = chi * chi
-        elif self.model_name == "quad-mix":
-            polynom = nc.concatenate([v1 ** 2, nc.kron(v1, v2), v2 ** 2])
 
-        result = nc.dot(weights, polynom)
+class LookupTable2D(ModelAbstract):
+    model_name = "tabular"
 
+    def __init__(self, dims=None):
+        self.table = rc.zeros(dims)
+        self.indices = tuple([(i, j) for i in range(dims[0]) for j in range(dims[1])])
+
+    def __call__(self, argin, use_fixed_weights=False):
+
+        if use_fixed_weights is False:
+            result = self.forward(argin)
+        else:
+            result = self.cache.forward(argin)
         return result
 
-    def gradient(self, vector, weights):
+    def forward(self, argin):
+        self.table[argin]
 
-        gradient = nc.autograd(self.compute, vector, [], weights)
+    def update(self, table):
+        self.table = table
 
-        return gradient
-
-
-class ModelQuadForm:
-    def __init__(self, R1=None, R2=None, model_name="quadratic"):
-        self.model_name = model_name
-        self.R1 = R1
-        self.R2 = R2
-
-    def __call__(self, v1, v2):
-        return self.compute(v1, v2)
-
-    def compute(self, v1, v2):
-        result = nc.matmul(nc.matmul(v1.T, self.R1), v2)
-
-        result = nc.squeeze(result)
-
-        return result
-
-
-class ModelBiquadForm:
-    def __init__(self, R1=None, R2=None, model_name="biquadratic"):
-        self.model_name = model_name
-        self.R1 = R1
-        self.R2 = R2
-
-    def __call__(self, v1, v2):
-        return self.compute(v1, v2)
-
-    def compute(self, v1, v2):
-        result = nc.matmul(nc.matmul(v1.T ** 2, self.R2), v2 ** 2) + nc.matmul(
-            nc.matmul(v1.T, self.R1), v2
-        )
-        result = nc.squeeze(result)
-
-        return result

@@ -42,7 +42,7 @@ With model estimation tools
 The package was tested with online model estimation using
 `SIPPY <https://github.com/CPCLAB-UNIPI/SIPPY>`__. The respective
 functionality is implemented and enabled via ``is_est_model``. Related
-parameters can be found in the documentation of the ``CtrlOptPred``
+parameters can be found in the documentation of the ``RLController``
 class.
 
 Installing dependencies
@@ -98,7 +98,7 @@ package consists of several modules, namely, ``controllers``,
 ``visuals`` and a collection of main modules (presets) for each
 agent-environment configuration.
 
-`This flowchart <./flowcharts/rcognita-flowchart-CtrlOptPred.pdf>`__
+`This flowchart <./flowcharts/rcognita-flowchart-RLController.pdf>`__
 shows interaction of the core ``rcognita`` classes contained in the said
 modules (the latter are not shown on the diagram).
 
@@ -137,10 +137,10 @@ Everything is packed together in the ``closed_loop_rhs`` for the use in
 ``Simulator``.
 
 Finally, the ``controllers`` module contains various agent types. One of
-them is ``CtrlOptPred`` – the class of predictive objective-optimizing
+them is ``RLController`` – the class of predictive objective-optimizing
 agents (model-predictive control and predictive reinforcement learning)
 as shown in `this
-flowchart <./flowcharts/rcognita-flowchart-CtrlOptPred.pdf>`__. Notice
+flowchart <./flowcharts/rcognita-flowchart-RLController.pdf>`__. Notice
 it contains an explicit specification of the sampling time ``dt``.
 
 The method ``critic`` computes a model of something related to the
@@ -211,7 +211,7 @@ Some key settings are described below (full description is available via
 +-------------------------+-----------+--------------------------------------------------------+
 | ``Nactor``              | integer   | Horizon length (in steps) for predictive controllers   |
 +-------------------------+-----------+--------------------------------------------------------+
-| ``stage_obj_struct``    | string    | Structure of running objective function                |
+| ``running_obj_struct``    | string    | Structure of running objective function                |
 +-------------------------+-----------+--------------------------------------------------------+
 | ``Ncritic``             | integer   | Critic stack size (number of TDs)                      |
 +-------------------------+-----------+--------------------------------------------------------+
@@ -234,10 +234,10 @@ Advanced customization
 -  **Custom AC method**: simplest way -- by adding a new mode and
    updating ``cost``, ``cost`` and, possibly, ``_actor``,
    ``critic``. For deep net AC structures, use, say,
-   `PyTorch <https://pytorch.org/>`__
+   `Torch <https://pytorch.org/>`__
 -  **Custom model estimator**: so far, the framework offers a
    state-space model structure. You may use any other one. In case of
-   neural nets, use, e.g., `PyTorch <https://pytorch.org/>`__
+   neural nets, use, e.g., `Torch <https://pytorch.org/>`__
 
 Experimental things
 -------------------

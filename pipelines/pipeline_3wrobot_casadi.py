@@ -1,5 +1,4 @@
 import os, sys
-import numpy as np
 
 PARENT_DIR = os.path.abspath(__file__ + "/../../")
 sys.path.insert(0, PARENT_DIR)

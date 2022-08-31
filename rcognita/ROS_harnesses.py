@@ -36,14 +36,14 @@ class ROSHarness:
         my_sys,
         my_ctrl_benchm,
         action_manual,
-        stage_objective,
+        running_objective,
         my_logger=None,
         datafiles=None,
         dt=0.05,
         pred_step_size=1.0,
     ):
         self.accum_obj_val = 0
-        self.stage_objective = stage_objective
+        self.running_objective = running_objective
         self.action_manual = action_manual
         self.RATE = rospy.get_param("/rate", 1.0 / dt)
 
@@ -112,7 +112,7 @@ class ROSHarness:
         
         """
 
-        self.accum_obj_val += self.stage_objective(observation, action) * delta
+        self.accum_obj_val += self.running_objective(observation, action) * delta
 
     def odometry_callback(self, msg):
 
@@ -262,13 +262,13 @@ class ROSHarness:
             yCoord = self.new_state[1]
             alpha = self.new_state[2]
 
-            stage_obj = self.stage_objective(self.new_state, action)
+            running_obj = self.running_objective(self.new_state, action)
             self.upd_accum_obj(self.new_state, action, delta_t)
             accum_obj = self.accum_obj_val
 
             if is_print_sim_step:
                 self.logger.print_sim_step(
-                    t, xCoord, yCoord, alpha, stage_obj, accum_obj, action
+                    t, xCoord, yCoord, alpha, running_obj, accum_obj, action
                 )
 
             if is_log_data:
@@ -278,7 +278,7 @@ class ROSHarness:
                     xCoord,
                     yCoord,
                     alpha,
-                    stage_obj,
+                    running_obj,
                     accum_obj,
                     action,
                 )
@@ -300,7 +300,7 @@ class ROSHarness:
                 )
             ) and t > 10.0:
                 print("FINAL RESULTS!!!")
-                print(t, xCoord, yCoord, alpha, stage_obj, accum_obj, action)
+                print(t, xCoord, yCoord, alpha, running_obj, accum_obj, action)
                 velocity.linear.x = 0
                 velocity.angular.z = 0
                 break

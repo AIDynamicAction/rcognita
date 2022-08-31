@@ -4,6 +4,7 @@ from abc import abstractmethod
 import sys
 import pickle5 as pickle
 import sys
+from rcognita.utilities import rc
 
 
 class LoadFromFile(argparse.Action):
@@ -186,7 +187,7 @@ class Config3WRobot(AbstractConfig):
             help="Size of the buffer (experience replay) for model estimation, agent learning etc.",
         )
         parser.add_argument(
-            "--stage_obj_struct",
+            "--running_obj_struct",
             type=str,
             default="quadratic",
             choices=["quadratic", "biquadratic"],
@@ -382,7 +383,7 @@ class Config3WRobotNI(AbstractConfig):
             help="Size of the buffer (experience replay) for model estimation, agent learning etc.",
         )
         parser.add_argument(
-            "--stage_obj_struct",
+            "--running_obj_struct",
             type=str,
             default="quadratic",
             choices=["quadratic", "biquadratic"],
@@ -428,7 +429,7 @@ class Config3WRobotNI(AbstractConfig):
             + "----quadratic: quadratic; "
             + "----quad-nomix: quadratic, no mixed terms; "
             + "----quad-mix: quadratic, mixed observation-action terms (for, say, Q or advantage function approximations)."
-            + "----NN: PyTorch neural network.",
+            + "----NN: Torch neural network.",
         )
         parser.add_argument(
             "--actor_struct",
@@ -601,7 +602,7 @@ class Config2Tank(AbstractConfig):
             help="Size of the buffer (experience replay) for model estimation, agent learning etc.",
         )
         parser.add_argument(
-            "--stage_obj_struct",
+            "--running_obj_struct",
             type=str,
             default="quadratic",
             choices=["quadratic", "biquadratic"],

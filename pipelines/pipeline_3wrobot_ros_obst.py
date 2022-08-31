@@ -53,7 +53,7 @@ class PipelineROS3wrobotNI(Pipeline3WRobotNI):
             my_sys=self.my_sys,
             my_ctrl_benchm=self.my_ctrl_benchm,
             action_manual=self.action_manual,
-            stage_objective=self.stage_objective,
+            running_objective=self.running_objective,
             my_logger=self.my_logger,
             datafiles=self.datafiles,
             dt=self.dt,
